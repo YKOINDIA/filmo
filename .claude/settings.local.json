@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Users/namas -maxdepth 3 -type d -iname *taxipro*)",
+      "Bash(find /c/Users/namas -maxdepth 3 -type d -iname *taxi*)",
+      "Bash(find /c/Users/namas -maxdepth 2 -type d -iname *taxipro*)",
+      "Bash(find /c/Users/namas/taxipro-next -name middleware.ts -o -name *auth* -o -name *login*)",
+      "Bash(find /c/Users/namas/taxipro-next -name server* -type f)",
+      "Bash(find /c/Users/namas/taxipro-next/lib -type f -name *.ts)",
+      "Bash(head -200 /c/Users/namas/taxipro-next/supabase/migrations/*.sql)",
+      "Bash(ls /c/Users/namas/taxipro-next/app/components/*.tsx)",
+      "Bash(find /c/Users/namas/taxipro-next -name *.server.ts -o -name *.action.ts)",
+      "Bash(grep -r 'use server' /c/Users/namas/taxipro-next/app --include=*.ts --include=*.tsx)",
+      "Bash(find /c/Users/namas/taxipro-next -name *.types.ts -o -name *schema* -o -name *types* -path */app/*)",
+      "Bash(npx create-next-app@latest . --app --typescript --tailwind --eslint --no-src-dir --no-import-alias --yes)"
+    ]
+  }
+}
