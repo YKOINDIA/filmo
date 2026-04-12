@@ -95,12 +95,10 @@ export default function Page() {
         await databases.createDocument(DB_ID, COLLECTIONS.USERS, acc.$id, {
           email: authEmail,
           name: authName || authEmail.split('@')[0],
-          referral_code: refCode,
           level: 1,
           points: 0,
           login_streak: 0,
           bio: '',
-          favorite_genres: [],
         })
         setSession(acc)
         await loadUserProfile(acc.$id)
