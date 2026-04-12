@@ -89,50 +89,177 @@ const DECADES = [
 ]
 
 const PROVIDERS = [
-  { id: 8, name: 'Netflix', emoji: '🔴' },
-  { id: 9, name: 'Amazon Prime Video', emoji: '📦' },
-  { id: 15, name: 'Hulu', emoji: '🟢' },
-  { id: 337, name: 'Disney+', emoji: '🏰' },
-  { id: 84, name: 'U-NEXT', emoji: '🟣' },
-  { id: 1796, name: 'FOD', emoji: '📺' },
-  { id: 283, name: 'dアニメストア', emoji: '🎌' },
-  { id: 1860, name: 'DMM TV', emoji: '🎬' },
-  { id: 2136, name: 'Lemino', emoji: '🟡' },
-  { id: 85, name: 'TELASA', emoji: '🔵' },
+  { id: 9, name: 'Prime Video', emoji: '📦', desc: 'Amazonの動画配信' },
+  { id: 84, name: 'U-NEXT', emoji: '🟣', desc: '31日間無料トライアル' },
+  { id: 1860, name: 'DMM TV', emoji: '🎬', desc: 'アニメ・エンタメ充実' },
+  { id: 337, name: 'ディズニープラス', emoji: '🏰', desc: 'ディズニー・マーベル・SW' },
+  { id: 1796, name: 'FOD', emoji: '📺', desc: 'フジテレビ公式' },
+  { id: 85, name: 'TELASA', emoji: '🔵', desc: 'テレビ朝日公式' },
+  { id: 2136, name: 'Lemino', emoji: '🟡', desc: 'NTTドコモ運営' },
+  { id: 0, name: 'ABEMA', emoji: '🟠', desc: '無料で楽しめるTV' },
+  { id: 15, name: 'Hulu', emoji: '🟢', desc: '日テレ系充実' },
+  { id: 8, name: 'Netflix', emoji: '🔴', desc: '世界最大級の配信' },
+  { id: 0, name: 'WOWOWオンデマンド', emoji: '📡', desc: '映画・ドラマ・スポーツ' },
+  { id: 0, name: 'アニメタイムズ', emoji: '🎌', desc: 'アニメ専門チャンネル' },
+  { id: 0, name: 'Roadstead', emoji: '🚢', desc: 'ミニシアター系作品' },
+  { id: 0, name: 'J:COM STREAM', emoji: '📶', desc: 'J:COM加入者向け' },
+  { id: 0, name: 'TSUTAYA DISCAS', emoji: '💿', desc: 'DVD/BD宅配レンタル' },
+  { id: 283, name: 'dアニメストア', emoji: '🅰️', desc: 'アニメ見放題No.1' },
+  { id: 0, name: 'Apple TV+', emoji: '🍎', desc: 'Appleオリジナル作品' },
+  { id: 0, name: 'Rakuten TV', emoji: '🛒', desc: '楽天の動画配信' },
 ]
 
-const AWARDS: { name: string; emoji: string; sort: string; voteMin: string; voteMax?: string; voteAvgMin?: string; country?: string }[] = [
+interface Award {
+  name: string
+  emoji: string
+  sort: string
+  voteMin: string
+  voteMax?: string
+  voteAvgMin?: string
+  country?: string
+}
+
+const AWARDS: Award[] = [
+  // 主要映画賞 (Filmarks完全対応 + α)
   { name: 'アカデミー賞', emoji: '🏆', sort: 'vote_average.desc', voteMin: '5000' },
   { name: 'ゴールデングローブ賞', emoji: '🌐', sort: 'vote_average.desc', voteMin: '3000' },
   { name: '日本アカデミー賞', emoji: '🇯🇵', sort: 'vote_average.desc', voteMin: '500', country: 'JP' },
-  { name: 'カンヌ国際映画祭', emoji: '🌴', sort: 'vote_average.desc', voteMin: '1000', country: 'FR' },
-  { name: 'ヴェネチア国際映画祭', emoji: '🦁', sort: 'vote_average.desc', voteMin: '800', country: 'IT' },
-  { name: 'ベルリン国際映画祭', emoji: '🐻', sort: 'vote_average.desc', voteMin: '800', country: 'DE' },
   { name: '東京国際映画祭', emoji: '🗼', sort: 'vote_average.desc', voteMin: '200', country: 'JP' },
+  { name: 'カンヌ国際映画祭', emoji: '🌴', sort: 'vote_average.desc', voteMin: '1000' },
+  { name: 'ヴェネチア国際映画祭', emoji: '🦁', sort: 'vote_average.desc', voteMin: '800' },
+  { name: 'ベルリン国際映画祭', emoji: '🐻', sort: 'vote_average.desc', voteMin: '800' },
+  { name: 'サンダンス映画祭', emoji: '🎿', sort: 'vote_average.desc', voteMin: '500' },
+  { name: 'ロサンゼルス映画批評家協会賞', emoji: '🎬', sort: 'vote_average.desc', voteMin: '2000' },
+  { name: 'インディペンデント・スピリット賞', emoji: '🕊️', sort: 'vote_average.desc', voteMin: '800' },
   { name: '英国アカデミー賞', emoji: '🇬🇧', sort: 'vote_average.desc', voteMin: '2000', country: 'GB' },
+  { name: 'ブルーリボン賞', emoji: '🎀', sort: 'vote_average.desc', voteMin: '300', country: 'JP' },
+  { name: 'ニューヨーク映画批評家協会賞', emoji: '🗽', sort: 'vote_average.desc', voteMin: '2000' },
+  { name: 'セザール賞', emoji: '🇫🇷', sort: 'vote_average.desc', voteMin: '500', country: 'FR' },
+  { name: 'ゴールデンラズベリー賞', emoji: '🍓', sort: 'vote_count.desc', voteMin: '3000' },
+  { name: 'モントリオール世界映画祭', emoji: '🍁', sort: 'vote_average.desc', voteMin: '300', country: 'CA' },
+  { name: 'ナショナル・ボード・オブ・レビュー', emoji: '📋', sort: 'vote_average.desc', voteMin: '2000' },
+  { name: 'アニー賞', emoji: '✏️', sort: 'vote_average.desc', voteMin: '500' },
+  { name: 'オースティン映画批評家協会賞', emoji: '🤠', sort: 'vote_average.desc', voteMin: '1000' },
+  { name: 'TAMA映画賞', emoji: '🎌', sort: 'vote_average.desc', voteMin: '100', country: 'JP' },
+  { name: 'キネコ国際映画祭', emoji: '🧒', sort: 'vote_average.desc', voteMin: '50', country: 'JP' },
+  { name: '放送映画批評家協会賞', emoji: '📺', sort: 'vote_average.desc', voteMin: '2000' },
+  { name: 'ヨーロッパ映画賞', emoji: '🇪🇺', sort: 'vote_average.desc', voteMin: '500' },
+  { name: 'MTVムービー・アワード', emoji: '📻', sort: 'popularity.desc', voteMin: '3000' },
+  { name: 'トロント国際映画祭', emoji: '🇨🇦', sort: 'vote_average.desc', voteMin: '500' },
+  { name: 'アジア映画大賞', emoji: '🌏', sort: 'vote_average.desc', voteMin: '200' },
+  { name: 'ストックホルム国際映画祭', emoji: '🇸🇪', sort: 'vote_average.desc', voteMin: '200', country: 'SE' },
+  { name: 'カルロヴィ・ヴァリ国際映画祭', emoji: '🇨🇿', sort: 'vote_average.desc', voteMin: '200', country: 'CZ' },
+  // Filmo独自
   { name: '高評価映画 (8.0+)', emoji: '⭐', sort: 'vote_average.desc', voteMin: '1000', voteAvgMin: '8' },
   { name: '隠れた名作', emoji: '💎', sort: 'vote_average.desc', voteMin: '100', voteMax: '1000', voteAvgMin: '7.5' },
+  { name: 'カルト映画', emoji: '🔮', sort: 'vote_count.desc', voteMin: '200', voteMax: '2000', voteAvgMin: '7' },
+  { name: '興行収入トップ', emoji: '💰', sort: 'revenue.desc', voteMin: '1000' },
 ]
 
-const COUNTRIES = [
-  { code: 'JP', name: '日本', emoji: '🇯🇵' },
-  { code: 'US', name: 'アメリカ', emoji: '🇺🇸' },
-  { code: 'GB', name: 'イギリス', emoji: '🇬🇧' },
-  { code: 'FR', name: 'フランス', emoji: '🇫🇷' },
-  { code: 'KR', name: '韓国', emoji: '🇰🇷' },
-  { code: 'IN', name: 'インド', emoji: '🇮🇳' },
-  { code: 'IT', name: 'イタリア', emoji: '🇮🇹' },
-  { code: 'DE', name: 'ドイツ', emoji: '🇩🇪' },
-  { code: 'CN', name: '中国', emoji: '🇨🇳' },
-  { code: 'ES', name: 'スペイン', emoji: '🇪🇸' },
-  { code: 'SE', name: 'スウェーデン', emoji: '🇸🇪' },
-  { code: 'AU', name: 'オーストラリア', emoji: '🇦🇺' },
-  { code: 'HK', name: '香港', emoji: '🇭🇰' },
-  { code: 'TW', name: '台湾', emoji: '🇹🇼' },
-  { code: 'BR', name: 'ブラジル', emoji: '🇧🇷' },
-  { code: 'CA', name: 'カナダ', emoji: '🇨🇦' },
-  { code: 'RU', name: 'ロシア', emoji: '🇷🇺' },
-  { code: 'TH', name: 'タイ', emoji: '🇹🇭' },
+// Full 180+ countries/regions (Filmarks 176 + extras)
+const COUNTRIES: { code: string; name: string }[] = [
+  // 主要国 (上部に表示)
+  { code: 'JP', name: '日本' },{ code: 'US', name: 'アメリカ' },{ code: 'GB', name: 'イギリス' },
+  { code: 'FR', name: 'フランス' },{ code: 'KR', name: '韓国' },{ code: 'CN', name: '中国' },
+  { code: 'IN', name: 'インド' },{ code: 'IT', name: 'イタリア' },{ code: 'DE', name: 'ドイツ' },
+  { code: 'ES', name: 'スペイン' },{ code: 'HK', name: '香港' },{ code: 'TW', name: '台湾' },
+  { code: 'CA', name: 'カナダ' },{ code: 'AU', name: 'オーストラリア' },{ code: 'BR', name: 'ブラジル' },
+  { code: 'RU', name: 'ロシア' },{ code: 'TH', name: 'タイ' },{ code: 'SE', name: 'スウェーデン' },
+  { code: 'MX', name: 'メキシコ' },{ code: 'DK', name: 'デンマーク' },
+  // あ行
+  { code: 'IS', name: 'アイスランド' },{ code: 'IE', name: 'アイルランド' },
+  { code: 'AZ', name: 'アゼルバイジャン' },{ code: 'AF', name: 'アフガニスタン' },
+  { code: 'AS', name: 'アメリカ領サモア' },{ code: 'AE', name: 'アラブ首長国連邦' },
+  { code: 'DZ', name: 'アルジェリア' },{ code: 'AR', name: 'アルゼンチン' },
+  { code: 'AL', name: 'アルバニア' },{ code: 'AM', name: 'アルメニア' },
+  { code: 'AO', name: 'アンゴラ' },{ code: 'AD', name: 'アンドラ' },
+  { code: 'YE', name: 'イエメン' },{ code: 'VG', name: 'イギリス領ヴァージン諸島' },
+  { code: 'IL', name: 'イスラエル' },{ code: 'IQ', name: 'イラク' },{ code: 'IR', name: 'イラン' },
+  { code: 'ID', name: 'インドネシア' },{ code: 'UG', name: 'ウガンダ' },
+  { code: 'UA', name: 'ウクライナ' },{ code: 'UZ', name: 'ウズベキスタン' },
+  { code: 'UY', name: 'ウルグアイ' },{ code: 'EC', name: 'エクアドル' },
+  { code: 'EG', name: 'エジプト' },{ code: 'EE', name: 'エストニア' },
+  { code: 'ET', name: 'エチオピア' },{ code: 'SV', name: 'エルサルバドル' },
+  { code: 'OM', name: 'オマーン' },{ code: 'NL', name: 'オランダ' },
+  { code: 'AN', name: 'オランダ領アンティル' },{ code: 'AT', name: 'オーストリア' },
+  // か行
+  { code: 'KZ', name: 'カザフスタン' },{ code: 'QA', name: 'カタール' },
+  { code: 'CM', name: 'カメルーン' },{ code: 'KH', name: 'カンボジア' },
+  { code: 'CV', name: 'カーボベルデ共和国' },{ code: 'GY', name: 'ガイアナ' },
+  { code: 'GA', name: 'ガボン' },{ code: 'GH', name: 'ガーナ' },
+  { code: 'CY', name: 'キプロス' },{ code: 'CU', name: 'キューバ' },
+  { code: 'KG', name: 'キルギス' },{ code: 'GN', name: 'ギニア' },
+  { code: 'GW', name: 'ギニアビサウ共和国' },{ code: 'GR', name: 'ギリシャ' },
+  { code: 'KW', name: 'クウェート' },{ code: 'HR', name: 'クロアチア' },
+  { code: 'GT', name: 'グアテマラ' },{ code: 'GU', name: 'グアム' },
+  { code: 'GL', name: 'グリーンランド' },{ code: 'KY', name: 'ケイマン諸島' },
+  { code: 'KE', name: 'ケニア' },{ code: 'CR', name: 'コスタリカ' },
+  { code: 'XK', name: 'コソボ' },{ code: 'CO', name: 'コロンビア' },
+  { code: 'CG', name: 'コンゴ' },{ code: 'CI', name: 'コートジボワール' },
+  // さ行
+  { code: 'SA', name: 'サウジアラビア' },{ code: 'ZM', name: 'ザンビア' },
+  { code: 'SY', name: 'シリア' },{ code: 'SG', name: 'シンガポール' },
+  { code: 'JM', name: 'ジャマイカ' },{ code: 'GE', name: 'ジョージア' },
+  { code: 'ZW', name: 'ジンバブエ' },{ code: 'CH', name: 'スイス' },
+  { code: 'LK', name: 'スリランカ' },{ code: 'SK', name: 'スロバキア' },
+  { code: 'SI', name: 'スロベニア' },{ code: 'SD', name: 'スーダン' },
+  { code: 'SN', name: 'セネガル' },{ code: 'RS', name: 'セルビア' },
+  { code: 'CS', name: 'セルビア・モンテネグロ' },{ code: 'KN', name: 'セントクリストファー・ネービス' },
+  { code: 'SO', name: 'ソマリア' },{ code: 'SB', name: 'ソロモン諸島' },
+  { code: 'SU', name: 'ソ連' },
+  // た行
+  { code: 'TJ', name: 'タジキスタン' },{ code: 'TZ', name: 'タンザニア' },
+  { code: 'CZ', name: 'チェコ' },{ code: 'CSHH', name: 'チェコスロバキア' },
+  { code: 'TD', name: 'チャド' },{ code: 'TN', name: 'チュニジア' },
+  { code: 'CL', name: 'チリ' },{ code: 'TT', name: 'トリニダード・トバゴ' },
+  { code: 'TM', name: 'トルクメニスタン' },{ code: 'TR', name: 'トルコ' },
+  { code: 'DO', name: 'ドミニカ共和国' },
+  // な行
+  { code: 'NG', name: 'ナイジェリア' },{ code: 'NA', name: 'ナミビア' },
+  { code: 'NI', name: 'ニカラグア' },{ code: 'NE', name: 'ニジェール' },
+  { code: 'NZ', name: 'ニュージーランド' },{ code: 'NP', name: 'ネパール' },
+  { code: 'NO', name: 'ノルウェー' },
+  // は行
+  { code: 'HT', name: 'ハイチ' },{ code: 'HU', name: 'ハンガリー' },
+  { code: 'VU', name: 'バヌアツ' },{ code: 'BS', name: 'バハマ' },
+  { code: 'BB', name: 'バルバドス' },{ code: 'BD', name: 'バングラデシュ' },
+  { code: 'BH', name: 'バーレーン' },{ code: 'PK', name: 'パキスタン' },
+  { code: 'PA', name: 'パナマ' },{ code: 'PG', name: 'パプアニューギニア' },
+  { code: 'PY', name: 'パラグアイ' },{ code: 'PS', name: 'パレスチナ' },
+  { code: 'FJ', name: 'フィジー' },{ code: 'PH', name: 'フィリピン' },
+  { code: 'FI', name: 'フィンランド' },{ code: 'PF', name: 'フランス領ポリネシア' },
+  { code: 'BG', name: 'ブルガリア' },{ code: 'BF', name: 'ブルキナファソ' },
+  { code: 'BN', name: 'ブルネイ' },{ code: 'BT', name: 'ブータン' },
+  { code: 'PR', name: 'プエルトリコ' },{ code: 'VN', name: 'ベトナム' },
+  { code: 'BJ', name: 'ベナン' },{ code: 'VE', name: 'ベネズエラ' },
+  { code: 'BY', name: 'ベラルーシ' },{ code: 'BZ', name: 'ベリーズ' },
+  { code: 'BE', name: 'ベルギー' },{ code: 'PE', name: 'ペルー' },
+  { code: 'HN', name: 'ホンジュラス' },{ code: 'BA', name: 'ボスニア・ヘルツェゴビナ' },
+  { code: 'BW', name: 'ボツワナ' },{ code: 'BO', name: 'ボリビア' },
+  { code: 'PT', name: 'ポルトガル' },{ code: 'PL', name: 'ポーランド' },
+  // ま行
+  { code: 'MO', name: 'マカオ' },{ code: 'MK', name: 'マケドニア' },
+  { code: 'MG', name: 'マダガスカル' },{ code: 'ML', name: 'マリ' },
+  { code: 'MT', name: 'マルタ共和国' },{ code: 'MY', name: 'マレーシア' },
+  { code: 'MH', name: 'マーシャル諸島' },{ code: 'FM', name: 'ミクロネシア' },
+  { code: 'MM', name: 'ミャンマー' },{ code: 'MZ', name: 'モザンビーク' },
+  { code: 'MC', name: 'モナコ' },{ code: 'MV', name: 'モルディブ' },
+  { code: 'MD', name: 'モルドバ' },{ code: 'MA', name: 'モロッコ' },
+  { code: 'MN', name: 'モンゴル' },{ code: 'ME', name: 'モンテネグロ' },
+  { code: 'MU', name: 'モーリシャス共和国' },{ code: 'MR', name: 'モーリタニア' },
+  // や行
+  { code: 'YUCS', name: 'ユーゴスラビア' },{ code: 'JO', name: 'ヨルダン' },
+  // ら行
+  { code: 'LA', name: 'ラオス' },{ code: 'LV', name: 'ラトビア' },
+  { code: 'LT', name: 'リトアニア' },{ code: 'LI', name: 'リヒテンシュタイン' },
+  { code: 'LY', name: 'リビア' },{ code: 'LR', name: 'リベリア' },
+  { code: 'LU', name: 'ルクセンブルク' },{ code: 'RW', name: 'ルワンダ' },
+  { code: 'RO', name: 'ルーマニア' },{ code: 'LS', name: 'レソト' },
+  { code: 'LB', name: 'レバノン' },
+  // 漢字
+  { code: 'KP', name: '北朝鮮' },{ code: 'ZA', name: '南アフリカ' },
+  { code: 'TL', name: '東ティモール' },{ code: 'DDDE', name: '東ドイツ' },
+  { code: 'DEDE', name: '西ドイツ' },{ code: 'GQ', name: '赤道ギニア' },
 ]
 
 // Known TMDB company IDs for major distributors (used for direct lookup)
@@ -884,17 +1011,20 @@ export default function Search({ userId, onOpenWork }: {
 
   const renderProviderChips = () => (
     <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
-      <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36' }}>動画配信サービスで探す</div>
+      <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span>動画配信サービスで探す</span>
+        <span style={{ fontSize: 12, color: '#8888a8', fontWeight: 400 }}>{PROVIDERS.length}サービス</span>
+      </div>
       <div style={{ display: 'flex', overflowX: 'auto', gap: 12, padding: '16px', scrollbarWidth: 'none' }}>
         {PROVIDERS.map(p => (
           <button
-            key={p.id}
-            onClick={() => browseProvider(p.id, `${p.emoji} ${p.name}`)}
+            key={p.name}
+            onClick={() => p.id > 0 ? browseProvider(p.id, `${p.emoji} ${p.name}`) : browseProvider(0, `${p.emoji} ${p.name}`)}
             style={{
-              flexShrink: 0, width: 140, padding: '16px 12px',
+              flexShrink: 0, width: 150, padding: '16px 12px',
               background: '#0d0e1e', borderRadius: 12,
               border: '1px solid #2a2b46', cursor: 'pointer',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
               transition: 'border-color 0.2s, transform 0.2s',
             }}
             onMouseEnter={e => {
@@ -908,55 +1038,142 @@ export default function Search({ userId, onOpenWork }: {
           >
             <span style={{ fontSize: 28 }}>{p.emoji}</span>
             <span style={{ fontSize: 13, fontWeight: 600, color: '#e0e0f0', textAlign: 'center', lineHeight: 1.3 }}>{p.name}</span>
-            <span style={{ fontSize: 11, color: '#8888a8' }}>作品を見る ›</span>
+            <span style={{ fontSize: 11, color: '#8888a8', textAlign: 'center', lineHeight: 1.3 }}>{p.desc}</span>
           </button>
         ))}
       </div>
-    </div>
-  )
-
-  const renderAwardChips = () => (
-    <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
-      <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36' }}>映画賞・レーティングで探す</div>
-      {AWARDS.map(a => (
+      {/* Also show as list below cards */}
+      {PROVIDERS.map(p => (
         <button
-          key={a.name}
+          key={`list-${p.name}`}
           style={linkItemStyle}
-          onClick={() => browseAward(a)}
+          onClick={() => p.id > 0 ? browseProvider(p.id, `${p.emoji} ${p.name}`) : browseProvider(0, `${p.emoji} ${p.name}`)}
           onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.08)' }}
           onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
         >
-          <span>{a.emoji}</span>
-          <span>{a.name}</span>
+          <span>{p.emoji}</span>
+          <span style={{ flex: 1 }}>{p.name}</span>
+          <span style={{ fontSize: 11, color: '#8888a8' }}>{p.desc}</span>
           <span style={linkArrow}>›</span>
         </button>
       ))}
     </div>
   )
 
-  const renderCountryChips = () => (
-    <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
-      <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36' }}>製作国・地域で探す</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)' }}>
-        {COUNTRIES.map(c => (
+  const [awardExpanded, setAwardExpanded] = useState(false)
+
+  const renderAwardChips = () => {
+    const displayAwards = awardExpanded ? AWARDS : AWARDS.slice(0, 12)
+    return (
+      <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
+        <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>映画賞・映画祭で探す</span>
+          <span style={{ fontSize: 12, color: '#8888a8', fontWeight: 400 }}>{AWARDS.length}件</span>
+        </div>
+        {displayAwards.map(a => (
           <button
-            key={c.code}
-            style={{
-              ...linkItemStyle,
-              borderRight: '1px solid #1e1f36',
-            }}
-            onClick={() => browseCountry(c.code, `${c.emoji} ${c.name}`)}
+            key={a.name}
+            style={linkItemStyle}
+            onClick={() => browseAward(a)}
             onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.08)' }}
             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
           >
-            <span>{c.emoji}</span>
-            <span>{c.name}</span>
+            <span>{a.emoji}</span>
+            <span>{a.name}</span>
             <span style={linkArrow}>›</span>
           </button>
         ))}
+        {!awardExpanded && AWARDS.length > 12 && (
+          <button
+            onClick={() => setAwardExpanded(true)}
+            style={{
+              width: '100%', padding: '14px', background: 'none', border: 'none',
+              borderTop: '1px solid #1e1f36', color: '#a29bfe', fontSize: 14,
+              fontWeight: 600, cursor: 'pointer',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.08)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+          >
+            すべての映画賞を表示 ({AWARDS.length}件) ›
+          </button>
+        )}
+        {awardExpanded && (
+          <button onClick={() => setAwardExpanded(false)} style={{ width: '100%', padding: '14px', background: 'none', border: 'none', borderTop: '1px solid #1e1f36', color: '#8888a8', fontSize: 13, cursor: 'pointer' }}>閉じる</button>
+        )}
       </div>
-    </div>
-  )
+    )
+  }
+
+  const [countryFilter, setCountryFilter] = useState('')
+  const [countryExpanded, setCountryExpanded] = useState(false)
+
+  const renderCountryChips = () => {
+    const filtered = countryFilter.trim()
+      ? COUNTRIES.filter(c => c.name.includes(countryFilter) || c.code.toLowerCase().includes(countryFilter.toLowerCase()))
+      : COUNTRIES
+    const INITIAL_COUNT = 20 // 主要国のみ最初に表示
+    const displayCountries = countryExpanded || countryFilter ? filtered : filtered.slice(0, INITIAL_COUNT)
+
+    return (
+      <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
+        <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>製作国・地域で探す</span>
+          <span style={{ fontSize: 12, color: '#8888a8', fontWeight: 400 }}>{COUNTRIES.length}カ国・地域</span>
+        </div>
+        {/* Search filter */}
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid #1e1f36' }}>
+          <input
+            value={countryFilter}
+            onChange={e => { setCountryFilter(e.target.value); setCountryExpanded(true) }}
+            placeholder="国名で絞り込み..."
+            style={{
+              width: '100%', padding: '8px 12px', borderRadius: 8,
+              border: '1px solid #2a2b46', background: '#0d0e1e', color: '#e0e0f0',
+              fontSize: 13, boxSizing: 'border-box', outline: 'none',
+            }}
+            onFocus={e => { e.currentTarget.style.borderColor = '#6c5ce7' }}
+            onBlur={e => { e.currentTarget.style.borderColor = '#2a2b46' }}
+          />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)' }}>
+          {displayCountries.map(c => (
+            <button
+              key={c.code}
+              style={{ ...linkItemStyle, borderRight: '1px solid #1e1f36' }}
+              onClick={() => browseCountry(c.code, c.name)}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.08)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+            >
+              <span style={{ fontSize: 13 }}>{c.name}</span>
+              <span style={linkArrow}>›</span>
+            </button>
+          ))}
+        </div>
+        {!countryExpanded && !countryFilter && filtered.length > INITIAL_COUNT && (
+          <button
+            onClick={() => setCountryExpanded(true)}
+            style={{
+              width: '100%', padding: '14px', background: 'none', border: 'none',
+              borderTop: '1px solid #1e1f36', color: '#a29bfe', fontSize: 14,
+              fontWeight: 600, cursor: 'pointer',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.08)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+          >
+            すべての国・地域を表示 ({COUNTRIES.length}件) ›
+          </button>
+        )}
+        {countryExpanded && !countryFilter && (
+          <button onClick={() => setCountryExpanded(false)} style={{ width: '100%', padding: '14px', background: 'none', border: 'none', borderTop: '1px solid #1e1f36', color: '#8888a8', fontSize: 13, cursor: 'pointer' }}>閉じる</button>
+        )}
+        {countryFilter && filtered.length === 0 && (
+          <div style={{ padding: '24px 16px', textAlign: 'center', color: '#8888a8', fontSize: 13 }}>
+            「{countryFilter}」に一致する国・地域がありません
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const [companyFilter, setCompanyFilter] = useState('')
   const [companyExpanded, setCompanyExpanded] = useState(false)
