@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       case 'discover': {
         const type = searchParams.get('type') || 'movie'
         const params: Record<string, string> = { watch_region: 'JP' }
-        for (const key of ['with_genres', 'sort_by', 'page', 'primary_release_date.gte', 'primary_release_date.lte', 'first_air_date.gte', 'first_air_date.lte', 'vote_count.gte', 'with_runtime.gte', 'with_runtime.lte', 'with_watch_providers', 'with_origin_country']) {
+        for (const key of ['with_genres', 'sort_by', 'page', 'primary_release_date.gte', 'primary_release_date.lte', 'first_air_date.gte', 'first_air_date.lte', 'vote_count.gte', 'vote_count.lte', 'vote_average.gte', 'with_runtime.gte', 'with_runtime.lte', 'with_watch_providers', 'with_watch_monetization_types', 'with_origin_country', 'with_companies']) {
           const val = searchParams.get(key)
           if (val) params[key] = val
         }
@@ -79,6 +79,11 @@ export async function GET(request: NextRequest) {
         const id = searchParams.get('id')!
         const season = searchParams.get('season_number') || '1'
         const data = await tmdbFetch(`/tv/${id}/season/${season}`)
+        return NextResponse.json(data)
+      }
+      case 'watch_providers': {
+        const type = searchParams.get('type') || 'movie'
+        const data = await tmdbFetch(`/watch/providers/${type}`, { watch_region: 'JP' })
         return NextResponse.json(data)
       }
       default:

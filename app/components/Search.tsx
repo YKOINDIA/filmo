@@ -27,7 +27,7 @@ interface SectionData {
 }
 
 interface BrowseState {
-  mode: 'home' | 'genre' | 'year'
+  mode: 'home' | 'genre' | 'year' | 'provider' | 'award' | 'country' | 'company'
   label: string
   items: TMDBItem[]
   loading: boolean
@@ -84,6 +84,67 @@ const DECADES = [
   { label: '1990年代', gte: '1990-01-01', lte: '1999-12-31' },
   { label: '1980年代', gte: '1980-01-01', lte: '1989-12-31' },
   { label: '1970年代', gte: '1970-01-01', lte: '1979-12-31' },
+]
+
+const PROVIDERS = [
+  { id: 8, name: 'Netflix', emoji: '🔴' },
+  { id: 9, name: 'Amazon Prime Video', emoji: '📦' },
+  { id: 15, name: 'Hulu', emoji: '🟢' },
+  { id: 337, name: 'Disney+', emoji: '🏰' },
+  { id: 84, name: 'U-NEXT', emoji: '🟣' },
+  { id: 1796, name: 'FOD', emoji: '📺' },
+  { id: 283, name: 'dアニメストア', emoji: '🎌' },
+  { id: 1860, name: 'DMM TV', emoji: '🎬' },
+  { id: 2136, name: 'Lemino', emoji: '🟡' },
+  { id: 85, name: 'TELASA', emoji: '🔵' },
+]
+
+const AWARDS = [
+  { name: 'アカデミー賞受賞作品', emoji: '🏆', sort: 'vote_average.desc', voteMin: '5000' },
+  { name: 'ゴールデングローブ', emoji: '🌐', sort: 'vote_average.desc', voteMin: '3000' },
+  { name: '日本アカデミー賞', emoji: '🇯🇵', sort: 'vote_average.desc', voteMin: '500', country: 'JP' },
+  { name: '高評価映画 (8.0+)', emoji: '⭐', sort: 'vote_average.desc', voteMin: '1000', voteAvgMin: '8' },
+  { name: '隠れた名作', emoji: '💎', sort: 'vote_average.desc', voteMin: '100', voteMax: '1000', voteAvgMin: '7.5' },
+]
+
+const COUNTRIES = [
+  { code: 'JP', name: '日本', emoji: '🇯🇵' },
+  { code: 'US', name: 'アメリカ', emoji: '🇺🇸' },
+  { code: 'GB', name: 'イギリス', emoji: '🇬🇧' },
+  { code: 'FR', name: 'フランス', emoji: '🇫🇷' },
+  { code: 'KR', name: '韓国', emoji: '🇰🇷' },
+  { code: 'IN', name: 'インド', emoji: '🇮🇳' },
+  { code: 'IT', name: 'イタリア', emoji: '🇮🇹' },
+  { code: 'DE', name: 'ドイツ', emoji: '🇩🇪' },
+  { code: 'CN', name: '中国', emoji: '🇨🇳' },
+  { code: 'ES', name: 'スペイン', emoji: '🇪🇸' },
+  { code: 'SE', name: 'スウェーデン', emoji: '🇸🇪' },
+  { code: 'AU', name: 'オーストラリア', emoji: '🇦🇺' },
+  { code: 'HK', name: '香港', emoji: '🇭🇰' },
+  { code: 'TW', name: '台湾', emoji: '🇹🇼' },
+  { code: 'BR', name: 'ブラジル', emoji: '🇧🇷' },
+  { code: 'CA', name: 'カナダ', emoji: '🇨🇦' },
+  { code: 'RU', name: 'ロシア', emoji: '🇷🇺' },
+  { code: 'TH', name: 'タイ', emoji: '🇹🇭' },
+]
+
+const COMPANIES = [
+  { id: 2, name: 'ウォルト・ディズニー', emoji: '🏰' },
+  { id: 33, name: 'ユニバーサル', emoji: '🌍' },
+  { id: 174, name: 'ワーナー・ブラザース', emoji: '🛡️' },
+  { id: 4, name: 'パラマウント', emoji: '⛰️' },
+  { id: 5, name: 'コロンビア', emoji: '🗽' },
+  { id: 25, name: '20世紀スタジオ', emoji: '🎬' },
+  { id: 420, name: 'マーベル', emoji: '🦸' },
+  { id: 7505, name: '東宝', emoji: '🇯🇵' },
+  { id: 5542, name: '東映', emoji: '🎌' },
+  { id: 1507, name: '松竹', emoji: '🎋' },
+  { id: 3287, name: 'A24', emoji: '💫' },
+  { id: 882, name: 'スタジオジブリ', emoji: '🌱' },
+  { id: 21, name: 'ピクサー', emoji: '💡' },
+  { id: 9993, name: 'DC', emoji: '🦇' },
+  { id: 2251, name: 'KADOKAWA', emoji: '📖' },
+  { id: 34, name: 'ソニー・ピクチャーズ', emoji: '🎮' },
 ]
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -479,6 +540,97 @@ export default function Search({ userId, onOpenWork }: {
     }
   }
 
+  const browseProvider = async (providerId: number, providerName: string, page: number = 1) => {
+    const mediaType = activeTab === 'movie' ? 'movie' : 'tv'
+    setBrowse({ mode: 'provider', label: providerName, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
+    try {
+      const res = await fetch(`/api/tmdb?action=discover&type=${mediaType}&with_watch_providers=${providerId}&with_watch_monetization_types=flatrate&page=${page}&sort_by=popularity.desc`)
+      const data = await res.json()
+      const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
+        ...item,
+        media_type: item.media_type || mediaType,
+      }))
+      setBrowse(prev => ({
+        ...prev,
+        items: page === 1 ? items : [...prev.items, ...items],
+        loading: false,
+        page,
+        totalPages: data.total_pages || 1,
+      }))
+    } catch {
+      setBrowse(prev => ({ ...prev, loading: false }))
+    }
+  }
+
+  const browseAward = async (award: typeof AWARDS[number], page: number = 1) => {
+    const label = `${award.emoji} ${award.name}`
+    setBrowse({ mode: 'award', label, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
+    try {
+      let url = `/api/tmdb?action=discover&type=movie&sort_by=${award.sort}&vote_count.gte=${award.voteMin}&page=${page}`
+      if (award.voteAvgMin) url += `&vote_average.gte=${award.voteAvgMin}`
+      if (award.voteMax) url += `&vote_count.lte=${award.voteMax}`
+      if (award.country) url += `&with_origin_country=${award.country}`
+      const res = await fetch(url)
+      const data = await res.json()
+      const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
+        ...item,
+        media_type: item.media_type || 'movie',
+      }))
+      setBrowse(prev => ({
+        ...prev,
+        items: page === 1 ? items : [...prev.items, ...items],
+        loading: false,
+        page,
+        totalPages: data.total_pages || 1,
+      }))
+    } catch {
+      setBrowse(prev => ({ ...prev, loading: false }))
+    }
+  }
+
+  const browseCountry = async (countryCode: string, countryName: string, page: number = 1) => {
+    const mediaType = activeTab === 'movie' ? 'movie' : 'tv'
+    setBrowse({ mode: 'country', label: countryName, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
+    try {
+      const res = await fetch(`/api/tmdb?action=discover&type=${mediaType}&with_origin_country=${countryCode}&page=${page}&sort_by=popularity.desc`)
+      const data = await res.json()
+      const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
+        ...item,
+        media_type: item.media_type || mediaType,
+      }))
+      setBrowse(prev => ({
+        ...prev,
+        items: page === 1 ? items : [...prev.items, ...items],
+        loading: false,
+        page,
+        totalPages: data.total_pages || 1,
+      }))
+    } catch {
+      setBrowse(prev => ({ ...prev, loading: false }))
+    }
+  }
+
+  const browseCompany = async (companyId: number, companyName: string, page: number = 1) => {
+    setBrowse({ mode: 'company', label: companyName, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
+    try {
+      const res = await fetch(`/api/tmdb?action=discover&type=movie&with_companies=${companyId}&page=${page}&sort_by=popularity.desc`)
+      const data = await res.json()
+      const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
+        ...item,
+        media_type: item.media_type || 'movie',
+      }))
+      setBrowse(prev => ({
+        ...prev,
+        items: page === 1 ? items : [...prev.items, ...items],
+        loading: false,
+        page,
+        totalPages: data.total_pages || 1,
+      }))
+    } catch {
+      setBrowse(prev => ({ ...prev, loading: false }))
+    }
+  }
+
   const goBackToHome = () => {
     setBrowse({ mode: 'home', label: '', items: [], loading: false, page: 1, totalPages: 1 })
   }
@@ -628,6 +780,106 @@ export default function Search({ userId, onOpenWork }: {
     </div>
   )
 
+  const renderProviderChips = () => (
+    <div>
+      <div style={S.sectionHeader}>動画配信サービスで探す</div>
+      <div style={S.genreGrid}>
+        {PROVIDERS.map(p => (
+          <button
+            key={p.id}
+            style={S.genrePill(false)}
+            onClick={() => browseProvider(p.id, `${p.emoji} ${p.name}`)}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = '#6c5ce7'
+              ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.15)'
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = '#2a2b46'
+              ;(e.currentTarget as HTMLButtonElement).style.background = '#12132a'
+            }}
+          >
+            {p.emoji} {p.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
+  const renderAwardChips = () => (
+    <div>
+      <div style={S.sectionHeader}>映画賞・レーティングで探す</div>
+      <div style={S.genreGrid}>
+        {AWARDS.map(a => (
+          <button
+            key={a.name}
+            style={S.genrePill(false)}
+            onClick={() => browseAward(a)}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = '#6c5ce7'
+              ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.15)'
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = '#2a2b46'
+              ;(e.currentTarget as HTMLButtonElement).style.background = '#12132a'
+            }}
+          >
+            {a.emoji} {a.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
+  const renderCountryChips = () => (
+    <div>
+      <div style={S.sectionHeader}>製作国・地域で探す</div>
+      <div style={S.genreGrid}>
+        {COUNTRIES.map(c => (
+          <button
+            key={c.code}
+            style={S.genrePill(false)}
+            onClick={() => browseCountry(c.code, `${c.emoji} ${c.name}`)}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = '#6c5ce7'
+              ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.15)'
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = '#2a2b46'
+              ;(e.currentTarget as HTMLButtonElement).style.background = '#12132a'
+            }}
+          >
+            {c.emoji} {c.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
+  const renderCompanyChips = () => (
+    <div>
+      <div style={S.sectionHeader}>配給会社で探す</div>
+      <div style={S.genreGrid}>
+        {COMPANIES.map(c => (
+          <button
+            key={c.id}
+            style={S.genrePill(false)}
+            onClick={() => browseCompany(c.id, `${c.emoji} ${c.name}`)}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = '#6c5ce7'
+              ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.15)'
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = '#2a2b46'
+              ;(e.currentTarget as HTMLButtonElement).style.background = '#12132a'
+            }}
+          >
+            {c.emoji} {c.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
   // --- Search results view ---
   const renderSearchView = () => {
     const filtered = searchResults.filter(r => {
@@ -689,7 +941,6 @@ export default function Search({ userId, onOpenWork }: {
               style={S.loadMoreBtn}
               onClick={() => {
                 if (browse.mode === 'genre') {
-                  // Re-derive genre ID from the items' context
                   const genres = activeTab === 'movie' ? MOVIE_GENRES
                     : activeTab === 'drama' ? TV_GENRES : ANIME_GENRES
                   const found = genres.find(g => browse.label.includes(g.name))
@@ -697,6 +948,18 @@ export default function Search({ userId, onOpenWork }: {
                 } else if (browse.mode === 'year') {
                   const decade = DECADES.find(d => d.label === browse.label)
                   if (decade) browseDecade(decade.gte, decade.lte, browse.label, browse.page + 1)
+                } else if (browse.mode === 'provider') {
+                  const found = PROVIDERS.find(p => browse.label.includes(p.name))
+                  if (found) browseProvider(found.id, browse.label, browse.page + 1)
+                } else if (browse.mode === 'award') {
+                  const found = AWARDS.find(a => browse.label.includes(a.name))
+                  if (found) browseAward(found, browse.page + 1)
+                } else if (browse.mode === 'country') {
+                  const found = COUNTRIES.find(c => browse.label.includes(c.name))
+                  if (found) browseCountry(found.code, browse.label, browse.page + 1)
+                } else if (browse.mode === 'company') {
+                  const found = COMPANIES.find(c => browse.label.includes(c.name))
+                  if (found) browseCompany(found.id, browse.label, browse.page + 1)
                 }
               }}
               disabled={browse.loading}
@@ -723,8 +986,12 @@ export default function Search({ userId, onOpenWork }: {
           {renderScrollSection('trending_movie')}
           {renderScrollSection('now_playing')}
           {renderScrollSection('upcoming')}
+          {renderProviderChips()}
+          {renderAwardChips()}
           {renderGenreChips()}
           {renderDecadeButtons()}
+          {renderCountryChips()}
+          {renderCompanyChips()}
         </>
       )
     }
@@ -735,7 +1002,9 @@ export default function Search({ userId, onOpenWork }: {
           {renderScrollSection('jp_drama')}
           {renderScrollSection('kr_drama')}
           {renderScrollSection('us_drama')}
+          {renderProviderChips()}
           {renderGenreChips()}
+          {renderCountryChips()}
         </>
       )
     }
@@ -744,6 +1013,7 @@ export default function Search({ userId, onOpenWork }: {
         <>
           {renderScrollSection('trending_anime')}
           {renderScrollSection('airing_anime')}
+          {renderProviderChips()}
           {renderGenreChips()}
         </>
       )
