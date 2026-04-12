@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/daily-x-post",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/check-anomaly",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/sync-streaming",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}
