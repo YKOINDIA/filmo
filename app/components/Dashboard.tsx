@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
-const TMDB_IMG = 'https://image.tmdb.org/t/p'
+const TMDB_IMG_POSTER = 'https://image.tmdb.org/t/p/w342'
+const TMDB_IMG_BACKDROP = 'https://image.tmdb.org/t/p/w1280'
 
 interface DashboardProps {
   userId: string
@@ -15,37 +15,49 @@ interface MediaItem {
   title?: string
   name?: string
   poster_path: string | null
+  backdrop_path?: string | null
   media_type?: string
   vote_average?: number
   release_date?: string
   first_air_date?: string
 }
 
-interface WatchlistEntry {
-  tmdb_id: number
-  media_type: string
-  score: number | null
-  watched_at: string | null
-  movies: {
-    title: string
-    poster_path: string | null
-    tmdb_id: number
-    media_type: string
-    vote_average: number | null
-  }
+const GENRE_CHIPS: { label: string; emoji: string }[] = [
+  { label: 'アクション', emoji: '💥' },
+  { label: 'コメディ', emoji: '😂' },
+  { label: 'ドラマ', emoji: '🎭' },
+  { label: 'ホラー', emoji: '👻' },
+  { label: 'SF', emoji: '🚀' },
+  { label: 'ロマンス', emoji: '💕' },
+  { label: 'アニメ', emoji: '🎨' },
+  { label: 'ミステリー', emoji: '🔍' },
+  { label: 'ファンタジー', emoji: '🧙' },
+  { label: 'ドキュメンタリー', emoji: '📹' },
+  { label: 'スリラー', emoji: '😱' },
+  { label: '音楽', emoji: '🎵' },
+]
+
+interface SectionLoadingState {
+  trending: boolean
+  nowPlaying: boolean
+  upcoming: boolean
+  tvDramas: boolean
+  anime: boolean
 }
 
 export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
   const [trending, setTrending] = useState<MediaItem[]>([])
   const [nowPlaying, setNowPlaying] = useState<MediaItem[]>([])
-  const [recent, setRecent] = useState<WatchlistEntry[]>([])
-  const [recommended, setRecommended] = useState<MediaItem[]>([])
+  const [upcoming, setUpcoming] = useState<MediaItem[]>([])
+  const [tvDramas, setTvDramas] = useState<MediaItem[]>([])
+  const [anime, setAnime] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [sectionLoading, setSectionLoading] = useState({
+  const [sectionLoading, setSectionLoading] = useState<SectionLoadingState>({
     trending: true,
     nowPlaying: true,
-    recent: true,
-    recommended: true,
+    upcoming: true,
+    tvDramas: true,
+    anime: true,
   })
 
   const fetchTrending = useCallback(async () => {
@@ -74,92 +86,248 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
     }
   }, [])
 
-  const fetchRecent = useCallback(async () => {
+  const fetchUpcoming = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('watchlists')
-        .select('tmdb_id, media_type, score, watched_at, movies(title, poster_path, tmdb_id, media_type, vote_average)')
-        .eq('user_id', userId)
-        .not('watched_at', 'is', null)
-        .order('watched_at', { ascending: false })
-        .limit(20)
-      if (error) throw error
-      setRecent((data || []) as unknown as WatchlistEntry[])
-    } catch (err) {
-      console.error('Recent fetch error:', err)
-    } finally {
-      setSectionLoading(prev => ({ ...prev, recent: false }))
-    }
-  }, [userId])
-
-  const fetchRecommended = useCallback(async () => {
-    try {
-      const res = await fetch('/api/tmdb?action=trending&time_window=day')
-      if (!res.ok) throw new Error('Failed to fetch recommended')
+      const res = await fetch('/api/tmdb?action=upcoming')
+      if (!res.ok) throw new Error('Failed to fetch upcoming')
       const data = await res.json()
-      setRecommended(data.results?.slice(0, 20) || [])
+      setUpcoming(data.results || [])
     } catch (err) {
-      console.error('Recommended fetch error:', err)
+      console.error('Upcoming fetch error:', err)
     } finally {
-      setSectionLoading(prev => ({ ...prev, recommended: false }))
+      setSectionLoading(prev => ({ ...prev, upcoming: false }))
+    }
+  }, [])
+
+  const fetchTvDramas = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tmdb?action=discover&type=tv')
+      if (!res.ok) throw new Error('Failed to fetch TV dramas')
+      const data = await res.json()
+      setTvDramas(data.results || [])
+    } catch (err) {
+      console.error('TV dramas fetch error:', err)
+    } finally {
+      setSectionLoading(prev => ({ ...prev, tvDramas: false }))
+    }
+  }, [])
+
+  const fetchAnime = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tmdb?action=discover&type=tv&with_genres=16')
+      if (!res.ok) throw new Error('Failed to fetch anime')
+      const data = await res.json()
+      setAnime(data.results || [])
+    } catch (err) {
+      console.error('Anime fetch error:', err)
+    } finally {
+      setSectionLoading(prev => ({ ...prev, anime: false }))
     }
   }, [])
 
   useEffect(() => {
-    Promise.all([fetchTrending(), fetchNowPlaying(), fetchRecent(), fetchRecommended()])
-      .finally(() => setLoading(false))
-  }, [fetchTrending, fetchNowPlaying, fetchRecent, fetchRecommended])
+    Promise.all([
+      fetchTrending(),
+      fetchNowPlaying(),
+      fetchUpcoming(),
+      fetchTvDramas(),
+      fetchAnime(),
+    ]).finally(() => setLoading(false))
+  }, [fetchTrending, fetchNowPlaying, fetchUpcoming, fetchTvDramas, fetchAnime])
 
-  const getTitle = (item: MediaItem) => item.title || item.name || ''
-  const getYear = (item: MediaItem) => {
+  const getTitle = (item: MediaItem): string => item.title || item.name || ''
+  const getYear = (item: MediaItem): string => {
     const d = item.release_date || item.first_air_date
     return d ? d.slice(0, 4) : ''
   }
   const getMediaType = (item: MediaItem): 'movie' | 'tv' => {
     if (item.media_type === 'tv') return 'tv'
+    if (item.name && !item.title) return 'tv'
     return 'movie'
   }
+  const toFilmoScore = (tmdbScore: number): string => (tmdbScore / 2).toFixed(1)
 
-  const scoreColor = (score: number) => {
-    if (score >= 7) return 'var(--fm-success)'
-    if (score >= 5) return 'var(--fm-warning)'
-    return 'var(--fm-danger)'
-  }
-
-  const mediaTypeLabel = (type: string) => {
-    if (type === 'tv') return 'TV'
-    if (type === 'movie') return '映画'
-    return type
-  }
+  const heroItem = trending.length > 0 ? trending[0] : null
 
   return (
-    <div className="animate-fade-in" style={{ padding: '16px 0' }}>
-      {/* Trending Section */}
+    <div style={{
+      background: '#0a0b14',
+      minHeight: '100vh',
+      paddingBottom: 60,
+      color: '#e0e0e0',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    }}>
+      <style>{`
+        @keyframes pulse-skeleton {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 0.6; }
+        }
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .filmo-scroll-row::-webkit-scrollbar { display: none; }
+        .filmo-poster-card:hover { transform: translateY(-6px) scale(1.03) !important; }
+        .filmo-genre-chip:hover {
+          background: linear-gradient(135deg, #6c5ce7, #a29bfe) !important;
+          transform: scale(1.05) !important;
+          color: #fff !important;
+        }
+        .filmo-hero-btn:hover {
+          background: #a29bfe !important;
+          transform: scale(1.05) !important;
+        }
+        .filmo-more-link:hover {
+          color: #a29bfe !important;
+        }
+      `}</style>
+
+      {/* Hero Section - 注目セクション */}
+      {sectionLoading.trending ? (
+        <div style={{
+          width: '100%',
+          height: 420,
+          background: '#12132a',
+          animation: 'pulse-skeleton 1.5s ease-in-out infinite',
+        }} />
+      ) : heroItem ? (
+        <div
+          onClick={() => onOpenWork(heroItem.id, getMediaType(heroItem))}
+          style={{
+            position: 'relative',
+            width: '100%',
+            height: 420,
+            overflow: 'hidden',
+            cursor: 'pointer',
+          }}
+        >
+          {heroItem.backdrop_path && (
+            <img
+              src={`${TMDB_IMG_BACKDROP}${heroItem.backdrop_path}`}
+              alt={getTitle(heroItem)}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+              }}
+            />
+          )}
+          {/* Gradient overlays */}
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(to top, #0a0b14 0%, rgba(10,11,20,0.7) 40%, rgba(10,11,20,0.2) 70%, rgba(10,11,20,0.4) 100%)',
+          }} />
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(to right, rgba(10,11,20,0.8) 0%, transparent 60%)',
+          }} />
+
+          {/* Hero content */}
+          <div style={{
+            position: 'absolute',
+            bottom: 40,
+            left: 0,
+            right: 0,
+            padding: '0 32px',
+            animation: 'fadeInUp 0.8s ease-out',
+          }}>
+            <div style={{
+              display: 'inline-block',
+              background: 'rgba(108,92,231,0.9)',
+              borderRadius: 6,
+              padding: '4px 12px',
+              fontSize: 12,
+              fontWeight: 700,
+              color: '#fff',
+              marginBottom: 12,
+              letterSpacing: 1,
+            }}>
+              🔥 注目
+            </div>
+            <h1 style={{
+              fontSize: 32,
+              fontWeight: 800,
+              color: '#fff',
+              margin: '0 0 10px 0',
+              textShadow: '0 2px 8px rgba(0,0,0,0.6)',
+              lineHeight: 1.2,
+              maxWidth: 600,
+            }}>
+              {getTitle(heroItem)}
+            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+              {heroItem.vote_average != null && heroItem.vote_average > 0 && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  background: 'rgba(0,0,0,0.6)',
+                  backdropFilter: 'blur(8px)',
+                  borderRadius: 8,
+                  padding: '6px 14px',
+                }}>
+                  <span style={{ color: '#ffd700', fontSize: 18 }}>★</span>
+                  <span style={{ fontSize: 20, fontWeight: 800, color: '#ffd700' }}>
+                    {toFilmoScore(heroItem.vote_average)}
+                  </span>
+                  <span style={{ fontSize: 13, color: '#aaa', marginLeft: 2 }}>/ 5.0</span>
+                </div>
+              )}
+              {getYear(heroItem) && (
+                <span style={{ fontSize: 14, color: '#bbb' }}>{getYear(heroItem)}</span>
+              )}
+            </div>
+            <button
+              className="filmo-hero-btn"
+              onClick={(e) => {
+                e.stopPropagation()
+                onOpenWork(heroItem.id, getMediaType(heroItem))
+              }}
+              style={{
+                background: '#6c5ce7',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 10,
+                padding: '12px 28px',
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 4px 15px rgba(108,92,231,0.4)',
+              }}
+            >
+              詳細を見る
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* 今注目の作品 */}
       <Section
-        title="トレンド"
+        title="今注目の作品"
         emoji="🔥"
         loading={sectionLoading.trending}
       >
         <ScrollRow>
-          {trending.map(item => (
+          {trending.slice(1).map(item => (
             <PosterCard
               key={`trending-${item.id}`}
               posterPath={item.poster_path}
               title={getTitle(item)}
               year={getYear(item)}
-              score={item.vote_average}
-              mediaType={item.media_type}
-              scoreColor={scoreColor}
-              mediaTypeLabel={mediaTypeLabel}
+              voteAverage={item.vote_average}
               onClick={() => onOpenWork(item.id, getMediaType(item))}
             />
           ))}
         </ScrollRow>
       </Section>
 
-      {/* Now Playing Section */}
+      {/* 上映中の映画 */}
       <Section
-        title="上映中"
+        title="上映中の映画"
         emoji="🎬"
         loading={sectionLoading.nowPlaying}
       >
@@ -170,65 +338,122 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
               posterPath={item.poster_path}
               title={getTitle(item)}
               year={getYear(item)}
-              score={item.vote_average}
-              mediaType="movie"
-              scoreColor={scoreColor}
-              mediaTypeLabel={mediaTypeLabel}
+              voteAverage={item.vote_average}
               onClick={() => onOpenWork(item.id, 'movie')}
             />
           ))}
         </ScrollRow>
       </Section>
 
-      {/* Recent Watches Section */}
+      {/* 公開予定の映画 */}
       <Section
-        title="最近の鑑賞"
-        emoji="📝"
-        loading={sectionLoading.recent}
-        emptyMessage={recent.length === 0 && !sectionLoading.recent ? 'まだ鑑賞記録がありません' : undefined}
+        title="公開予定の映画"
+        emoji="📅"
+        loading={sectionLoading.upcoming}
       >
         <ScrollRow>
-          {recent.map((entry, idx) => {
-            const movie = entry.movies
-            if (!movie) return null
-            return (
-              <PosterCard
-                key={`recent-${entry.tmdb_id}-${idx}`}
-                posterPath={movie.poster_path}
-                title={movie.title}
-                userScore={entry.score}
-                mediaType={movie.media_type || entry.media_type}
-                scoreColor={scoreColor}
-                mediaTypeLabel={mediaTypeLabel}
-                onClick={() => onOpenWork(movie.tmdb_id, (movie.media_type || entry.media_type) as 'movie' | 'tv')}
-              />
-            )
-          })}
-        </ScrollRow>
-      </Section>
-
-      {/* Recommended Section */}
-      <Section
-        title="おすすめ"
-        emoji="✨"
-        loading={sectionLoading.recommended}
-      >
-        <ScrollRow>
-          {recommended.map(item => (
+          {upcoming.map(item => (
             <PosterCard
-              key={`rec-${item.id}`}
+              key={`up-${item.id}`}
               posterPath={item.poster_path}
               title={getTitle(item)}
               year={getYear(item)}
-              score={item.vote_average}
-              mediaType={item.media_type}
-              scoreColor={scoreColor}
-              mediaTypeLabel={mediaTypeLabel}
-              onClick={() => onOpenWork(item.id, getMediaType(item))}
+              voteAverage={item.vote_average}
+              onClick={() => onOpenWork(item.id, 'movie')}
             />
           ))}
         </ScrollRow>
       </Section>
+
+      {/* 人気のドラマ */}
+      <Section
+        title="人気のドラマ"
+        emoji="📺"
+        loading={sectionLoading.tvDramas}
+      >
+        <ScrollRow>
+          {tvDramas.map(item => (
+            <PosterCard
+              key={`tv-${item.id}`}
+              posterPath={item.poster_path}
+              title={getTitle(item)}
+              year={getYear(item)}
+              voteAverage={item.vote_average}
+              onClick={() => onOpenWork(item.id, 'tv')}
+            />
+          ))}
+        </ScrollRow>
+      </Section>
+
+      {/* 人気のアニメ */}
+      <Section
+        title="人気のアニメ"
+        emoji="🎨"
+        loading={sectionLoading.anime}
+      >
+        <ScrollRow>
+          {anime.map(item => (
+            <PosterCard
+              key={`anime-${item.id}`}
+              posterPath={item.poster_path}
+              title={getTitle(item)}
+              year={getYear(item)}
+              voteAverage={item.vote_average}
+              onClick={() => onOpenWork(item.id, 'tv')}
+            />
+          ))}
+        </ScrollRow>
+      </Section>
+
+      {/* ジャンルで探す */}
+      <section style={{ padding: '0 24px', marginTop: 12, marginBottom: 32 }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          marginBottom: 16,
+        }}>
+          <span style={{ fontSize: 22 }}>🏷️</span>
+          <h2 style={{
+            fontSize: 20,
+            fontWeight: 800,
+            color: '#fff',
+            margin: 0,
+          }}>
+            ジャンルで探す
+          </h2>
+        </div>
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 10,
+        }}>
+          {GENRE_CHIPS.map(genre => (
+            <button
+              key={genre.label}
+              className="filmo-genre-chip"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'rgba(108,92,231,0.15)',
+                border: '1px solid rgba(108,92,231,0.3)',
+                borderRadius: 24,
+                padding: '8px 18px',
+                fontSize: 14,
+                fontWeight: 600,
+                color: '#a29bfe',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <span style={{ fontSize: 16 }}>{genre.emoji}</span>
+              {genre.label}
+            </button>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }
@@ -241,41 +466,48 @@ function Section({
   title,
   emoji,
   loading,
-  emptyMessage,
   children,
 }: {
   title: string
   emoji: string
   loading: boolean
-  emptyMessage?: string
   children: React.ReactNode
 }) {
   return (
-    <section style={{ marginBottom: 28 }}>
+    <section style={{ marginTop: 28, marginBottom: 8 }}>
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '0 16px', marginBottom: 12,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 24px',
+        marginBottom: 14,
       }}>
-        <span style={{ fontSize: 20 }}>{emoji}</span>
-        <h2 style={{
-          fontSize: 18, fontWeight: 700, color: 'var(--fm-text)', margin: 0,
-        }}>
-          {title}
-        </h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 22 }}>{emoji}</span>
+          <h2 style={{
+            fontSize: 20,
+            fontWeight: 800,
+            color: '#fff',
+            margin: 0,
+          }}>
+            {title}
+          </h2>
+        </div>
+        <span
+          className="filmo-more-link"
+          style={{
+            fontSize: 13,
+            color: '#6c5ce7',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'color 0.2s',
+          }}
+        >
+          もっと見る →
+        </span>
       </div>
 
-      {loading ? (
-        <SkeletonRow />
-      ) : emptyMessage ? (
-        <div style={{
-          padding: '24px 16px', textAlign: 'center',
-          color: 'var(--fm-text-muted)', fontSize: 14,
-        }}>
-          {emptyMessage}
-        </div>
-      ) : (
-        children
-      )}
+      {loading ? <SkeletonRow /> : children}
     </section>
   )
 }
@@ -290,12 +522,13 @@ function ScrollRow({ children }: { children: React.ReactNode }) {
   return (
     <div
       ref={ref}
+      className="filmo-scroll-row"
       style={{
         display: 'flex',
         overflowX: 'auto',
         overflowY: 'hidden',
-        gap: 12,
-        padding: '0 16px 8px',
+        gap: 14,
+        padding: '0 24px 12px',
         scrollSnapType: 'x mandatory',
         WebkitOverflowScrolling: 'touch',
         scrollbarWidth: 'none',
@@ -315,115 +548,107 @@ function PosterCard({
   posterPath,
   title,
   year,
-  score,
-  userScore,
-  mediaType,
-  scoreColor,
-  mediaTypeLabel,
+  voteAverage,
   onClick,
 }: {
   posterPath: string | null
   title: string
   year?: string
-  score?: number
-  userScore?: number | null
-  mediaType?: string
-  scoreColor: (s: number) => string
-  mediaTypeLabel: (t: string) => string
+  voteAverage?: number
   onClick: () => void
 }) {
   const [imgError, setImgError] = useState(false)
-  const [hovered, setHovered] = useState(false)
-
-  const displayScore = userScore ?? score
-  const hasScore = displayScore != null && displayScore > 0
+  const filmoScore = voteAverage != null && voteAverage > 0 ? (voteAverage / 2) : null
 
   return (
     <div
+      className="filmo-poster-card"
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       style={{
         flexShrink: 0,
-        width: 130,
+        width: 140,
         cursor: 'pointer',
         scrollSnapAlign: 'start',
-        transition: 'transform 0.2s',
-        transform: hovered ? 'translateY(-4px)' : 'translateY(0)',
+        transition: 'transform 0.25s ease',
       }}
     >
       <div style={{
         position: 'relative',
-        width: 130,
-        height: 195,
-        borderRadius: 10,
+        width: 140,
+        height: 210,
+        borderRadius: 12,
         overflow: 'hidden',
-        background: 'var(--fm-bg-card)',
-        border: '1px solid var(--fm-border)',
+        background: '#12132a',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
       }}>
         {posterPath && !imgError ? (
           <img
-            src={`${TMDB_IMG}/w500${posterPath}`}
+            src={`${TMDB_IMG_POSTER}${posterPath}`}
             alt={title}
             loading="lazy"
             onError={() => setImgError(true)}
             style={{
-              width: '100%', height: '100%', objectFit: 'cover',
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
               display: 'block',
             }}
           />
         ) : (
           <div style={{
-            width: '100%', height: '100%',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'var(--fm-bg-secondary)',
-            color: 'var(--fm-text-muted)', fontSize: 32,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'linear-gradient(135deg, #12132a, #1e1f3a)',
+            color: '#555',
+            fontSize: 36,
           }}>
             🎬
           </div>
         )}
 
         {/* Score badge */}
-        {hasScore && (
+        {filmoScore !== null && (
           <div style={{
-            position: 'absolute', top: 6, left: 6,
-            background: 'rgba(0,0,0,0.75)',
-            backdropFilter: 'blur(4px)',
-            borderRadius: 6, padding: '2px 6px',
-            display: 'flex', alignItems: 'center', gap: 3,
-            fontSize: 12, fontWeight: 700,
-            color: scoreColor(displayScore!),
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            background: 'rgba(0,0,0,0.8)',
+            backdropFilter: 'blur(6px)',
+            borderRadius: 8,
+            padding: '3px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: 12,
+            fontWeight: 800,
           }}>
-            <span style={{ color: 'var(--fm-star)', fontSize: 10 }}>★</span>
-            {userScore != null ? userScore.toFixed(1) : (displayScore! / 2).toFixed(1)}
-          </div>
-        )}
-
-        {/* Media type badge */}
-        {mediaType && (
-          <div style={{
-            position: 'absolute', top: 6, right: 6,
-            background: mediaType === 'tv'
-              ? 'rgba(108,92,231,0.85)'
-              : 'rgba(46,204,138,0.85)',
-            backdropFilter: 'blur(4px)',
-            borderRadius: 6, padding: '2px 6px',
-            fontSize: 10, fontWeight: 700, color: '#fff',
-          }}>
-            {mediaTypeLabel(mediaType)}
+            <span style={{ color: '#ffd700', fontSize: 11 }}>★</span>
+            <span style={{ color: '#ffd700' }}>{filmoScore.toFixed(1)}</span>
           </div>
         )}
       </div>
 
       <div style={{ marginTop: 8, padding: '0 2px' }}>
         <div style={{
-          fontSize: 13, fontWeight: 600, color: 'var(--fm-text)',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          fontSize: 13,
+          fontWeight: 700,
+          color: '#e0e0e0',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          lineHeight: 1.3,
         }}>
           {title}
         </div>
         {year && (
-          <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 2 }}>
+          <div style={{
+            fontSize: 11,
+            color: '#777',
+            marginTop: 3,
+          }}>
             {year}
           </div>
         )}
@@ -439,35 +664,39 @@ function PosterCard({
 function SkeletonRow() {
   return (
     <div style={{
-      display: 'flex', gap: 12, padding: '0 16px',
+      display: 'flex',
+      gap: 14,
+      padding: '0 24px',
       overflowX: 'hidden',
     }}>
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} style={{ flexShrink: 0, width: 130 }}>
+        <div key={i} style={{ flexShrink: 0, width: 140 }}>
           <div style={{
-            width: 130, height: 195, borderRadius: 10,
-            background: 'var(--fm-bg-card)',
+            width: 140,
+            height: 210,
+            borderRadius: 12,
+            background: '#12132a',
             animation: 'pulse-skeleton 1.5s ease-in-out infinite',
-            animationDelay: `${i * 0.1}s`,
+            animationDelay: `${i * 0.12}s`,
           }} />
           <div style={{
-            width: 90, height: 14, borderRadius: 4, marginTop: 8,
-            background: 'var(--fm-bg-card)',
+            width: 100,
+            height: 14,
+            borderRadius: 6,
+            marginTop: 10,
+            background: '#12132a',
             animation: 'pulse-skeleton 1.5s ease-in-out infinite',
-            animationDelay: `${i * 0.1 + 0.05}s`,
+            animationDelay: `${i * 0.12 + 0.06}s`,
           }} />
           <div style={{
-            width: 40, height: 10, borderRadius: 4, marginTop: 4,
-            background: 'var(--fm-bg-card)',
+            width: 45,
+            height: 10,
+            borderRadius: 4,
+            marginTop: 5,
+            background: '#12132a',
             animation: 'pulse-skeleton 1.5s ease-in-out infinite',
-            animationDelay: `${i * 0.1 + 0.1}s`,
+            animationDelay: `${i * 0.12 + 0.12}s`,
           }} />
-          <style>{`
-            @keyframes pulse-skeleton {
-              0%, 100% { opacity: 0.4; }
-              50% { opacity: 0.8; }
-            }
-          `}</style>
         </div>
       ))}
     </div>

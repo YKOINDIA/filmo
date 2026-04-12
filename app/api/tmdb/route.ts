@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       case 'discover': {
         const type = searchParams.get('type') || 'movie'
         const params: Record<string, string> = { watch_region: 'JP' }
-        for (const key of ['with_genres', 'sort_by', 'page', 'primary_release_date.gte', 'primary_release_date.lte', 'vote_count.gte', 'with_runtime.gte', 'with_runtime.lte', 'with_watch_providers']) {
+        for (const key of ['with_genres', 'sort_by', 'page', 'primary_release_date.gte', 'primary_release_date.lte', 'first_air_date.gte', 'first_air_date.lte', 'vote_count.gte', 'with_runtime.gte', 'with_runtime.lte', 'with_watch_providers', 'with_origin_country']) {
           const val = searchParams.get(key)
           if (val) params[key] = val
         }
