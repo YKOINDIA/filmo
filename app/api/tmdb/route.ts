@@ -81,6 +81,11 @@ export async function GET(request: NextRequest) {
         const data = await tmdbFetch(`/tv/${id}/season/${season}`)
         return NextResponse.json(data)
       }
+      case 'search_company': {
+        const query = searchParams.get('query') || ''
+        const data = await tmdbFetch('/search/company', { query })
+        return NextResponse.json(data)
+      }
       case 'watch_providers': {
         const type = searchParams.get('type') || 'movie'
         const data = await tmdbFetch(`/watch/providers/${type}`, { watch_region: 'JP' })

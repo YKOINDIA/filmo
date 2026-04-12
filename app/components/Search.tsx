@@ -135,23 +135,88 @@ const COUNTRIES = [
   { code: 'TH', name: 'タイ', emoji: '🇹🇭' },
 ]
 
-const COMPANIES = [
-  { id: 2, name: 'ウォルト・ディズニー', emoji: '🏰' },
-  { id: 33, name: 'ユニバーサル', emoji: '🌍' },
-  { id: 174, name: 'ワーナー・ブラザース', emoji: '🛡️' },
-  { id: 4, name: 'パラマウント', emoji: '⛰️' },
-  { id: 5, name: 'コロンビア', emoji: '🗽' },
-  { id: 25, name: '20世紀スタジオ', emoji: '🎬' },
-  { id: 420, name: 'マーベル', emoji: '🦸' },
-  { id: 7505, name: '東宝', emoji: '🇯🇵' },
-  { id: 5542, name: '東映', emoji: '🎌' },
-  { id: 1507, name: '松竹', emoji: '🎋' },
-  { id: 3287, name: 'A24', emoji: '💫' },
-  { id: 882, name: 'スタジオジブリ', emoji: '🌱' },
-  { id: 21, name: 'ピクサー', emoji: '💡' },
-  { id: 9993, name: 'DC', emoji: '🦇' },
-  { id: 2251, name: 'KADOKAWA', emoji: '📖' },
-  { id: 34, name: 'ソニー・ピクチャーズ', emoji: '🎮' },
+// Known TMDB company IDs for major distributors (used for direct lookup)
+const COMPANY_ID_MAP: Record<string, number> = {
+  'ウォルト・ディズニー・ジャパン': 2, 'ウォルト・ディズニー・スタジオ・ジャパン': 2,
+  'ユニバーサル映画': 33, 'ユニヴァーサル': 33,
+  'ワーナー・ブラザース映画': 174, 'ワーナー': 174,
+  'パラマウント・ピクチャーズ': 4, '20世紀フォックス映画': 25,
+  'コロンビア映画': 5, 'コロンビア': 5, 'コロムビア映画': 5,
+  'ソニー・ピクチャーズ': 34, 'ソニー・ピクチャーズ エンタテインメント': 34,
+  '東宝': 7505, '東宝東和': 7505, '東映': 5542, '東映アニメーション': 5765,
+  '松竹': 1507, 'KADOKAWA': 2251, '角川映画': 2251,
+  'スタジオジブリ': 882, 'A24': 41077,
+  'MGM': 21, 'NBCユニバーサル・エンターテイメント': 33,
+  'アニプレックス': 13113, 'コミックス・ウェーブ・フィルム': 49898,
+  '東京テアトル': 5765, '日活': 5765, 'キノフィルムズ': 130137,
+  'ギャガ': 6583, 'アスミック・エース': 5765, 'トランスフォーマー': 174,
+  'スタジオ地図': 115003, 'MAPPA': 109153, 'ufotable': 26218,
+}
+
+// Full distributor list from Filmarks (grouped by あいうえお order)
+const DISTRIBUTORS: { heading: string; names: string[] }[] = [
+  { heading: '英数', names: ['Go×En','WAW','weber CINEMA CLUB','AMGエンタテインメント','ABCリブラ','ATG','CIC','CKエンタテインメント','CJ Entertainment Japan','DCT entertainment','D-films','Engawa Films Project','ENBUゼミナール','Elles Films','Foggy','FIKAFILM','Filmarks','Filmssimo','FLICKK','FLYING IMAGE','GACHINKO Film','GBGG Production','GOLD FISH FILMS LIVEUP','GUM','IAC MUSIC JAPAN','IMAGICA TV','J SPORTS','JAIHO','JAYMEN TOKYO','JET','JIGGYFILMS','JOYUP','K2エンタテインメント','K2Pictures','K3企画','KDDI','KODARU','KOBY PICTURES','KOOKS FILM','KT StudioGenie','KYO＋','Lamp.','MGM','Mirovision','MMJ','MomentumLabo.','MUGENUP inc.','NEGA','Netflix','NOROSHI','NSW','OCAWARI','OHGURO FILM','OTAK映画社','Otter pictures','Open Culture Entertainment','Planetafilm','RAW FILM','REALCOFFEE ENTERTAINMENT','REGENTS','REWINDERA PICTURES','RKO日本支社','RKOラジオ日本支社','Route9 & Friends','SAIGATE','SAMANSA','Santa Barbara Pictures','SASSO CO., LTD.','SCRAMBLE FILM','Sending You','Shkran','SHM FILMS','SPACE SHOWER FILMS','SPOTTED PRODUCTIONS','STAR CHANNEL MOVIES','Stranger','STREET LABO','SUNDAE','SUPER BENTO ENTERTEINMENT','S・D・P','Spanic Films','Soul Boat','CHIMNEY TOWN','CHOCOLATE Inc.','CHIPANGU','COMTEG','TRYSOME BROS.','TRYDENT PICTURES','TWENTY FIRST CITY','Team 結婚の報告','TeamDylan','TK事業開発研究所','TCエンタテインメント','TBSテレビ','T-artist','10ANTS','Tokyo New Cinema','TOHO NEXT','TSUBOFILM','UIP','UNCOLORED','VANDALISM','VOICE OF GHOST','WOWOW','WOWOWプラス','YOAKE FILM','Yo-Pro'] },
+  { heading: 'あ', names: ['アイエス・フィールド','アイ・エム・ティ','アイ・ヴィー・シー','アウトサイド','青空映画舎','アカリノ映画舎','アギィ','アクセスエー','アジョンス・ドゥ・原生林','アステア','アスミック','アスミック＝パルコ','アスミック・エース','アスランフィルム','アダンソニア','アットエンタテインメント','アップリンク','Atemo','アニプレックス','アニメック','アニモプロデュース','After School Cinema Club','アミューズ・ピクチャーズ','アムモ98','彩プロ','アルゴプロジェクト','アルバトロス・フィルム','ALFAZBET','アルファヴィル','アルミード','and pictures','アンプラグド','アークエンタテインメント','Arct\'4 Film','アーク・フィルムズ','アース・スターエンターテイメント','アースライズ','アートポート','アート・アンサンブル'] },
+  { heading: 'い', names: ['イオンエンターテイメント','ikoi films','いせフィルム','inasato','イナズマ社','イハフィルムズ','Incline','インターフィルム','インドエイガジャパン','impasse','インプレオ','Eastworld Entertainment','イーチタイム','イーニッド・フィルム'] },
+  { heading: 'う', names: ['ウィルコ','ウォルト・ディズニー・ジャパン','ウォルト・ディズニー・スタジオ・ジャパン','太秦','ウッディ'] },
+  { heading: 'え', names: ['エアプレーンレーベル','映画『杳かなる』上映委員会','映像制作リアン','エイベックス・エンタテインメント','エイベックス・ピクチャーズ','エイベックス・フィルムレーベルズ','エクストリーム','エスパース・サロウ','エスピーオー','エタンチェ','EternalWind Factory','エデン','NBCユニバーサル・エンターテイメント','エネサイ','えびふらいレコーズ','emir heart Inc.','エムエフピクチャーズ','エレファントハウス','エレファント・ピクチャー','エンジンフイルム'] },
+  { heading: 'お', names: ['オソレゾーン','オデッサ・エンタテインメント','オフィス北野','オフィス熊谷','オフィス・インベーダー','オムロ','オムロピクチャーズ','おもしろ制作','オライオン＝ワーナー','オリオフィルムズ','オンリー・ハーツ','オープンセサミ'] },
+  { heading: 'か', names: ['海燕社','海獣シアター','カエルカフェ','カズモ','活弁シネマ倶楽部','KADOKAWA','KADOKAWA Kプラス','角川ANIMATION','角川映画','角川エンタテインメント','角川ヘラルド映画','カブ研究会','株式会社 STUDIO CARNET','株式会社E.x.N','株式会社BIG RIVER FILMS','株式会社ムービック','株式会社 BBB','株式会社2L','株式会社オフィス桐生','株式会社CANTEEN','株式会社サイ','株式会社セイタロウデザインエンタテイメント','株式会社sommelierTV','株式会社ヴィレッヂ','株式会社桃','株式会社riverstone','鎌田フィルム','カラー','カルチャヴィル合同会社','カルチャヴィル','カルチャ・パブリッシャーズ','カルチュアルライフ','川崎市アートセンター','関西テレビ放送'] },
+  { heading: 'が', names: ['ガスコイン・エイシア','ガムシャラ倶楽部'] },
+  { heading: 'き', names: ['キグー','KICCORIT','kine A house','キネマ旬報企画','キノコヤ映画','キノパトス','キノフィルムズ','kinologue','キャンター','京都映画センター','京都シネマ','記録活映社','きろくびと','キングレコード','kys STUDIO TOKYO','KeyHolder Pictures'] },
+  { heading: 'ぎ', names: ['ギグリーボックス','ギャガ','ギャガ・コミュニケーションズ','ギャガ・コミュニケーションズ＝ヒューマックス・ピクチャーズ','ギャガ・ヒューマックス','ギャガ・プラス','ギークピクチュアズ'] },
+  { heading: 'く', names: ['クイーンズカンパニー','KUZUIエンタープライズ','空族','KUDO COMPANY','熊本やまが映画プロジェクト','クレストインターナショナル','クレプスキュール フィルム','クロックワークス'] },
+  { heading: 'ぐ', names: ['グッチーズ・フリースクール','グラスゴー15','グランピクス','グループ現代'] },
+  { heading: 'こ', names: ['小池博史ブリッジプロジェクト-Odyssey','コギトワークス','コピアポア・フィルム','コミックス・ウェーブ・フィルム','コムストック','コムストック・グループ','コムデシネマ・ジャポン','コロムビア映画','コロンビア','コロンビア映画＝コロンビア　トライスター映画','コロンビア・トライスター','コロンビア　トライスター映画','コンテンツセブン'] },
+  { heading: 'ご', names: ['合同会社adg-ethics','合同会社K-zone.','合同会社ゼリコ・フィルム','合同会社ななし','合同会社リガード／Regard'] },
+  { heading: 'さ', names: ['サキプロ','サニーフィルム','サムワンズガーデン','さらい','サロンジャパン','サンタバーバラ・ピクチャーズ','サンリスフィルム'] },
+  { heading: 'ざ', names: ['ザジフィルムズ','ザナドゥー'] },
+  { heading: 'し', names: ['シグロ','シナジー','シネカノン','シネスコ','シネセゾン','cinepos','Cinemago','シネマスコーレ','シネマトリックス','Cinema Drifters','シネメディア','シノニム','渋谷プロダクション','シャイカー','小学館集英社プロダクション','ショウゲート','松竹','松竹ODS事業室／イノベーション推進部','松竹ODS事業室','松竹＝松竹富士','松竹富士','松竹富士＝KUZUIエンタープライズ','松竹富士＝日本ヘラルド映画','松竹ブロードキャスティング','松竹メディア事業部','湘南遊映坐','シンエイ動画','信越放送','シンカ','shinshin','新日本映画社'] },
+  { heading: 'じ', names: ['ジェイ・ストーム','ジョーカーフィルムズ','神宮前プロデュース','G-STAR.PRO','ジーンハート株式会社'] },
+  { heading: 'す', names: ['鈴正','スタイルジャム','スタジオジブリ','studio solars','スタジオ地図','スタジオ地図LLP','Studio-D JAPAN','スタジオねこ','スタジオレヴォ','スタンダードフィルム','スターキャット','スターキャットアルバトロス・フィルム','スターサンズ','スティングレイ','ストロール','ストームピクチャーズ','ストームレーベルズ','SPOON','SPACEBOX','スモモ','スリーピン','スールキートス'] },
+  { heading: 'せ', names: ['生活の医療社','セテラ・インターナショナル','セブンフィルム','セントラルゲーム'] },
+  { heading: 'ぜ', names: ['ゼアリズエンタープライズ','是空','ゼリコ・フィルム','零合舎'] },
+  { heading: 'そ', names: ['ソイチウム','ソニー・ピクチャーズ','ソニー・ピクチャーズ エンタテインメント','ソニー・ミュージック エンタテインメント','sommelierTV','SORA','空架 soraca film'] },
+  { heading: 'た', names: ['台湾映画社','台湾映画同好会','タキオンジャパン','田中千世子事務所','旦々舎'] },
+  { heading: 'だ', names: ['大映','大映洋画部','大福','ダゲレオ出版','ダッサイ・フィルムズ','dan'] },
+  { heading: 'ち', names: ['小さな映画','チェスキー・ケー','チャイルド・フィルム','チャンス イン','チームジョイ'] },
+  { heading: 'つ', names: ['ツイン','ツインエンジン','円谷プロダクション'] },
+  { heading: 'て', names: ['ティ・ジョイ','テツヤトミナフィルム','テレビ東京','テレビマンユニオン','テンダープロ'] },
+  { heading: 'で', names: ['Diggin\'','ディスクユニオン','デイヴィッド・リンチ　プロジェクト','デジタルSKIPステーション','デスペラード','電通クリエイティブピクチャーズ'] },
+  { heading: 'と', names: ['東映','東映アニメーション','東映エージエンシー','東映ビデオ','東海テレビ放送','東京テアトル','東京テアトル=ザナドゥー','東芝エンタテインメント','東風','東宝','東宝映像事業部','東宝東和','東北新社','東和','東和ピクチャーズ','トキメディアワークス','トムス・エンタテインメント','豊田組','トライアングルCプロジェクト','トライスター映画','トランスフォーマー','トラヴィス','トリウッド','トリプルアップ','トレノバ','towaie'] },
+  { heading: 'ど', names: ['ドゥヴィネット','doodler','ドキュメンタリー・ドリームセンター','ドッグシュガー','ドマ','Drunken Bird','Donuts Films'] },
+  { heading: 'な', names: ['ナカチカピクチャーズ','NOTHING NEW','ナミキリズム'] },
+  { heading: 'に', names: ['ニコニコフィルム','20世紀フォックス映画','日活','にっかつ','ニチホランド','日本RKO','日本電波ニュース社','日本ヘラルド映画','日本ヘラルド=オフィス北野','Nuiavan','ニューゲーツ','ニューディアー'] },
+  { heading: 'ね', names: ['ネツゲン'] },
+  { heading: 'の', names: ['ノアド','ノッカ','ノンデライコ','north cky','ノーム'] },
+  { heading: 'は', names: ['花三','ハピネット','ハピネットファントム・スタジオ','ハマジム','浜松市民映画館シネマイーラ','ハリウッド・クラシックス','春巻号','半円フィルムズ','反射光','ハンドメイドピクチャーズ','BY4M STUDIO'] },
+  { heading: 'ば', names: ['BASARA','バップ','BABEL LABEL','BABELO','バリオン','バンダイナムコアーツ','バンダイナムコピクチャーズ','バンダイナムコフィルムワークス','バーズフィルム'] },
+  { heading: 'ぱ', names: ['パブリックアーツ','パラマウント・ピクチャーズ','パル企画','パルコ','パンドラ'] },
+  { heading: 'ひ', names: ['ひと夏の冒険出版','ヒューマックス・ピクチャーズ＝ギャガ・コミュニケーションズ','HumanPictures'] },
+  { heading: 'び', names: ['ビターズ・エンド','ビックウエスト','ビデオプランニング','ビーズインターナショナル'] },
+  { heading: 'ぴ', names: ['ピクチャーズデプト','ピクチャーズ・デプト','ピックス','PIC映像事務所'] },
+  { heading: 'ふ', names: ['ファインフィルムズ','ファントム・フィルム','フィールドワークス','フェイス・トゥ・フェイス','フジヤマコム','フューレック','フラッグ','フランス映画社','フリッカポイカ','フリック','フリークスムービー','フリーマン・オフィス','フルモテルモ','ふればり','フロンティアワークス'] },
+  { heading: 'ぶ', names: ['ブエナビスタ','ブエナビスタインターナショナル','ブエナワイカ','ブシロードムーブ','ブライトホース・フィルム','BLUE.MOUNTAIN','ブロードウェイ','ブロードメディア','ブロードメディア・スタジオ','Bunkamura'] },
+  { heading: 'ぷ', names: ['プライムウェーブ','プラントフィルムズエンタテインメント','Primo Vere','プルーク','プレシディオ','プロジェクトラム','プンクテ'] },
+  { heading: 'へ', names: ['平成プロジェクト','ヘラルド','ヘラルド・エース','ヘラルド・エース＝日本ヘラルド映画'] },
+  { heading: 'べ', names: ['ベストブレーン','BasicCinema'] },
+  { heading: 'ほ', names: ['ホリプロ','boid','BOTA','ポッシブルフィルムズ','ポニーキャニオン','ポルトレ','ポレポレタイムス社','ポレポレ東中野'] },
+  { heading: 'ま', names: ['マイウェイムービーズ','マイナーリーグ','マクザム','マグネタイズ','マジックアワー','「街の上で」 フィルムパートナーズ','まちのレコード','MAPPA','MAP','MAM FILM','MANGAZOO.COM','Mark Bookman Foundation','マーチ','murmur','マーメイドフィルム'] },
+  { heading: 'み', names: ['ミステリーピクチャーズ','ミカタ・エンタテインメント','ミッドシップ','MinyMixCreati部','ミモザフィルムズ','ミュート','未来映画社','ミラクルヴォイス'] },
+  { heading: 'む', names: ['夢何生','武蔵野エンタテインメント','武蔵野興業','ムヴィオラ','ムービック','ムービーアイ','ムービー・アクト・プロジェクト','ムービーウォーカー','ムーランプロモーション','ムーリンプロダクション'] },
+  { heading: 'め', names: ['メディア・スーツ','メディアファクトリー','Memento Film Club','メリーサン','面白映画','メ～テレ'] },
+  { heading: 'も', names: ['モンタージュ','モービー・ディック'] },
+  { heading: 'や', names: ['役式','ヤマハミュージックエンタテインメントホールディングス'] },
+  { heading: 'ゆ', names: ['ユナイテッドエンタテインメント','ユナイテッド・シネマ','ユナイテッドピープル','ユナイト映画','ユニバーサル映画','ユニヴァーサル','ユニヴァーサル＝CIC','ユニヴァーサル＝UIP','ユーステール','ufotable','ユーラシアビジョン','ユーロスペース'] },
+  { heading: 'よ', names: ['ヨアケ','よしもとクリエイティブ・エージェンシー','吉本興業','読売テレビ'] },
+  { heading: 'ら', names: ['ライツキューブ','ライトフィルム','ライブ・ビューイング・ジャパン','樂舎','Rakuten Distribution','ラジオ下神白','ラテンビート','ラビットハウス'] },
+  { heading: 'り', names: ['リアリーライクフィルムズ','リスキット','リトルモア','リベロ'] },
+  { heading: 'る', names: ['LUDIQUE'] },
+  { heading: 'れ', names: ['レイドバック・コーポレーション','レスペ','レックスエンタテインメント','レッドビーンズピクチャーズ','レプロエンタテインメント','Label Betty'] },
+  { heading: 'ろ', names: ['ロックウェルアイズ','ロックンロール・マウンテン','ロッコク・キッチン・プロジェクト事務局','ロングライド','ローソン','ローソン・ユナイテッドシネマ'] },
+  { heading: 'わ', names: ['ワイズポリシー','若松プロダクション','ワノユメ','One Goose','one\'s','ワン・ポイント・シックス','ワーナー','ワーナー・ブラザース・セブン・アーツ','ワーナー・ブラザース映画'] },
+  { heading: 'ヴ', names: ['ヴィジュアルフォークロア'] },
+  { heading: 'その他', names: ['映日果人','泰閣映畫'] },
 ]
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -622,9 +687,21 @@ export default function Search({ userId, onOpenWork }: {
     }
   }
 
-  const browseCompany = async (companyId: number, companyName: string, page: number = 1) => {
+  const browseCompany = async (companyName: string, page: number = 1) => {
     setBrowse({ mode: 'company', label: companyName, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
     try {
+      // Check if we have a known TMDB ID
+      let companyId = COMPANY_ID_MAP[companyName]
+      if (!companyId) {
+        // Search TMDB for the company by name
+        const searchRes = await fetch(`/api/tmdb?action=search_company&query=${encodeURIComponent(companyName)}`)
+        const searchData = await searchRes.json()
+        companyId = searchData.results?.[0]?.id
+      }
+      if (!companyId) {
+        setBrowse(prev => ({ ...prev, loading: false, items: [] }))
+        return
+      }
       const res = await fetch(`/api/tmdb?action=discover&type=movie&with_companies=${companyId}&page=${page}&sort_by=popularity.desc`)
       const data = await res.json()
       const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
@@ -881,29 +958,100 @@ export default function Search({ userId, onOpenWork }: {
     </div>
   )
 
-  const renderCompanyChips = () => (
-    <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
-      <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36' }}>配給会社で探す</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)' }}>
-        {COMPANIES.map(c => (
-          <button
-            key={c.id}
+  const [companyFilter, setCompanyFilter] = useState('')
+  const [companyExpanded, setCompanyExpanded] = useState(false)
+
+  const renderCompanyChips = () => {
+    const filtered = companyFilter.trim()
+      ? DISTRIBUTORS.map(g => ({
+          ...g,
+          names: g.names.filter(n => n.toLowerCase().includes(companyFilter.toLowerCase())),
+        })).filter(g => g.names.length > 0)
+      : DISTRIBUTORS
+
+    const displayGroups = companyExpanded ? filtered : filtered.slice(0, 5)
+
+    return (
+      <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
+        <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>配給会社で探す</span>
+          <span style={{ fontSize: 12, color: '#8888a8', fontWeight: 400 }}>
+            {DISTRIBUTORS.reduce((sum, g) => sum + g.names.length, 0)}社
+          </span>
+        </div>
+        {/* Search filter */}
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid #1e1f36' }}>
+          <input
+            value={companyFilter}
+            onChange={e => { setCompanyFilter(e.target.value); setCompanyExpanded(true) }}
+            placeholder="配給会社名で絞り込み..."
             style={{
-              ...linkItemStyle,
-              borderRight: '1px solid #1e1f36',
+              width: '100%', padding: '8px 12px', borderRadius: 8,
+              border: '1px solid #2a2b46', background: '#0d0e1e', color: '#e0e0f0',
+              fontSize: 13, boxSizing: 'border-box', outline: 'none',
             }}
-            onClick={() => browseCompany(c.id, `${c.emoji} ${c.name}`)}
+            onFocus={e => { e.currentTarget.style.borderColor = '#6c5ce7' }}
+            onBlur={e => { e.currentTarget.style.borderColor = '#2a2b46' }}
+          />
+        </div>
+        {/* Grouped distributor list */}
+        {displayGroups.map(group => (
+          <div key={group.heading}>
+            <div style={{
+              padding: '8px 16px', fontSize: 13, fontWeight: 700, color: '#a29bfe',
+              background: '#0d0e1e', borderBottom: '1px solid #1e1f36',
+              position: 'sticky', top: 0, zIndex: 1,
+            }}>
+              {group.heading}
+            </div>
+            {group.names.map(name => (
+              <button
+                key={name}
+                style={linkItemStyle}
+                onClick={() => browseCompany(name)}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.08)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+              >
+                <span style={{ fontSize: 13 }}>{name}</span>
+                <span style={linkArrow}>›</span>
+              </button>
+            ))}
+          </div>
+        ))}
+        {!companyExpanded && !companyFilter && filtered.length > 5 && (
+          <button
+            onClick={() => setCompanyExpanded(true)}
+            style={{
+              width: '100%', padding: '14px', background: 'none', border: 'none',
+              borderTop: '1px solid #1e1f36', color: '#a29bfe', fontSize: 14,
+              fontWeight: 600, cursor: 'pointer', transition: 'background 0.15s',
+            }}
             onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.08)' }}
             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
           >
-            <span>{c.emoji}</span>
-            <span>{c.name}</span>
-            <span style={linkArrow}>›</span>
+            すべての配給会社を表示 ›
           </button>
-        ))}
+        )}
+        {companyExpanded && !companyFilter && (
+          <button
+            onClick={() => setCompanyExpanded(false)}
+            style={{
+              width: '100%', padding: '14px', background: 'none', border: 'none',
+              borderTop: '1px solid #1e1f36', color: '#8888a8', fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            閉じる
+          </button>
+        )}
+        {companyFilter && filtered.length === 0 && (
+          <div style={{ padding: '24px 16px', textAlign: 'center', color: '#8888a8', fontSize: 13 }}>
+            「{companyFilter}」に一致する配給会社がありません
+          </div>
+        )}
       </div>
-    </div>
-  )
+    )
+  }
 
   // --- Search results view ---
   const renderSearchView = () => {
@@ -983,8 +1131,7 @@ export default function Search({ userId, onOpenWork }: {
                   const found = COUNTRIES.find(c => browse.label.includes(c.name))
                   if (found) browseCountry(found.code, browse.label, browse.page + 1)
                 } else if (browse.mode === 'company') {
-                  const found = COMPANIES.find(c => browse.label.includes(c.name))
-                  if (found) browseCompany(found.id, browse.label, browse.page + 1)
+                  browseCompany(browse.label, browse.page + 1)
                 }
               }}
               disabled={browse.loading}
