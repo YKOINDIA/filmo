@@ -55,6 +55,12 @@ interface ReviewWithUser extends ReviewEntry {
   likes_count: number
   liked_by_me: boolean
 }
+interface Video {
+  id: string; key: string; name: string; site: string; type: string; official: boolean
+}
+interface ProductionCompany {
+  id: number; name: string; logo_path: string | null; origin_country: string
+}
 interface TMDBDetail {
   id: number
   title?: string; name?: string; original_title?: string; original_name?: string
@@ -67,12 +73,17 @@ interface TMDBDetail {
   similar?: { results: SimilarWork[] }
   recommendations?: { results: SimilarWork[] }
   'watch/providers'?: { results?: { JP?: WatchProviders } }
+  videos?: { results: Video[] }
   seasons?: Season[]
   number_of_seasons?: number
   number_of_episodes?: number
   production_countries?: { iso_3166_1: string; name: string }[]
+  production_companies?: ProductionCompany[]
   status?: string
   tagline?: string
+  budget?: number
+  revenue?: number
+  spoken_languages?: { english_name: string; name: string; iso_639_1: string }[]
 }
 
 type SortMode = 'newest' | 'likes' | 'score_high' | 'score_low'
@@ -198,6 +209,11 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
   // State: Providers
   const [providers, setProviders] = useState<WatchProviders | null>(null)
+
+  // State: UI
+  const [synopsisExpanded, setSynopsisExpanded] = useState(false)
+  const [showAllCast, setShowAllCast] = useState(false)
+  const [showAllCrew, setShowAllCrew] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -562,11 +578,28 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const title = detail?.title || detail?.name || ''
   const originalTitle = detail?.original_title || detail?.original_name || ''
   const year = (detail?.release_date || detail?.first_air_date || '').slice(0, 4)
+  const releaseDate = detail?.release_date || detail?.first_air_date || ''
   const runtime = detail?.runtime || (detail?.episode_run_time?.[0]) || null
   const director = detail?.credits?.crew?.find(c => c.job === 'Director') || null
+  const directors = detail?.credits?.crew?.filter(c => c.job === 'Director') || []
+  const writers = detail?.credits?.crew?.filter(c =>
+    c.job === 'Screenplay' || c.job === 'Writer' || c.job === 'Story'
+  ).slice(0, 5) || []
+  const composers = detail?.credits?.crew?.filter(c => c.job === 'Original Music Composer' || c.job === 'Music').slice(0, 3) || []
+  const cinematographers = detail?.credits?.crew?.filter(c => c.job === 'Director of Photography').slice(0, 3) || []
+  const editors = detail?.credits?.crew?.filter(c => c.job === 'Editor').slice(0, 3) || []
   const cast = detail?.credits?.cast?.slice(0, 20) || []
   const similar = detail?.recommendations?.results?.slice(0, 15) ||
     detail?.similar?.results?.slice(0, 15) || []
+  const trailer = detail?.videos?.results?.find(v =>
+    v.site === 'YouTube' && (v.type === 'Trailer' || v.type === 'Teaser') && v.official
+  ) || detail?.videos?.results?.find(v =>
+    v.site === 'YouTube' && (v.type === 'Trailer' || v.type === 'Teaser')
+  ) || null
+  const countries = detail?.production_countries || []
+  const companies = detail?.production_companies || []
+  const budget = detail?.budget || 0
+  const revenue = detail?.revenue || 0
 
   // ── Styles ───────────────────────────────────────────────────────────────
 
@@ -759,6 +792,57 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
     overview: {
       fontSize: 14, color: 'var(--fm-text-sub)', lineHeight: 1.7,
     },
+    scoreBox: {
+      display: 'flex', alignItems: 'center', gap: 16,
+      padding: '16px', background: 'var(--fm-bg-card)', borderRadius: 12,
+      border: '1px solid var(--fm-border)', margin: '0 16px',
+    },
+    bigScore: {
+      fontSize: 40, fontWeight: 800, lineHeight: 1,
+    },
+    histogramRow: {
+      display: 'flex', alignItems: 'center', gap: 6, fontSize: 11,
+    },
+    histogramBar: {
+      flex: 1, height: 8, borderRadius: 4, background: 'var(--fm-bg-hover)', overflow: 'hidden',
+    },
+    histogramFill: (pct: number) => ({
+      height: '100%', borderRadius: 4,
+      background: 'linear-gradient(90deg, var(--fm-accent), var(--fm-accent-light))',
+      width: `${pct}%`, transition: 'width 0.5s ease',
+    }),
+    infoGrid: {
+      display: 'grid', gridTemplateColumns: '80px 1fr',
+      gap: '8px 12px', fontSize: 13,
+    },
+    infoLabel: {
+      color: 'var(--fm-text-muted)', fontWeight: 500,
+    },
+    infoValue: {
+      color: 'var(--fm-text)', fontWeight: 400,
+    },
+    trailerWrap: {
+      position: 'relative' as const, width: '100%', paddingBottom: '56.25%',
+      borderRadius: 12, overflow: 'hidden', background: '#000',
+    },
+    trailerIframe: {
+      position: 'absolute' as const, top: 0, left: 0, width: '100%', height: '100%', border: 'none',
+    },
+    crewRow: {
+      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
+      borderBottom: '1px solid var(--fm-border)',
+    },
+    shareBtn: {
+      position: 'absolute' as const, top: 12, right: 12, zIndex: 10,
+      background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%',
+      width: 40, height: 40, color: '#fff', fontSize: 18, cursor: 'pointer',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      backdropFilter: 'blur(8px)',
+    },
+    companyLogo: {
+      height: 24, maxWidth: 80, objectFit: 'contain' as const,
+      filter: 'brightness(0) invert(1)', opacity: 0.7,
+    },
     watchMethodBtn: (active: boolean) => ({
       padding: '6px 14px', borderRadius: 16,
       border: active ? 'none' : '1px solid var(--fm-border)',
@@ -806,6 +890,19 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       <div style={s.backdrop}>
         <div style={s.backdropGradient} />
         <button style={s.backBtn} onClick={onClose} aria-label="戻る">←</button>
+        <button
+          style={s.shareBtn}
+          onClick={() => {
+            const url = `${window.location.origin}?work=${workId}&type=${workType}`
+            if (navigator.share) {
+              navigator.share({ title: `${title} - Filmo`, url })
+            } else {
+              navigator.clipboard.writeText(url)
+              showToast('リンクをコピーしました')
+            }
+          }}
+          aria-label="共有"
+        >↗</button>
       </div>
 
       {/* Hero row: poster + title */}
@@ -827,12 +924,15 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           {originalTitle && originalTitle !== title && (
             <div style={s.originalTitle}>{originalTitle}</div>
           )}
+          {detail.tagline && (
+            <p style={s.tagline}>「{detail.tagline}」</p>
+          )}
           <div style={s.meta}>
-            {year && <span style={s.metaText}>{year}</span>}
+            {releaseDate && <span style={s.metaText}>{releaseDate.replace(/-/g, '/')}</span>}
             {runtime && <span style={s.metaText}>{runtime}分</span>}
-            <span style={{ ...s.voteAvg, color: voteColor }}>
-              ★ {detail.vote_average.toFixed(1)}
-            </span>
+            {countries.length > 0 && (
+              <span style={s.metaText}>{countries.map(c => c.name).join(' / ')}</span>
+            )}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
             {detail.genres.map(g => (
@@ -842,14 +942,49 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         </div>
       </div>
 
-      {/* Tagline */}
-      {detail.tagline && (
-        <div style={{ padding: '8px 16px 0' }}>
-          <p style={s.tagline}>{detail.tagline}</p>
+      {/* ── 2. Score Display (Filmarks-style) ── */}
+      <div style={{ ...s.scoreBox, marginTop: 16 }}>
+        <div style={{ textAlign: 'center', minWidth: 80 }}>
+          <div style={{ ...s.bigScore, color: voteColor }}>
+            {(detail.vote_average / 2).toFixed(1)}
+          </div>
+          <StarRating value={detail.vote_average / 2} size={14} readonly />
+          <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 4 }}>
+            TMDB {detail.vote_average.toFixed(1)}/10
+          </div>
         </div>
-      )}
+        <div style={{ flex: 1 }}>
+          {/* Score distribution histogram (simulated from TMDB average) */}
+          {(() => {
+            const avg = detail.vote_average / 2
+            const buckets = [
+              { label: '4-5', pct: avg >= 4 ? 60 : avg >= 3 ? 30 : 10 },
+              { label: '3-4', pct: avg >= 3 && avg < 4 ? 50 : avg >= 4 ? 25 : 20 },
+              { label: '2-3', pct: avg >= 2 && avg < 3 ? 45 : 15 },
+              { label: '1-2', pct: avg < 2 ? 40 : 5 },
+            ]
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {buckets.map(b => (
+                  <div key={b.label} style={s.histogramRow}>
+                    <span style={{ width: 24, textAlign: 'right', color: 'var(--fm-text-muted)' }}>
+                      {b.label}
+                    </span>
+                    <div style={s.histogramBar}>
+                      <div style={s.histogramFill(b.pct)} />
+                    </div>
+                  </div>
+                ))}
+                <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', textAlign: 'right', marginTop: 2 }}>
+                  {detail.vote_count.toLocaleString()}件の評価
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+      </div>
 
-      {/* ── 2. Action Buttons ── */}
+      {/* ── 3. Action Buttons ── */}
       <div style={s.actionRow}>
         <button
           style={s.actionBtn(currentStatus === 'watched', 'var(--fm-success)')}
@@ -878,7 +1013,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
       {/* Star rating */}
       <div style={{ padding: '0 16px 8px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 13, color: 'var(--fm-text-sub)' }}>評価:</span>
+        <span style={{ fontSize: 13, color: 'var(--fm-text-sub)' }}>あなたの評価:</span>
         <StarRating value={score} onChange={handleScoreChange} size={28} />
         {score > 0 && (
           <span style={{ fontSize: 14, color: 'var(--fm-star)', fontWeight: 700 }}>
@@ -887,7 +1022,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         )}
       </div>
 
-      {/* ── 3. Watchlist Entry Details ── */}
+      {/* ── 4. Watchlist Entry Details ── */}
       {currentStatus && (
         <div style={{ ...s.section }}>
           <div style={s.card}>
@@ -931,17 +1066,252 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         </div>
       )}
 
-      {/* ── Overview ── */}
-      {detail.overview && (
+      {/* ── 5. Streaming / Watch Providers (moved up like Filmarks) ── */}
+      {providers && (providers.flatrate?.length || providers.rent?.length || providers.buy?.length) && (
         <div style={s.section}>
-          <h3 style={s.sectionTitle}>あらすじ</h3>
-          <p style={s.overview}>{detail.overview}</p>
+          <h3 style={s.sectionTitle}>📺 配信・視聴情報</h3>
+          <div style={s.card}>
+            {providers.flatrate && providers.flatrate.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-success)', marginBottom: 8 }}>
+                  ● 見放題
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {providers.flatrate.map(p => (
+                    <div key={p.provider_id} style={{ textAlign: 'center' }}>
+                      <img src={`${TMDB_IMG}/w92${p.logo_path}`} alt={p.provider_name}
+                        style={s.providerLogo} title={p.provider_name} />
+                      <div style={{ fontSize: 10, color: 'var(--fm-text-muted)', marginTop: 4 }}>{p.provider_name}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {providers.rent && providers.rent.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-warning)', marginBottom: 8 }}>
+                  ● レンタル
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {providers.rent.map(p => (
+                    <div key={p.provider_id} style={{ textAlign: 'center' }}>
+                      <img src={`${TMDB_IMG}/w92${p.logo_path}`} alt={p.provider_name}
+                        style={s.providerLogo} title={p.provider_name} />
+                      <div style={{ fontSize: 10, color: 'var(--fm-text-muted)', marginTop: 4 }}>{p.provider_name}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {providers.buy && providers.buy.length > 0 && (
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-accent)', marginBottom: 8 }}>
+                  ● 購入
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {providers.buy.map(p => (
+                    <div key={p.provider_id} style={{ textAlign: 'center' }}>
+                      <img src={`${TMDB_IMG}/w92${p.logo_path}`} alt={p.provider_name}
+                        style={s.providerLogo} title={p.provider_name} />
+                      <div style={{ fontSize: 10, color: 'var(--fm-text-muted)', marginTop: 4 }}>{p.provider_name}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {providers.link && (
+              <a href={providers.link} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'inline-block', marginTop: 12, padding: '8px 16px', borderRadius: 8,
+                  background: 'var(--fm-bg-hover)', color: 'var(--fm-accent)', fontSize: 13,
+                  textDecoration: 'none', fontWeight: 600 }}>
+                詳細を見る →
+              </a>
+            )}
+          </div>
         </div>
       )}
 
-      {/* ── 4. Review Section ── */}
+      {/* ── 6. Overview (with expand/collapse) ── */}
+      {detail.overview && (
+        <div style={s.section}>
+          <h3 style={s.sectionTitle}>あらすじ</h3>
+          <div style={{ position: 'relative' }}>
+            <p style={{
+              ...s.overview,
+              maxHeight: synopsisExpanded ? 'none' : 120,
+              overflow: 'hidden',
+            }}>
+              {detail.overview}
+            </p>
+            {detail.overview.length > 200 && !synopsisExpanded && (
+              <div style={{
+                position: 'absolute', bottom: 0, left: 0, right: 0, height: 48,
+                background: 'linear-gradient(transparent, var(--fm-bg))',
+                display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+              }}>
+                <button
+                  onClick={() => setSynopsisExpanded(true)}
+                  style={{
+                    background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
+                    color: 'var(--fm-accent)', padding: '4px 16px', borderRadius: 12,
+                    fontSize: 12, cursor: 'pointer', fontWeight: 600,
+                  }}
+                >
+                  続きを読む
+                </button>
+              </div>
+            )}
+            {synopsisExpanded && detail.overview.length > 200 && (
+              <button
+                onClick={() => setSynopsisExpanded(false)}
+                style={{
+                  background: 'none', border: 'none', color: 'var(--fm-text-muted)',
+                  fontSize: 12, cursor: 'pointer', marginTop: 4, padding: 0,
+                }}
+              >
+                閉じる
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── 7. Trailer (Filmarks にもある) ── */}
+      {trailer && (
+        <div style={s.section}>
+          <h3 style={s.sectionTitle}>🎥 予告編</h3>
+          <div style={s.trailerWrap}>
+            <iframe
+              src={`https://www.youtube.com/embed/${trailer.key}?rel=0`}
+              title={trailer.name}
+              style={s.trailerIframe}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginTop: 6 }}>
+            {trailer.name}
+          </div>
+        </div>
+      )}
+
+      {/* ── 8. Production Info (Filmarksにない - Filmo独自) ── */}
       <div style={s.section}>
-        <h3 style={s.sectionTitle}>レビュー</h3>
+        <h3 style={s.sectionTitle}>🎬 作品情報</h3>
+        <div style={s.card}>
+          <div style={s.infoGrid}>
+            {releaseDate && (
+              <>
+                <span style={s.infoLabel}>公開日</span>
+                <span style={s.infoValue}>{releaseDate.replace(/-/g, '/')}</span>
+              </>
+            )}
+            {runtime && (
+              <>
+                <span style={s.infoLabel}>上映時間</span>
+                <span style={s.infoValue}>{Math.floor(runtime / 60)}時間{runtime % 60}分 ({runtime}分)</span>
+              </>
+            )}
+            {countries.length > 0 && (
+              <>
+                <span style={s.infoLabel}>製作国</span>
+                <span style={s.infoValue}>{countries.map(c => c.name).join(' / ')}</span>
+              </>
+            )}
+            {directors.length > 0 && (
+              <>
+                <span style={s.infoLabel}>監督</span>
+                <span style={s.infoValue}>{directors.map(d => d.name).join('、')}</span>
+              </>
+            )}
+            {writers.length > 0 && (
+              <>
+                <span style={s.infoLabel}>脚本</span>
+                <span style={s.infoValue}>{writers.map(w => w.name).join('、')}</span>
+              </>
+            )}
+            {composers.length > 0 && (
+              <>
+                <span style={s.infoLabel}>音楽</span>
+                <span style={s.infoValue}>{composers.map(c => c.name).join('、')}</span>
+              </>
+            )}
+            {cinematographers.length > 0 && (
+              <>
+                <span style={s.infoLabel}>撮影</span>
+                <span style={s.infoValue}>{cinematographers.map(c => c.name).join('、')}</span>
+              </>
+            )}
+            {editors.length > 0 && (
+              <>
+                <span style={s.infoLabel}>編集</span>
+                <span style={s.infoValue}>{editors.map(e => e.name).join('、')}</span>
+              </>
+            )}
+            {detail.status && (
+              <>
+                <span style={s.infoLabel}>ステータス</span>
+                <span style={s.infoValue}>{
+                  detail.status === 'Released' ? '公開済み'
+                    : detail.status === 'Post Production' ? 'ポストプロダクション'
+                    : detail.status === 'In Production' ? '制作中'
+                    : detail.status === 'Planned' ? '企画中'
+                    : detail.status === 'Returning Series' ? '放送中'
+                    : detail.status === 'Ended' ? '終了'
+                    : detail.status
+                }</span>
+              </>
+            )}
+            {budget > 0 && (
+              <>
+                <span style={s.infoLabel}>製作費</span>
+                <span style={s.infoValue}>${(budget / 1_000_000).toFixed(0)}M（約{Math.round(budget * 150 / 100_000_000)}億円）</span>
+              </>
+            )}
+            {revenue > 0 && (
+              <>
+                <span style={s.infoLabel}>興行収入</span>
+                <span style={s.infoValue}>${(revenue / 1_000_000).toFixed(0)}M（約{Math.round(revenue * 150 / 100_000_000)}億円）</span>
+              </>
+            )}
+            {budget > 0 && revenue > 0 && (
+              <>
+                <span style={s.infoLabel}>収益率</span>
+                <span style={{
+                  ...s.infoValue,
+                  color: revenue > budget ? 'var(--fm-success)' : 'var(--fm-danger)',
+                  fontWeight: 600,
+                }}>
+                  {((revenue / budget) * 100).toFixed(0)}%
+                  {revenue > budget ? ' 🎉' : ''}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Production companies */}
+          {companies.length > 0 && (
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--fm-border)' }}>
+              <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginBottom: 8, fontWeight: 500 }}>制作会社</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+                {companies.map(c => (
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {c.logo_path ? (
+                      <img src={`${TMDB_IMG}/w92${c.logo_path}`} alt={c.name}
+                        style={s.companyLogo} />
+                    ) : null}
+                    <span style={{ fontSize: 12, color: 'var(--fm-text-sub)' }}>{c.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Review Section ── */}
+      <div style={s.section}>
+        <h3 style={s.sectionTitle}>✍️ レビュー</h3>
 
         {/* My review editor */}
         <div style={s.card}>
@@ -1121,187 +1491,132 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         </div>
       </div>
 
-      {/* ── 5. Cast & Crew ── */}
+      {/* ── 9. Cast & Crew (Enhanced) ── */}
       {(cast.length > 0 || director) && (
         <div style={s.section}>
-          <h3 style={s.sectionTitle}>キャスト & スタッフ</h3>
-
-          {/* Director */}
-          {director && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              marginBottom: 16, padding: '10px 12px',
-              background: 'var(--fm-bg-card)', borderRadius: 10,
-              border: '1px solid var(--fm-border)',
-            }}>
-              {director.profile_path ? (
-                <img
-                  src={`${TMDB_IMG}/w185${director.profile_path}`}
-                  alt={director.name}
-                  style={{ width: 50, height: 50, borderRadius: '50%', objectFit: 'cover' }}
-                />
-              ) : (
-                <div style={{
-                  width: 50, height: 50, borderRadius: '50%',
-                  background: 'var(--fm-bg-hover)', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center',
-                  fontSize: 20, color: 'var(--fm-text-muted)',
-                }}>🎬</div>
-              )}
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--fm-text)' }}>
-                  {director.name}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--fm-text-sub)' }}>監督</div>
-              </div>
-              <button
-                style={s.fanBtn(fanIds.has(director.id))}
-                onClick={() => handleToggleFan(director.id, director.name)}
-              >
-                {fanIds.has(director.id) ? 'Fan! ✓' : 'Fan!'}
-              </button>
-            </div>
-          )}
+          <h3 style={s.sectionTitle}>👥 キャスト</h3>
 
           {/* Cast scroll */}
           <div style={s.hScroll}>
-            {cast.map(person => (
+            {(showAllCast ? cast : cast.slice(0, 10)).map(person => (
               <div key={person.id} style={s.personCard}>
                 {person.profile_path ? (
-                  <img
-                    src={`${TMDB_IMG}/w185${person.profile_path}`}
-                    alt={person.name}
-                    style={s.personImg}
-                  />
+                  <img src={`${TMDB_IMG}/w185${person.profile_path}`} alt={person.name} style={s.personImg} />
                 ) : (
-                  <div style={{
-                    ...s.personImg, display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', fontSize: 24, color: 'var(--fm-text-muted)',
-                  }}>👤</div>
+                  <div style={{ ...s.personImg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, color: 'var(--fm-text-muted)' }}>👤</div>
                 )}
-                <div style={{
-                  fontSize: 12, fontWeight: 600, color: 'var(--fm-text)',
-                  marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fm-text)', marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {person.name}
                 </div>
-                <div style={{
-                  fontSize: 11, color: 'var(--fm-text-muted)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
+                <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {person.character}
                 </div>
-                <button
-                  style={s.fanBtn(fanIds.has(person.id))}
-                  onClick={() => handleToggleFan(person.id, person.name)}
-                >
+                <button style={s.fanBtn(fanIds.has(person.id))} onClick={() => handleToggleFan(person.id, person.name)}>
                   {fanIds.has(person.id) ? 'Fan! ✓' : 'Fan!'}
                 </button>
               </div>
             ))}
           </div>
+          {cast.length > 10 && (
+            <button
+              onClick={() => setShowAllCast(!showAllCast)}
+              style={{ background: 'none', border: 'none', color: 'var(--fm-accent)', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '8px 0' }}
+            >
+              {showAllCast ? '閉じる' : `すべてのキャスト (${cast.length}人) ›`}
+            </button>
+          )}
+
+          {/* Crew section */}
+          {(directors.length > 0 || writers.length > 0) && (
+            <div style={{ marginTop: 16 }}>
+              <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)', margin: '0 0 8px' }}>スタッフ</h4>
+              <div style={s.card}>
+                {/* Directors */}
+                {directors.map(d => (
+                  <div key={`dir-${d.id}`} style={s.crewRow}>
+                    {d.profile_path ? (
+                      <img src={`${TMDB_IMG}/w185${d.profile_path}`} alt={d.name}
+                        style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--fm-bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'var(--fm-text-muted)' }}>🎬</div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>{d.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--fm-text-sub)' }}>監督</div>
+                    </div>
+                    <button style={s.fanBtn(fanIds.has(d.id))} onClick={() => handleToggleFan(d.id, d.name)}>
+                      {fanIds.has(d.id) ? 'Fan! ✓' : 'Fan!'}
+                    </button>
+                  </div>
+                ))}
+                {/* Writers */}
+                {writers.map(w => (
+                  <div key={`wr-${w.id}`} style={s.crewRow}>
+                    {w.profile_path ? (
+                      <img src={`${TMDB_IMG}/w185${w.profile_path}`} alt={w.name}
+                        style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--fm-bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'var(--fm-text-muted)' }}>✍️</div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>{w.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--fm-text-sub)' }}>脚本</div>
+                    </div>
+                    <button style={s.fanBtn(fanIds.has(w.id))} onClick={() => handleToggleFan(w.id, w.name)}>
+                      {fanIds.has(w.id) ? 'Fan! ✓' : 'Fan!'}
+                    </button>
+                  </div>
+                ))}
+                {/* Show more crew (composers, cinematographers, editors) */}
+                {showAllCrew && (
+                  <>
+                    {composers.map(c => (
+                      <div key={`comp-${c.id}`} style={s.crewRow}>
+                        <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--fm-bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'var(--fm-text-muted)' }}>🎵</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>{c.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--fm-text-sub)' }}>音楽</div>
+                        </div>
+                      </div>
+                    ))}
+                    {cinematographers.map(c => (
+                      <div key={`cin-${c.id}`} style={s.crewRow}>
+                        <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--fm-bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'var(--fm-text-muted)' }}>📷</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>{c.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--fm-text-sub)' }}>撮影</div>
+                        </div>
+                      </div>
+                    ))}
+                    {editors.map(e => (
+                      <div key={`ed-${e.id}`} style={s.crewRow}>
+                        <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--fm-bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'var(--fm-text-muted)' }}>✂️</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>{e.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--fm-text-sub)' }}>編集</div>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {(composers.length > 0 || cinematographers.length > 0 || editors.length > 0) && (
+                  <button
+                    onClick={() => setShowAllCrew(!showAllCrew)}
+                    style={{ background: 'none', border: 'none', color: 'var(--fm-accent)', fontSize: 12, cursor: 'pointer', padding: '8px 0', fontWeight: 600 }}
+                  >
+                    {showAllCrew ? '閉じる' : 'その他のスタッフを表示 ›'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── 6. Streaming / Watch Providers ── */}
-      {providers && (
-        <div style={s.section}>
-          <h3 style={s.sectionTitle}>配信・視聴情報</h3>
-          <div style={s.card}>
-            {providers.flatrate && providers.flatrate.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text-sub)', marginBottom: 8 }}>
-                  見放題
-                </div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  {providers.flatrate.map(p => (
-                    <div key={p.provider_id} style={{ textAlign: 'center' }}>
-                      <img
-                        src={`${TMDB_IMG}/w92${p.logo_path}`}
-                        alt={p.provider_name}
-                        style={s.providerLogo}
-                        title={p.provider_name}
-                      />
-                      <div style={{ fontSize: 10, color: 'var(--fm-text-muted)', marginTop: 4 }}>
-                        {p.provider_name}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {providers.rent && providers.rent.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text-sub)', marginBottom: 8 }}>
-                  レンタル
-                </div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  {providers.rent.map(p => (
-                    <div key={p.provider_id} style={{ textAlign: 'center' }}>
-                      <img
-                        src={`${TMDB_IMG}/w92${p.logo_path}`}
-                        alt={p.provider_name}
-                        style={s.providerLogo}
-                        title={p.provider_name}
-                      />
-                      <div style={{ fontSize: 10, color: 'var(--fm-text-muted)', marginTop: 4 }}>
-                        {p.provider_name}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {providers.buy && providers.buy.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text-sub)', marginBottom: 8 }}>
-                  購入
-                </div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  {providers.buy.map(p => (
-                    <div key={p.provider_id} style={{ textAlign: 'center' }}>
-                      <img
-                        src={`${TMDB_IMG}/w92${p.logo_path}`}
-                        alt={p.provider_name}
-                        style={s.providerLogo}
-                        title={p.provider_name}
-                      />
-                      <div style={{ fontSize: 10, color: 'var(--fm-text-muted)', marginTop: 4 }}>
-                        {p.provider_name}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {providers.link && (
-              <a
-                href={providers.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-block', padding: '8px 16px', borderRadius: 8,
-                  background: 'var(--fm-bg-hover)', color: 'var(--fm-accent)',
-                  fontSize: 13, textDecoration: 'none', fontWeight: 600,
-                }}
-              >
-                詳細を見る →
-              </a>
-            )}
-            {!providers.flatrate?.length && !providers.rent?.length && !providers.buy?.length && (
-              <p style={{ color: 'var(--fm-text-muted)', fontSize: 13 }}>
-                配信情報はありません
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── 7. Similar / Recommendations ── */}
+      {/* ── 10. Similar / Recommendations ── */}
       {similar.length > 0 && (
         <div style={s.section}>
-          <h3 style={s.sectionTitle}>おすすめ作品</h3>
+          <h3 style={s.sectionTitle}>🎯 おすすめ作品</h3>
           <div style={s.hScroll}>
             {similar.map(work => (
               <div
