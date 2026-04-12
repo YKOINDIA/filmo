@@ -78,12 +78,14 @@ const ANIME_GENRES = [
 ]
 
 const DECADES = [
-  { label: '2020年代', gte: '2020-01-01', lte: '2029-12-31' },
-  { label: '2010年代', gte: '2010-01-01', lte: '2019-12-31' },
-  { label: '2000年代', gte: '2000-01-01', lte: '2009-12-31' },
-  { label: '1990年代', gte: '1990-01-01', lte: '1999-12-31' },
-  { label: '1980年代', gte: '1980-01-01', lte: '1989-12-31' },
-  { label: '1970年代', gte: '1970-01-01', lte: '1979-12-31' },
+  { label: '2020年代', start: 2020, end: 2028 },
+  { label: '2010年代', start: 2010, end: 2019 },
+  { label: '2000年代', start: 2000, end: 2009 },
+  { label: '1990年代', start: 1990, end: 1999 },
+  { label: '1980年代', start: 1980, end: 1989 },
+  { label: '1970年代', start: 1970, end: 1979 },
+  { label: '1960年代', start: 1960, end: 1969 },
+  { label: '1950年代', start: 1950, end: 1959 },
 ]
 
 const PROVIDERS = [
@@ -99,10 +101,15 @@ const PROVIDERS = [
   { id: 85, name: 'TELASA', emoji: '🔵' },
 ]
 
-const AWARDS = [
-  { name: 'アカデミー賞受賞作品', emoji: '🏆', sort: 'vote_average.desc', voteMin: '5000' },
-  { name: 'ゴールデングローブ', emoji: '🌐', sort: 'vote_average.desc', voteMin: '3000' },
+const AWARDS: { name: string; emoji: string; sort: string; voteMin: string; voteMax?: string; voteAvgMin?: string; country?: string }[] = [
+  { name: 'アカデミー賞', emoji: '🏆', sort: 'vote_average.desc', voteMin: '5000' },
+  { name: 'ゴールデングローブ賞', emoji: '🌐', sort: 'vote_average.desc', voteMin: '3000' },
   { name: '日本アカデミー賞', emoji: '🇯🇵', sort: 'vote_average.desc', voteMin: '500', country: 'JP' },
+  { name: 'カンヌ国際映画祭', emoji: '🌴', sort: 'vote_average.desc', voteMin: '1000', country: 'FR' },
+  { name: 'ヴェネチア国際映画祭', emoji: '🦁', sort: 'vote_average.desc', voteMin: '800', country: 'IT' },
+  { name: 'ベルリン国際映画祭', emoji: '🐻', sort: 'vote_average.desc', voteMin: '800', country: 'DE' },
+  { name: '東京国際映画祭', emoji: '🗼', sort: 'vote_average.desc', voteMin: '200', country: 'JP' },
+  { name: '英国アカデミー賞', emoji: '🇬🇧', sort: 'vote_average.desc', voteMin: '2000', country: 'GB' },
   { name: '高評価映画 (8.0+)', emoji: '⭐', sort: 'vote_average.desc', voteMin: '1000', voteAvgMin: '8' },
   { name: '隠れた名作', emoji: '💎', sort: 'vote_average.desc', voteMin: '100', voteMax: '1000', voteAvgMin: '7.5' },
 ]
@@ -519,14 +526,19 @@ export default function Search({ userId, onOpenWork }: {
     }
   }
 
-  const browseDecade = async (gte: string, lte: string, label: string, page: number = 1) => {
+  const browseYear = async (year: number, page: number = 1) => {
+    const label = `${year}年`
+    const gte = `${year}-01-01`
+    const lte = `${year}-12-31`
+    const mediaType = activeTab === 'movie' ? 'movie' : 'tv'
+    const dateKey = mediaType === 'movie' ? 'primary_release_date' : 'first_air_date'
     setBrowse({ mode: 'year', label, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
     try {
-      const res = await fetch(`/api/tmdb?action=discover&type=movie&primary_release_date.gte=${gte}&primary_release_date.lte=${lte}&page=${page}&sort_by=popularity.desc`)
+      const res = await fetch(`/api/tmdb?action=discover&type=${mediaType}&${dateKey}.gte=${gte}&${dateKey}.lte=${lte}&page=${page}&sort_by=popularity.desc`)
       const data = await res.json()
       const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
         ...item,
-        media_type: item.media_type || 'movie',
+        media_type: item.media_type || mediaType,
       }))
       setBrowse(prev => ({
         ...prev,
@@ -724,81 +736,102 @@ export default function Search({ userId, onOpenWork }: {
     )
   }
 
+  // --- Filmarks-style link item ---
+  const linkItemStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 10,
+    padding: '11px 16px',
+    background: 'none', border: 'none', borderBottom: '1px solid #1e1f36',
+    color: '#e0e0f0', fontSize: 14, fontWeight: 500,
+    cursor: 'pointer', width: '100%', textAlign: 'left',
+    transition: 'background 0.15s',
+  }
+  const linkArrow: React.CSSProperties = {
+    marginLeft: 'auto', color: '#4a4b66', fontSize: 14,
+  }
+
   const renderGenreChips = () => {
     const genres = activeTab === 'movie' ? MOVIE_GENRES
       : activeTab === 'drama' ? TV_GENRES
       : ANIME_GENRES
 
     return (
-      <div>
-        <div style={S.sectionHeader}>ジャンルで探す</div>
-        <div style={S.genreGrid}>
-          {genres.map(g => (
-            <button
-              key={g.id}
-              style={S.genrePill(false)}
-              onClick={() => browseGenre(g.id, `${g.emoji} ${g.name}`)}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLButtonElement).style.borderColor = '#6c5ce7'
-                ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.15)'
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLButtonElement).style.borderColor = '#2a2b46'
-                ;(e.currentTarget as HTMLButtonElement).style.background = '#12132a'
-              }}
-            >
-              {g.emoji} {g.name}
-            </button>
-          ))}
-        </div>
+      <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
+        <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36' }}>ジャンルで探す</div>
+        {genres.map(g => (
+          <button
+            key={g.id}
+            style={linkItemStyle}
+            onClick={() => browseGenre(g.id, `${g.emoji} ${g.name}`)}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.08)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+          >
+            <span>{g.emoji}</span>
+            <span>{g.name}</span>
+            <span style={linkArrow}>›</span>
+          </button>
+        ))}
       </div>
     )
   }
 
   const renderDecadeButtons = () => (
-    <div>
-      <div style={S.sectionHeader}>製作年で探す</div>
-      <div style={S.decadeGrid}>
-        {DECADES.map(d => (
-          <button
-            key={d.label}
-            style={S.decadePill}
-            onClick={() => browseDecade(d.gte, d.lte, d.label)}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = '#6c5ce7'
-              ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.15)'
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = '#2a2b46'
-              ;(e.currentTarget as HTMLButtonElement).style.background = '#12132a'
-            }}
-          >
-            {d.label}
-          </button>
-        ))}
-      </div>
+    <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
+      <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36' }}>製作年で探す</div>
+      {DECADES.map(d => {
+        const years: number[] = []
+        for (let y = d.end; y >= d.start; y--) years.push(y)
+        return (
+          <div key={d.label} style={{ borderBottom: '1px solid #1e1f36' }}>
+            <div style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#a29bfe' }}>{d.label}</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 0, paddingBottom: 8 }}>
+              {years.map(y => (
+                <button
+                  key={y}
+                  style={{
+                    background: 'none', border: 'none', color: '#c0c0d8', fontSize: 13,
+                    padding: '4px 12px', cursor: 'pointer', transition: 'color 0.15s',
+                  }}
+                  onClick={() => browseYear(y)}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#a29bfe' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#c0c0d8' }}
+                >
+                  {y}年
+                </button>
+              ))}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 
   const renderProviderChips = () => (
-    <div>
-      <div style={S.sectionHeader}>動画配信サービスで探す</div>
-      <div style={S.genreGrid}>
+    <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
+      <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36' }}>動画配信サービスで探す</div>
+      <div style={{ display: 'flex', overflowX: 'auto', gap: 12, padding: '16px', scrollbarWidth: 'none' }}>
         {PROVIDERS.map(p => (
           <button
             key={p.id}
-            style={S.genrePill(false)}
             onClick={() => browseProvider(p.id, `${p.emoji} ${p.name}`)}
+            style={{
+              flexShrink: 0, width: 140, padding: '16px 12px',
+              background: '#0d0e1e', borderRadius: 12,
+              border: '1px solid #2a2b46', cursor: 'pointer',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+              transition: 'border-color 0.2s, transform 0.2s',
+            }}
             onMouseEnter={e => {
               (e.currentTarget as HTMLButtonElement).style.borderColor = '#6c5ce7'
-              ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.15)'
+              ;(e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)'
             }}
             onMouseLeave={e => {
               (e.currentTarget as HTMLButtonElement).style.borderColor = '#2a2b46'
-              ;(e.currentTarget as HTMLButtonElement).style.background = '#12132a'
+              ;(e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'
             }}
           >
-            {p.emoji} {p.name}
+            <span style={{ fontSize: 28 }}>{p.emoji}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#e0e0f0', textAlign: 'center', lineHeight: 1.3 }}>{p.name}</span>
+            <span style={{ fontSize: 11, color: '#8888a8' }}>作品を見る ›</span>
           </button>
         ))}
       </div>
@@ -806,49 +839,42 @@ export default function Search({ userId, onOpenWork }: {
   )
 
   const renderAwardChips = () => (
-    <div>
-      <div style={S.sectionHeader}>映画賞・レーティングで探す</div>
-      <div style={S.genreGrid}>
-        {AWARDS.map(a => (
-          <button
-            key={a.name}
-            style={S.genrePill(false)}
-            onClick={() => browseAward(a)}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = '#6c5ce7'
-              ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.15)'
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = '#2a2b46'
-              ;(e.currentTarget as HTMLButtonElement).style.background = '#12132a'
-            }}
-          >
-            {a.emoji} {a.name}
-          </button>
-        ))}
-      </div>
+    <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
+      <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36' }}>映画賞・レーティングで探す</div>
+      {AWARDS.map(a => (
+        <button
+          key={a.name}
+          style={linkItemStyle}
+          onClick={() => browseAward(a)}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.08)' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+        >
+          <span>{a.emoji}</span>
+          <span>{a.name}</span>
+          <span style={linkArrow}>›</span>
+        </button>
+      ))}
     </div>
   )
 
   const renderCountryChips = () => (
-    <div>
-      <div style={S.sectionHeader}>製作国・地域で探す</div>
-      <div style={S.genreGrid}>
+    <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
+      <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36' }}>製作国・地域で探す</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)' }}>
         {COUNTRIES.map(c => (
           <button
             key={c.code}
-            style={S.genrePill(false)}
+            style={{
+              ...linkItemStyle,
+              borderRight: '1px solid #1e1f36',
+            }}
             onClick={() => browseCountry(c.code, `${c.emoji} ${c.name}`)}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = '#6c5ce7'
-              ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.15)'
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = '#2a2b46'
-              ;(e.currentTarget as HTMLButtonElement).style.background = '#12132a'
-            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.08)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
           >
-            {c.emoji} {c.name}
+            <span>{c.emoji}</span>
+            <span>{c.name}</span>
+            <span style={linkArrow}>›</span>
           </button>
         ))}
       </div>
@@ -856,24 +882,23 @@ export default function Search({ userId, onOpenWork }: {
   )
 
   const renderCompanyChips = () => (
-    <div>
-      <div style={S.sectionHeader}>配給会社で探す</div>
-      <div style={S.genreGrid}>
+    <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
+      <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36' }}>配給会社で探す</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)' }}>
         {COMPANIES.map(c => (
           <button
             key={c.id}
-            style={S.genrePill(false)}
+            style={{
+              ...linkItemStyle,
+              borderRight: '1px solid #1e1f36',
+            }}
             onClick={() => browseCompany(c.id, `${c.emoji} ${c.name}`)}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = '#6c5ce7'
-              ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.15)'
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = '#2a2b46'
-              ;(e.currentTarget as HTMLButtonElement).style.background = '#12132a'
-            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.08)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
           >
-            {c.emoji} {c.name}
+            <span>{c.emoji}</span>
+            <span>{c.name}</span>
+            <span style={linkArrow}>›</span>
           </button>
         ))}
       </div>
@@ -946,8 +971,8 @@ export default function Search({ userId, onOpenWork }: {
                   const found = genres.find(g => browse.label.includes(g.name))
                   if (found) browseGenre(found.id, browse.label, browse.page + 1)
                 } else if (browse.mode === 'year') {
-                  const decade = DECADES.find(d => d.label === browse.label)
-                  if (decade) browseDecade(decade.gte, decade.lte, browse.label, browse.page + 1)
+                  const yearMatch = browse.label.match(/^(\d{4})年$/)
+                  if (yearMatch) browseYear(parseInt(yearMatch[1]), browse.page + 1)
                 } else if (browse.mode === 'provider') {
                   const found = PROVIDERS.find(p => browse.label.includes(p.name))
                   if (found) browseProvider(found.id, browse.label, browse.page + 1)
