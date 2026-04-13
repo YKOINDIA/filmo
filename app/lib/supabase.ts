@@ -241,21 +241,28 @@ class UpdateBuilder {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async then(resolve: (value: { data: any; error: any }) => void) {
+  async then(resolve: (value: { data: any; error: any }) => void, reject?: (e: unknown) => void) {
     try {
       const collId = getCollectionId(this.table)
+      // Remove null/undefined values from update data to avoid Appwrite errors
+      const cleanData: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(this.data)) {
+        if (v !== null && v !== undefined) cleanData[k] = v
+      }
       // Find matching docs
       const queries = this.filters.map(([f, v]) =>
         f === 'id' ? Query.equal('$id', String(v)) : Query.equal(f as string, v as string | number | boolean)
       )
       queries.push(Query.limit(100))
       const result = await databases.listDocuments(DB_ID, collId, queries)
+      const updated: Record<string, unknown>[] = []
       for (const doc of result.documents) {
-        await databases.updateDocument(DB_ID, collId, doc.$id, this.data)
+        const updatedDoc = await databases.updateDocument(DB_ID, collId, doc.$id, cleanData)
+        updated.push(normalizeDoc(updatedDoc as unknown as Record<string, unknown>))
       }
-      resolve({ data: null, error: null })
+      resolve({ data: updated.length === 1 ? updated[0] : updated, error: null })
     } catch (e) {
-      resolve({ data: null, error: e })
+      if (reject) { reject(e) } else { resolve({ data: null, error: e }) }
     }
   }
 }

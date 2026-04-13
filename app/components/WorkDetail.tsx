@@ -45,7 +45,12 @@ interface SimilarWork {
 }
 interface WatchlistEntry {
   id: string; user_id: string; movie_id: number; status: string; score: number | null;
-  watched_at: string | null; watch_method: string | null
+  watched_at: string | null; watched_at_approx: string | null; watch_method: string | null;
+  streaming_platform: string | null; memo: string | null
+}
+interface ClipMemoEntry {
+  id: string; user_id: string; memo: string; score: number | null;
+  users?: { display_name: string; avatar_url: string | null } | null
 }
 interface ReviewEntry {
   id: string; user_id: string; movie_id: number; body: string | null; score: number | null;
@@ -101,6 +106,10 @@ const WATCH_METHODS_REVERSE: Record<string, string> = Object.fromEntries(
   Object.entries(WATCH_METHODS_MAP).map(([k, v]) => [v, k])
 )
 const WATCH_METHODS = ['映画館', '配信', 'DVD', 'TV', 'その他'] as const
+const STREAMING_PLATFORMS = [
+  'Netflix', 'Amazon Prime', 'Disney+', 'U-NEXT', 'Hulu',
+  'Apple TV+', 'ABEMA', 'dアニメストア', 'Lemino', 'WOWOWオンデマンド', 'その他',
+] as const
 
 // ── Helper Components ──────────────────────────────────────────────────────
 
@@ -194,6 +203,10 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const [score, setScore] = useState(0)
   const [watchedDate, setWatchedDate] = useState('')
   const [watchMethod, setWatchMethod] = useState('')
+  const [watchedDateMode, setWatchedDateMode] = useState<'old' | 'recent' | 'exact' | ''>('')
+  const [streamingPlatform, setStreamingPlatform] = useState('')
+  const [clipMemo, setClipMemo] = useState('')
+  const [clipMemos, setClipMemos] = useState<ClipMemoEntry[]>([])
   const [savingWatchlist, setSavingWatchlist] = useState(false)
 
   // State: User review
@@ -284,7 +297,10 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       setCurrentStatus(wl.status as WatchStatus)
       setScore(wl.score || 0)
       setWatchedDate(wl.watched_at || '')
+      setWatchedDateMode(wl.watched_at_approx as 'old' | 'recent' | 'exact' | '' || (wl.watched_at ? 'exact' : ''))
       setWatchMethod(WATCH_METHODS_REVERSE[wl.watch_method] || wl.watch_method || '')
+      setStreamingPlatform(wl.streaming_platform || '')
+      setClipMemo(wl.memo || '')
     }
 
     // My review
@@ -371,12 +387,25 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
     setReviews(enriched)
   }, [workId, userId])
 
+  const fetchClipMemos = useCallback(async () => {
+    const { data } = await supabase
+      .from('watchlists')
+      .select('id, user_id, memo, score, users(display_name, avatar_url)')
+      .eq('movie_id', workId)
+      .eq('status', 'want_to_watch')
+      .neq('user_id', userId)
+    if (data) {
+      setClipMemos((data as unknown as ClipMemoEntry[]).filter(d => (d.memo && d.memo.trim()) || (d.score && d.score > 0)))
+    }
+  }, [workId, userId])
+
   useEffect(() => {
     fetchDetail()
     fetchUserData()
     fetchReviews()
+    fetchClipMemos()
     scrollRef.current?.scrollTo(0, 0)
-  }, [fetchDetail, fetchUserData, fetchReviews])
+  }, [fetchDetail, fetchUserData, fetchReviews, fetchClipMemos])
 
   // Build taste profile once per mount
   useEffect(() => {
@@ -400,18 +429,21 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
     setSavingWatchlist(true)
     try {
       if (watchEntry) {
+        const updateData: Record<string, unknown> = { status }
+        if (score > 0) updateData.score = score
         await supabase
           .from('watchlists')
-          .update({ status, score: score || null })
+          .update(updateData)
           .eq('id', watchEntry.id)
         setWatchEntry({ ...watchEntry, status })
       } else {
+        const insertData: Record<string, unknown> = {
+          user_id: userId, movie_id: workId, status,
+        }
+        if (score > 0) insertData.score = score
         const insertResult = await supabase
           .from('watchlists')
-          .insert({
-            user_id: userId, movie_id: workId,
-            status, score: score || null,
-          })
+          .insert(insertData)
         const { data } = await insertResult.select('*').single()
         if (data) setWatchEntry(data as unknown as WatchlistEntry)
       }
@@ -434,28 +466,54 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
   const handleScoreChange = async (newScore: number) => {
     setScore(newScore)
-    if (watchEntry) {
-      await supabase
-        .from('watchlists')
-        .update({ score: newScore })
-        .eq('id', watchEntry.id)
+    if (watchEntry && newScore > 0) {
+      try {
+        await supabase
+          .from('watchlists')
+          .update({ score: newScore })
+          .eq('id', watchEntry.id)
+      } catch (e) {
+        console.error('Score update failed:', e)
+      }
     }
   }
 
   const handleSaveWatchDetails = async () => {
-    if (!watchEntry) return
+    if (!watchEntry) {
+      showToast('先にMark!またはClip!ボタンを押してください')
+      return
+    }
     setSavingWatchlist(true)
     try {
-      await supabase
+      const updateData: Record<string, unknown> = {}
+      if (currentStatus === 'watched' || currentStatus === 'watching') {
+        if (watchedDateMode === 'exact' && watchedDate) updateData.watched_at = watchedDate
+        if (watchedDateMode && watchedDateMode !== 'exact') updateData.watched_at_approx = watchedDateMode
+        if (watchedDateMode === 'exact') updateData.watched_at_approx = 'exact'
+        if (watchMethod) updateData.watch_method = WATCH_METHODS_MAP[watchMethod] || watchMethod
+        if (watchMethod === '配信' && streamingPlatform) updateData.streaming_platform = streamingPlatform
+        if (score > 0) updateData.score = score
+      }
+      if (currentStatus === 'want_to_watch') {
+        if (clipMemo) updateData.memo = clipMemo
+        if (score > 0) updateData.score = score
+      }
+      if (Object.keys(updateData).length === 0) {
+        showToast('変更がありません')
+        setSavingWatchlist(false)
+        return
+      }
+      const result = await supabase
         .from('watchlists')
-        .update({
-          watched_at: watchedDate || null,
-          watch_method: (watchMethod ? WATCH_METHODS_MAP[watchMethod] || watchMethod : null),
-          score: score || null,
-        })
+        .update(updateData)
         .eq('id', watchEntry.id)
+      if (result && (result as { error?: unknown }).error) {
+        throw (result as { error: unknown }).error
+      }
+      setWatchEntry({ ...watchEntry, ...updateData } as typeof watchEntry)
       showToast('保存しました')
-    } catch {
+    } catch (e) {
+      console.error('Save watch details failed:', e)
       showToast('保存に失敗しました')
     } finally {
       setSavingWatchlist(false)
@@ -467,11 +525,12 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const handleSaveReview = async (isDraft: boolean) => {
     setSavingReview(true)
     try {
-      const reviewData = {
+      const reviewData: Record<string, unknown> = {
         user_id: userId, movie_id: workId, body: reviewBody,
-        score: score || null, has_spoiler: reviewSpoiler,
+        has_spoiler: reviewSpoiler,
         is_draft: isDraft,
       }
+      if (score > 0) reviewData.score = score
 
       if (myReview) {
         await supabase
@@ -1115,35 +1174,113 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         )}
       </div>
 
-      {/* Star rating */}
-      <div style={{ padding: '0 16px 8px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 13, color: 'var(--fm-text-sub)' }}>あなたの評価:</span>
-        <StarRating value={score} onChange={handleScoreChange} size={28} />
-        {score > 0 && (
-          <span style={{ fontSize: 14, color: 'var(--fm-star)', fontWeight: 700 }}>
-            {score.toFixed(1)}
-          </span>
-        )}
-      </div>
-
-      {/* ── 4. Watchlist Entry Details ── */}
-      {currentStatus && (
+      {/* ── 4a. Mark Panel: Star + Review + Watch Details ── */}
+      {(currentStatus === 'watched' || currentStatus === 'watching') && (
         <div style={{ ...s.section }}>
           <div style={s.card}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Star rating */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 13, color: 'var(--fm-text-sub)' }}>評価:</span>
+                <StarRating value={score} onChange={handleScoreChange} size={28} />
+                {score > 0 && (
+                  <span style={{ fontSize: 14, color: 'var(--fm-star)', fontWeight: 700 }}>
+                    {score.toFixed(1)}
+                  </span>
+                )}
+              </div>
+
+              {/* Review textarea */}
+              <textarea
+                style={s.textarea}
+                value={reviewBody}
+                onChange={e => setReviewBody(e.target.value)}
+                placeholder="感想を書く..."
+                maxLength={5000}
+              />
+              <div style={{
+                display: 'flex', justifyContent: 'space-between',
+                alignItems: 'center', flexWrap: 'wrap', gap: 8,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <label style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    fontSize: 13, color: 'var(--fm-text-sub)', cursor: 'pointer',
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={reviewSpoiler}
+                      onChange={e => setReviewSpoiler(e.target.checked)}
+                      style={{ accentColor: 'var(--fm-danger)' }}
+                    />
+                    ネタバレあり
+                  </label>
+                  <span style={{ fontSize: 12, color: 'var(--fm-text-muted)' }}>
+                    {reviewBody.length} / 5000
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    style={s.smallBtn}
+                    onClick={() => handleSaveReview(true)}
+                    disabled={savingReview || !reviewBody.trim()}
+                  >
+                    下書き保存
+                  </button>
+                  <button
+                    style={{
+                      ...s.primaryBtn, padding: '6px 14px', fontSize: 13,
+                      opacity: (!reviewBody.trim() || savingReview) ? 0.5 : 1,
+                    }}
+                    onClick={() => handleSaveReview(false)}
+                    disabled={savingReview || !reviewBody.trim()}
+                  >
+                    {savingReview ? '投稿中...' : myReview && !myReview.is_draft ? '更新' : '投稿'}
+                  </button>
+                </div>
+              </div>
+              {reviewDraft && myReview?.is_draft && (
+                <div style={{
+                  padding: '6px 12px', borderRadius: 8,
+                  background: 'rgba(240,192,64,0.1)', border: '1px solid var(--fm-warning)',
+                  fontSize: 12, color: 'var(--fm-warning)',
+                }}>
+                  下書き保存中
+                </div>
+              )}
+
+              {/* Divider */}
+              <div style={{ borderTop: '1px solid var(--fm-border)', margin: '2px 0' }} />
+
+              {/* Watch date: 昔 / 最近 / 日付入力 */}
               <div>
-                <label style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 4, display: 'block' }}>
+                <label style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 6, display: 'block' }}>
                   鑑賞日
                 </label>
-                <input
-                  type="date"
-                  value={watchedDate}
-                  onChange={e => setWatchedDate(e.target.value)}
-                  style={s.input}
-                />
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: watchedDateMode === 'exact' ? 8 : 0 }}>
+                  {([['old', '昔'], ['recent', '最近'], ['exact', '日付を入力']] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      style={s.watchMethodBtn(watchedDateMode === val)}
+                      onClick={() => setWatchedDateMode(watchedDateMode === val ? '' : val)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {watchedDateMode === 'exact' && (
+                  <input
+                    type="date"
+                    value={watchedDate}
+                    onChange={e => setWatchedDate(e.target.value)}
+                    style={s.input}
+                  />
+                )}
               </div>
+
+              {/* Watch method */}
               <div>
-                <label style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 4, display: 'block' }}>
+                <label style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 6, display: 'block' }}>
                   視聴方法
                 </label>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -1151,13 +1288,39 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                     <button
                       key={method}
                       style={s.watchMethodBtn(watchMethod === method)}
-                      onClick={() => setWatchMethod(watchMethod === method ? '' : method)}
+                      onClick={() => {
+                        setWatchMethod(watchMethod === method ? '' : method)
+                        if (method !== '配信') setStreamingPlatform('')
+                      }}
                     >
                       {method}
                     </button>
                   ))}
                 </div>
+                {/* Streaming platform picker */}
+                {watchMethod === '配信' && (
+                  <div style={{ marginTop: 8 }}>
+                    <label style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 4, display: 'block' }}>
+                      プラットフォーム
+                    </label>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {STREAMING_PLATFORMS.map(p => (
+                        <button
+                          key={p}
+                          style={{
+                            ...s.watchMethodBtn(streamingPlatform === p),
+                            fontSize: 11, padding: '4px 10px', minHeight: 28,
+                          }}
+                          onClick={() => setStreamingPlatform(streamingPlatform === p ? '' : p)}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
+
               <button
                 style={s.primaryBtn}
                 onClick={handleSaveWatchDetails}
@@ -1166,6 +1329,233 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                 {savingWatchlist ? '保存中...' : '保存'}
               </button>
             </div>
+          </div>
+
+          {/* みんなのレビュー inline */}
+          <div style={{ marginTop: 16 }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between',
+              alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8,
+            }}>
+              <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)', margin: 0 }}>
+                💬 みんなのレビュー ({reviews.length})
+              </h4>
+              {reviews.length > 0 && (
+                <label style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  fontSize: 12, color: 'var(--fm-text-sub)', cursor: 'pointer',
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={spoilerFilter === 'no_spoiler'}
+                    onChange={e => setSpoilerFilter(e.target.checked ? 'no_spoiler' : 'all')}
+                  />
+                  ネタバレなしのみ
+                </label>
+              )}
+            </div>
+            {reviews.length > 0 && (
+              <div style={s.tabRow}>
+                {([
+                  ['newest', '新着'],
+                  ['likes', 'いいね数'],
+                  ['score_high', 'スコア高い'],
+                  ['score_low', 'スコア低い'],
+                ] as [SortMode, string][]).map(([key, label]) => (
+                  <button key={key} style={s.tab(reviewSort === key)} onClick={() => setReviewSort(key)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {sortedReviews.length === 0 ? (
+              <p style={{ color: 'var(--fm-text-muted)', fontSize: 14, textAlign: 'center', padding: 20 }}>
+                まだレビューはありません
+              </p>
+            ) : sortedReviews.map(review => (
+                <div key={review.id} style={s.reviewCard}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    {review.users?.avatar_url ? (
+                      <img src={review.users.avatar_url} alt="" style={s.avatar} />
+                    ) : (
+                      <div style={{
+                        ...s.avatar, display: 'flex', alignItems: 'center',
+                        justifyContent: 'center', fontSize: 16, color: 'var(--fm-text-muted)',
+                      }}>👤</div>
+                    )}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>
+                        {review.users?.display_name || '匿名ユーザー'}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
+                        {new Date(review.created_at).toLocaleDateString('ja-JP')}
+                      </div>
+                    </div>
+                    {review.score && <StarRating value={review.score} size={16} readonly />}
+                  </div>
+                  {review.has_spoiler && !revealedSpoilers.has(review.id) ? (
+                    <div className="spoiler-text"
+                      onClick={() => setRevealedSpoilers(prev => new Set(prev).add(review.id))}
+                      style={{ padding: '8px 12px', fontSize: 14, lineHeight: 1.7 }}>
+                      {review.body}
+                    </div>
+                  ) : review.has_spoiler ? (
+                    <>
+                      <div style={{
+                        display: 'inline-block', padding: '2px 8px', borderRadius: 4,
+                        background: 'rgba(255,107,107,0.15)', color: 'var(--fm-danger)',
+                        fontSize: 11, fontWeight: 600, marginBottom: 6,
+                      }}>⚠ ネタバレあり</div>
+                      <div className="spoiler-text revealed"
+                        style={{ padding: '4px 0', fontSize: 14, lineHeight: 1.7 }}>
+                        {review.body}
+                      </div>
+                    </>
+                  ) : (
+                    <p style={{ fontSize: 14, color: 'var(--fm-text)', lineHeight: 1.7, margin: 0 }}>
+                      {review.body}
+                    </p>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
+                    <button style={s.likeBtn(review.liked_by_me)} onClick={() => handleLike(review)}>
+                      {review.liked_by_me ? '❤️' : '🤍'} {review.likes_count}
+                    </button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── 4b. Clip Panel: Memo + Match Score ── */}
+      {currentStatus === 'want_to_watch' && (
+        <div style={{ ...s.section }}>
+          <div style={s.card}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Expectation star rating */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 13, color: 'var(--fm-text-sub)' }}>期待度:</span>
+                <StarRating value={score} onChange={handleScoreChange} size={28} />
+                {score > 0 && (
+                  <span style={{ fontSize: 14, color: 'var(--fm-star)', fontWeight: 700 }}>
+                    {score.toFixed(1)}
+                  </span>
+                )}
+              </div>
+
+              {/* Why do you want to watch? */}
+              <div>
+                <label style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 6, display: 'block' }}>
+                  なぜ観たい？ / 何が楽しみ？
+                </label>
+                <textarea
+                  style={{ ...s.textarea, minHeight: 60 }}
+                  value={clipMemo}
+                  onChange={e => setClipMemo(e.target.value)}
+                  placeholder="気になった理由、期待していることなど..."
+                  maxLength={500}
+                />
+                <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', textAlign: 'right', marginTop: 4 }}>
+                  {clipMemo.length} / 500
+                </div>
+              </div>
+
+              {/* Match score inline */}
+              {matchScore !== null && matchScore > 0 && (
+                <div style={{
+                  padding: '12px 16px',
+                  borderRadius: 10,
+                  background: 'linear-gradient(135deg, rgba(108,92,231,0.12), rgba(162,155,254,0.06))',
+                  border: '1px solid rgba(108,92,231,0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                }}>
+                  <div style={{
+                    position: 'relative',
+                    width: 44, height: 44, flexShrink: 0,
+                  }}>
+                    <svg width="44" height="44" viewBox="0 0 44 44" style={{ transform: 'rotate(-90deg)' }}>
+                      <circle cx="22" cy="22" r="18" fill="none"
+                        stroke="rgba(108,92,231,0.2)" strokeWidth="3.5" />
+                      <circle cx="22" cy="22" r="18" fill="none"
+                        stroke={matchScore >= 80 ? '#2ecc8a' : matchScore >= 60 ? '#6c5ce7' : '#e67e22'}
+                        strokeWidth="3.5"
+                        strokeDasharray={`${(matchScore / 100) * 113.1} 113.1`}
+                        strokeLinecap="round"
+                        style={{ transition: 'stroke-dasharray 0.8s ease' }}
+                      />
+                    </svg>
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 13, fontWeight: 800,
+                      color: matchScore >= 80 ? '#2ecc8a' : matchScore >= 60 ? '#a29bfe' : '#e67e22',
+                    }}>
+                      {matchScore}%
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fm-text)' }}>
+                      マッチ度 {matchScore}%
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--fm-text-sub)', lineHeight: 1.4 }}>
+                      {matchScore >= 80
+                        ? 'あなたの好みにとても合いそう!'
+                        : matchScore >= 65
+                          ? 'あなたの好みに合う可能性あり'
+                          : 'あなたの好みとはやや異なるかも'
+                      }
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                style={s.primaryBtn}
+                onClick={handleSaveWatchDetails}
+                disabled={savingWatchlist}
+              >
+                {savingWatchlist ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+
+          {/* みんなの「なぜ観たい」 inline */}
+          <div style={{ marginTop: 16 }}>
+            <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)', margin: '0 0 10px' }}>
+              📌 みんなが観たい理由 ({clipMemos.length})
+            </h4>
+            {clipMemos.length === 0 ? (
+              <p style={{ color: 'var(--fm-text-muted)', fontSize: 14, textAlign: 'center', padding: 20 }}>
+                まだ投稿はありません
+              </p>
+            ) : clipMemos.map(cm => (
+              <div key={cm.id} style={{
+                ...s.card, marginBottom: 8, padding: '10px 14px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  {cm.users?.avatar_url ? (
+                    <img src={cm.users.avatar_url} alt="" style={{ ...s.avatar, width: 24, height: 24 }} />
+                  ) : (
+                    <div style={{
+                      ...s.avatar, width: 24, height: 24,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 12, color: 'var(--fm-text-muted)',
+                    }}>👤</div>
+                  )}
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text)', flex: 1 }}>
+                    {cm.users?.display_name || '匿名ユーザー'}
+                  </span>
+                  {cm.score && cm.score > 0 && <StarRating value={cm.score} size={14} readonly />}
+                </div>
+                {cm.memo && (
+                  <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', lineHeight: 1.6, margin: 0 }}>
+                    {cm.memo}
+                  </p>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -1409,188 +1799,6 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                 ))}
               </div>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Review Section ── */}
-      <div style={s.section}>
-        <h3 style={s.sectionTitle}>✍️ レビュー</h3>
-
-        {/* My review editor */}
-        <div style={s.card}>
-          <textarea
-            style={s.textarea}
-            value={reviewBody}
-            onChange={e => setReviewBody(e.target.value)}
-            placeholder="この作品について書く..."
-            maxLength={5000}
-          />
-          <div style={{
-            display: 'flex', justifyContent: 'space-between',
-            alignItems: 'center', marginTop: 8, flexWrap: 'wrap', gap: 8,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <label style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                fontSize: 13, color: 'var(--fm-text-sub)', cursor: 'pointer',
-              }}>
-                <input
-                  type="checkbox"
-                  checked={reviewSpoiler}
-                  onChange={e => setReviewSpoiler(e.target.checked)}
-                  style={{ accentColor: 'var(--fm-danger)' }}
-                />
-                ネタバレあり
-              </label>
-              <span style={{ fontSize: 12, color: 'var(--fm-text-muted)' }}>
-                {reviewBody.length} / 5000
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                style={s.smallBtn}
-                onClick={() => handleSaveReview(true)}
-                disabled={savingReview || !reviewBody.trim()}
-              >
-                下書き保存
-              </button>
-              <button
-                style={{
-                  ...s.primaryBtn,
-                  opacity: (!reviewBody.trim() || savingReview) ? 0.5 : 1,
-                }}
-                onClick={() => handleSaveReview(false)}
-                disabled={savingReview || !reviewBody.trim()}
-              >
-                {savingReview ? '投稿中...' : myReview && !myReview.is_draft ? '更新' : '投稿'}
-              </button>
-            </div>
-          </div>
-          {reviewDraft && myReview?.is_draft && (
-            <div style={{
-              marginTop: 8, padding: '6px 12px', borderRadius: 8,
-              background: 'rgba(240,192,64,0.1)', border: '1px solid var(--fm-warning)',
-              fontSize: 12, color: 'var(--fm-warning)',
-            }}>
-              下書き保存中
-            </div>
-          )}
-        </div>
-
-        {/* Reviews from others */}
-        <div style={{ marginTop: 20 }}>
-          <div style={{
-            display: 'flex', justifyContent: 'space-between',
-            alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8,
-          }}>
-            <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)', margin: 0 }}>
-              みんなのレビュー ({reviews.length})
-            </h4>
-            <label style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              fontSize: 12, color: 'var(--fm-text-sub)', cursor: 'pointer',
-            }}>
-              <input
-                type="checkbox"
-                checked={spoilerFilter === 'no_spoiler'}
-                onChange={e => setSpoilerFilter(e.target.checked ? 'no_spoiler' : 'all')}
-              />
-              ネタバレなしのみ
-            </label>
-          </div>
-
-          {/* Sort tabs */}
-          <div style={s.tabRow}>
-            {([
-              ['newest', '新着'],
-              ['likes', 'いいね数'],
-              ['score_high', 'スコア高い'],
-              ['score_low', 'スコア低い'],
-            ] as [SortMode, string][]).map(([key, label]) => (
-              <button
-                key={key}
-                style={s.tab(reviewSort === key)}
-                onClick={() => setReviewSort(key)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {sortedReviews.length === 0 ? (
-            <p style={{ color: 'var(--fm-text-muted)', fontSize: 14, textAlign: 'center', padding: 20 }}>
-              まだレビューはありません
-            </p>
-          ) : (
-            sortedReviews.map(review => (
-              <div key={review.id} style={s.reviewCard}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10,
-                }}>
-                  {review.users?.avatar_url ? (
-                    <img src={review.users.avatar_url} alt="" style={s.avatar} />
-                  ) : (
-                    <div style={{
-                      ...s.avatar, display: 'flex', alignItems: 'center',
-                      justifyContent: 'center', fontSize: 16, color: 'var(--fm-text-muted)',
-                    }}>👤</div>
-                  )}
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>
-                      {review.users?.display_name || '匿名ユーザー'}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
-                      {new Date(review.created_at).toLocaleDateString('ja-JP')}
-                    </div>
-                  </div>
-                  {review.score && (
-                    <StarRating value={review.score} size={16} readonly />
-                  )}
-                </div>
-
-                {review.has_spoiler && !revealedSpoilers.has(review.id) ? (
-                  <div
-                    className="spoiler-text"
-                    onClick={() => setRevealedSpoilers(prev => new Set(prev).add(review.id))}
-                    style={{ padding: '8px 12px', fontSize: 14, lineHeight: 1.7 }}
-                  >
-                    {review.body}
-                  </div>
-                ) : review.has_spoiler ? (
-                  <>
-                    <div style={{
-                      display: 'inline-block', padding: '2px 8px', borderRadius: 4,
-                      background: 'rgba(255,107,107,0.15)', color: 'var(--fm-danger)',
-                      fontSize: 11, fontWeight: 600, marginBottom: 6,
-                    }}>
-                      ⚠ ネタバレあり
-                    </div>
-                    <div
-                      className="spoiler-text revealed"
-                      style={{ padding: '4px 0', fontSize: 14, lineHeight: 1.7 }}
-                    >
-                      {review.body}
-                    </div>
-                  </>
-                ) : (
-                  <p style={{ fontSize: 14, color: 'var(--fm-text)', lineHeight: 1.7, margin: 0 }}>
-                    {review.body}
-                  </p>
-                )}
-
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 12, marginTop: 10,
-                }}>
-                  <button
-                    style={s.likeBtn(review.liked_by_me)}
-                    onClick={() => handleLike(review)}
-                  >
-                    {review.liked_by_me ? '❤️' : '🤍'} {review.likes_count}
-                  </button>
-                </div>
-              </div>
-            ))
           )}
         </div>
       </div>
