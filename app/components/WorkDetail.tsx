@@ -44,11 +44,11 @@ interface SimilarWork {
 }
 interface WatchlistEntry {
   id: string; user_id: string; movie_id: number; status: string; score: number | null;
-  watched_date: string | null; watch_method: string | null; work_type: string
+  watched_at: string | null; watch_method: string | null
 }
 interface ReviewEntry {
   id: string; user_id: string; movie_id: number; body: string | null; score: number | null;
-  is_spoiler: boolean; is_draft: boolean; created_at: string; updated_at: string
+  has_spoiler: boolean; is_draft: boolean; created_at: string; updated_at: string
 }
 interface ReviewWithUser extends ReviewEntry {
   users: { display_name: string; avatar_url: string | null } | null
@@ -89,6 +89,16 @@ interface TMDBDetail {
 type SortMode = 'newest' | 'likes' | 'score_high' | 'score_low'
 type WatchStatus = 'watched' | 'want_to_watch' | 'watching' | null
 
+const WATCH_METHODS_MAP: Record<string, string> = {
+  '映画館': 'theater',
+  '配信': 'streaming',
+  'DVD': 'dvd',
+  'TV': 'tv',
+  'その他': 'other',
+}
+const WATCH_METHODS_REVERSE: Record<string, string> = Object.fromEntries(
+  Object.entries(WATCH_METHODS_MAP).map(([k, v]) => [v, k])
+)
 const WATCH_METHODS = ['映画館', '配信', 'DVD', 'TV', 'その他'] as const
 
 // ── Helper Components ──────────────────────────────────────────────────────
@@ -245,7 +255,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         genres: data.genres,
         vote_average: data.vote_average,
         overview: data.overview,
-        work_type: workType,
+        media_type: workType,
         production_countries: data.production_countries || [],
       }, { onConflict: 'tmdb_id' })
     } catch (e) {
@@ -262,15 +272,14 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       .select('*')
       .eq('user_id', userId)
       .eq('movie_id', workId)
-      .eq('work_type', workType)
       .maybeSingle()
 
     if (wl) {
       setWatchEntry(wl)
       setCurrentStatus(wl.status as WatchStatus)
       setScore(wl.score || 0)
-      setWatchedDate(wl.watched_date || '')
-      setWatchMethod(wl.watch_method || '')
+      setWatchedDate(wl.watched_at || '')
+      setWatchMethod(WATCH_METHODS_REVERSE[wl.watch_method] || wl.watch_method || '')
     }
 
     // My review
@@ -284,7 +293,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
     if (rv) {
       setMyReview(rv)
       setReviewBody(rv.body || '')
-      setReviewSpoiler(rv.is_spoiler || false)
+      setReviewSpoiler(rv.has_spoiler || false)
       setReviewDraft(rv.is_draft || false)
     }
 
@@ -298,16 +307,28 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       setFanIds(new Set(fans.map((f: { person_id: number }) => f.person_id)))
     }
 
-    // Episode watches (TV)
+    // Episode watches (TV) — join through episodes table
     if (workType === 'tv') {
-      const { data: ew } = await supabase
-        .from('episode_watches')
-        .select('episode_key')
-        .eq('user_id', userId)
-        .eq('work_id', workId)
+      const { data: episodes } = await supabase
+        .from('episodes')
+        .select('id, season_number, episode_number')
+        .eq('movie_id', workId)
 
-      if (ew) {
-        setEpisodeWatches(new Set(ew.map((e: { episode_key: string }) => e.episode_key)))
+      if (episodes && episodes.length > 0) {
+        const episodeIds = episodes.map((e: { id: string }) => e.id)
+        const { data: ew } = await supabase
+          .from('episode_watches')
+          .select('episode_id')
+          .eq('user_id', userId)
+          .in('episode_id', episodeIds)
+
+        if (ew) {
+          const watchedEpIds = new Set(ew.map((e: { episode_id: string }) => e.episode_id))
+          const keys = episodes
+            .filter((e: { id: string }) => watchedEpIds.has(e.id))
+            .map((e: { season_number: number; episode_number: number }) => `s${e.season_number}e${e.episode_number}`)
+          setEpisodeWatches(new Set(keys))
+        }
       }
     }
   }, [userId, workId, workType])
@@ -368,7 +389,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         const insertResult = await supabase
           .from('watchlists')
           .insert({
-            user_id: userId, movie_id: workId, work_type: workType,
+            user_id: userId, movie_id: workId,
             status, score: score || null,
           })
         const { data } = await insertResult.select('*').single()
@@ -408,8 +429,8 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       await supabase
         .from('watchlists')
         .update({
-          watched_date: watchedDate || null,
-          watch_method: watchMethod || null,
+          watched_at: watchedDate || null,
+          watch_method: (watchMethod ? WATCH_METHODS_MAP[watchMethod] || watchMethod : null),
           score: score || null,
         })
         .eq('id', watchEntry.id)
@@ -428,8 +449,8 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
     try {
       const reviewData = {
         user_id: userId, movie_id: workId, body: reviewBody,
-        score: score || null, is_spoiler: reviewSpoiler,
-        is_draft: isDraft, work_type: workType,
+        score: score || null, has_spoiler: reviewSpoiler,
+        is_draft: isDraft,
       }
 
       if (myReview) {
@@ -543,18 +564,29 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
   const handleToggleEpisode = async (seasonNumber: number, episodeNumber: number) => {
     const key = `s${seasonNumber}e${episodeNumber}`
+
+    // Look up episode UUID from episodes table
+    const { data: ep } = await supabase
+      .from('episodes')
+      .select('id')
+      .eq('movie_id', workId)
+      .eq('season_number', seasonNumber)
+      .eq('episode_number', episodeNumber)
+      .maybeSingle()
+
+    if (!ep) return
+
     if (episodeWatches.has(key)) {
       await supabase
         .from('episode_watches')
         .delete()
         .eq('user_id', userId)
-        .eq('work_id', workId)
-        .eq('episode_key', key)
+        .eq('episode_id', ep.id)
       setEpisodeWatches(prev => { const n = new Set(prev); n.delete(key); return n })
     } else {
       await supabase
         .from('episode_watches')
-        .insert({ user_id: userId, work_id: workId, episode_key: key })
+        .insert({ user_id: userId, episode_id: ep.id })
       setEpisodeWatches(prev => new Set(prev).add(key))
     }
   }
@@ -562,7 +594,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   // ── Sorted/Filtered Reviews ──────────────────────────────────────────────
 
   const sortedReviews = [...reviews]
-    .filter(r => spoilerFilter === 'all' || !r.is_spoiler)
+    .filter(r => spoilerFilter === 'all' || !r.has_spoiler)
     .sort((a, b) => {
       switch (reviewSort) {
         case 'newest': return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -1445,7 +1477,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                   )}
                 </div>
 
-                {review.is_spoiler && !revealedSpoilers.has(review.id) ? (
+                {review.has_spoiler && !revealedSpoilers.has(review.id) ? (
                   <div
                     className="spoiler-text"
                     onClick={() => setRevealedSpoilers(prev => new Set(prev).add(review.id))}
@@ -1453,7 +1485,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                   >
                     {review.body}
                   </div>
-                ) : review.is_spoiler ? (
+                ) : review.has_spoiler ? (
                   <>
                     <div style={{
                       display: 'inline-block', padding: '2px 8px', borderRadius: 4,
