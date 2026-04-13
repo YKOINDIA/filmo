@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { addPoints, POINT_CONFIG } from '../lib/points'
 import { showToast } from '../lib/toast'
+import { buildTasteProfile, calculateMatchScore, type TasteProfile } from '../lib/matchScore'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -220,6 +221,10 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   // State: Providers
   const [providers, setProviders] = useState<WatchProviders | null>(null)
 
+  // State: Match score
+  const [matchScore, setMatchScore] = useState<number | null>(null)
+  const [tasteProfile, setTasteProfile] = useState<TasteProfile | null>(null)
+
   // State: UI
   const [synopsisExpanded, setSynopsisExpanded] = useState(false)
   const [showAllCast, setShowAllCast] = useState(false)
@@ -372,6 +377,21 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
     fetchReviews()
     scrollRef.current?.scrollTo(0, 0)
   }, [fetchDetail, fetchUserData, fetchReviews])
+
+  // Build taste profile once per mount
+  useEffect(() => {
+    buildTasteProfile(userId).then(setTasteProfile)
+  }, [userId])
+
+  // Calculate match score when detail and profile are ready
+  useEffect(() => {
+    if (!tasteProfile || !detail) return
+    const score = calculateMatchScore(tasteProfile, {
+      genres: detail.genres,
+      credits: detail.credits,
+    })
+    setMatchScore(score)
+  }, [tasteProfile, detail])
 
   // ── Watchlist Actions ────────────────────────────────────────────────────
 
@@ -1015,6 +1035,58 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           })()}
         </div>
       </div>
+
+      {/* ── Match Score ── */}
+      {matchScore !== null && (
+        <div style={{
+          margin: '12px 16px 0',
+          padding: '14px 16px',
+          borderRadius: 12,
+          background: 'linear-gradient(135deg, rgba(108,92,231,0.15), rgba(162,155,254,0.08))',
+          border: '1px solid rgba(108,92,231,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+        }}>
+          <div style={{
+            position: 'relative',
+            width: 56, height: 56, flexShrink: 0,
+          }}>
+            <svg width="56" height="56" viewBox="0 0 56 56" style={{ transform: 'rotate(-90deg)' }}>
+              <circle cx="28" cy="28" r="24" fill="none"
+                stroke="rgba(108,92,231,0.2)" strokeWidth="4" />
+              <circle cx="28" cy="28" r="24" fill="none"
+                stroke={matchScore >= 80 ? '#2ecc8a' : matchScore >= 60 ? '#6c5ce7' : '#e67e22'}
+                strokeWidth="4"
+                strokeDasharray={`${(matchScore / 100) * 150.8} 150.8`}
+                strokeLinecap="round"
+                style={{ transition: 'stroke-dasharray 0.8s ease' }}
+              />
+            </svg>
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 16, fontWeight: 800,
+              color: matchScore >= 80 ? '#2ecc8a' : matchScore >= 60 ? '#a29bfe' : '#e67e22',
+            }}>
+              {matchScore}%
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fm-text)', marginBottom: 2 }}>
+              あなたへのマッチ度
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', lineHeight: 1.5 }}>
+              {matchScore >= 80
+                ? 'あなたの好みにとても合いそうです!'
+                : matchScore >= 65
+                  ? 'あなたの好みに合う可能性があります'
+                  : 'あなたの好みとはやや異なるかも'
+              }
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 3. Action Buttons ── */}
       <div style={s.actionRow}>

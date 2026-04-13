@@ -91,6 +91,15 @@ export async function GET(request: NextRequest) {
         const data = await tmdbFetch(`/watch/providers/${type}`, { watch_region: 'JP' })
         return NextResponse.json(data)
       }
+      case 'trending_people': {
+        const data = await tmdbFetch('/trending/person/week')
+        return NextResponse.json(data)
+      }
+      case 'popular_people': {
+        const page = searchParams.get('page') || '1'
+        const data = await tmdbFetch('/person/popular', { page })
+        return NextResponse.json(data)
+      }
       default:
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
     }

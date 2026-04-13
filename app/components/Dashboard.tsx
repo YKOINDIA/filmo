@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { buildTasteProfile, calculateGenreMatchScore, type TasteProfile } from '../lib/matchScore'
 
 const TMDB_IMG_POSTER = 'https://image.tmdb.org/t/p/w342'
 const TMDB_IMG_BACKDROP = 'https://image.tmdb.org/t/p/w1280'
@@ -20,6 +21,7 @@ interface MediaItem {
   vote_average?: number
   release_date?: string
   first_air_date?: string
+  genre_ids?: number[]
 }
 
 const GENRE_CHIPS: { label: string; emoji: string }[] = [
@@ -51,6 +53,7 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
   const [upcoming, setUpcoming] = useState<MediaItem[]>([])
   const [tvDramas, setTvDramas] = useState<MediaItem[]>([])
   const [anime, setAnime] = useState<MediaItem[]>([])
+  const [tasteProfile, setTasteProfile] = useState<TasteProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [sectionLoading, setSectionLoading] = useState<SectionLoadingState>({
     trending: true,
@@ -135,6 +138,10 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
     ]).finally(() => setLoading(false))
   }, [fetchTrending, fetchNowPlaying, fetchUpcoming, fetchTvDramas, fetchAnime])
 
+  useEffect(() => {
+    buildTasteProfile(userId).then(setTasteProfile)
+  }, [userId])
+
   const getTitle = (item: MediaItem): string => item.title || item.name || ''
   const getYear = (item: MediaItem): string => {
     const d = item.release_date || item.first_air_date
@@ -146,6 +153,11 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
     return 'movie'
   }
   const toFilmoScore = (tmdbScore: number): string => (tmdbScore / 2).toFixed(1)
+
+  const getMatchScore = (item: MediaItem): number | null => {
+    if (!tasteProfile || !item.genre_ids?.length) return null
+    return calculateGenreMatchScore(tasteProfile, item.genre_ids)
+  }
 
   const heroItem = trending.length > 0 ? trending[0] : null
 
@@ -319,6 +331,7 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
               title={getTitle(item)}
               year={getYear(item)}
               voteAverage={item.vote_average}
+              matchScore={getMatchScore(item)}
               onClick={() => onOpenWork(item.id, getMediaType(item))}
             />
           ))}
@@ -339,6 +352,7 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
               title={getTitle(item)}
               year={getYear(item)}
               voteAverage={item.vote_average}
+              matchScore={getMatchScore(item)}
               onClick={() => onOpenWork(item.id, 'movie')}
             />
           ))}
@@ -359,6 +373,7 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
               title={getTitle(item)}
               year={getYear(item)}
               voteAverage={item.vote_average}
+              matchScore={getMatchScore(item)}
               onClick={() => onOpenWork(item.id, 'movie')}
             />
           ))}
@@ -379,6 +394,7 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
               title={getTitle(item)}
               year={getYear(item)}
               voteAverage={item.vote_average}
+              matchScore={getMatchScore(item)}
               onClick={() => onOpenWork(item.id, 'tv')}
             />
           ))}
@@ -399,6 +415,7 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
               title={getTitle(item)}
               year={getYear(item)}
               voteAverage={item.vote_average}
+              matchScore={getMatchScore(item)}
               onClick={() => onOpenWork(item.id, 'tv')}
             />
           ))}
@@ -549,12 +566,14 @@ function PosterCard({
   title,
   year,
   voteAverage,
+  matchScore,
   onClick,
 }: {
   posterPath: string | null
   title: string
   year?: string
   voteAverage?: number
+  matchScore?: number | null
   onClick: () => void
 }) {
   const [imgError, setImgError] = useState(false)
@@ -627,6 +646,28 @@ function PosterCard({
           }}>
             <span style={{ color: '#ffd700', fontSize: 11 }}>★</span>
             <span style={{ color: '#ffd700' }}>{filmoScore.toFixed(1)}</span>
+          </div>
+        )}
+
+        {/* Match score badge */}
+        {matchScore != null && (
+          <div style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            background: matchScore >= 80
+              ? 'rgba(46,204,138,0.9)'
+              : matchScore >= 65
+                ? 'rgba(108,92,231,0.9)'
+                : 'rgba(230,126,34,0.85)',
+            backdropFilter: 'blur(6px)',
+            borderRadius: 8,
+            padding: '3px 7px',
+            fontSize: 11,
+            fontWeight: 800,
+            color: '#fff',
+          }}>
+            {matchScore}%
           </div>
         )}
       </div>
