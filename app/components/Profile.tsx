@@ -234,17 +234,45 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props)
     fetch()
   }, [user.id])
 
+  // Compress image to WebP, resize to max dimensions
+  const compressImage = (file: File, maxSize = 200, quality = 0.8): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => {
+        const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
+        const w = Math.round(img.width * scale)
+        const h = Math.round(img.height * scale)
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')!
+        ctx.drawImage(img, 0, 0, w, h)
+        canvas.toBlob(
+          blob => {
+            if (!blob) return reject(new Error('Compression failed'))
+            resolve(new File([blob], `avatar.webp`, { type: 'image/webp' }))
+          },
+          'image/webp',
+          quality,
+        )
+      }
+      img.onerror = () => reject(new Error('Image load failed'))
+      img.src = URL.createObjectURL(file)
+    })
+  }
+
   // Avatar upload
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setUploadingAvatar(true)
     try {
-      const ext = file.name.split('.').pop()
-      const path = `avatars/${user.id}/${Date.now()}.${ext}`
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+      const compressed = await compressImage(file)
+      const path = `avatars/${user.id}/${Date.now()}.webp`
+      const { data: uploadData, error: uploadError } = await supabase.storage.from('avatars').upload(path, compressed, { upsert: true })
       if (uploadError) throw uploadError
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+      const fileId = uploadData?.id || path
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileId)
       const avatar_url = urlData.publicUrl
       await supabase.from('users').update({ avatar_url }).eq('id', user.id)
       onUpdate({ avatar_url })
