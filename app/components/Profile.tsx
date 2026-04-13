@@ -44,11 +44,10 @@ interface WatchlistItem {
   score: number | null
   watched_at: string | null
   created_at: string
-  movies: {
-    title: string
-    poster_path: string | null
-    release_date: string | null
-  }
+  // Embedded movie data (merged from movies collection after fetch)
+  movie_title?: string
+  movie_poster?: string | null
+  movie_release_date?: string | null
 }
 
 interface ReviewItem {
@@ -57,10 +56,8 @@ interface ReviewItem {
   score: number
   body: string | null
   created_at: string
-  movies: {
-    title: string
-    poster_path: string | null
-  }
+  movie_title?: string
+  movie_poster?: string | null
 }
 
 interface FanItem {
@@ -74,12 +71,10 @@ interface FanItem {
 interface TitleItem {
   id: string
   earned_at: string
-  user_titles: {
-    name: string
-    description: string
-    icon: string
-    rarity: string
-  }
+  title_name?: string
+  title_description?: string
+  title_icon?: string
+  title_rarity?: string
 }
 
 interface TMDBResult {
@@ -154,7 +149,7 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props)
     }
     let query = supabase
       .from('watchlists')
-      .select('id, movie_id, status, score, watched_at, created_at, movies(title, poster_path, release_date)')
+      .select('id, movie_id, status, score, watched_at, created_at')
       .eq('user_id', user.id)
       .eq('status', statusMap[watchTab])
 
@@ -171,10 +166,36 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props)
     const { data } = await query.limit(50)
     let items = (data as unknown as WatchlistItem[]) || []
 
+    // Fetch movie metadata from movies collection to get title/poster
+    if (items.length > 0) {
+      const movieIds = [...new Set(items.map(i => i.movie_id))]
+      try {
+        const { data: movieData } = await supabase
+          .from('movies')
+          .select('tmdb_id, title, poster_path, release_date')
+          .in('tmdb_id', movieIds)
+        const movieMap = new Map<number, { title: string; poster_path: string | null; release_date: string | null }>()
+        if (movieData) {
+          for (const m of movieData as unknown as { tmdb_id: number; title: string; poster_path: string | null; release_date: string | null }[]) {
+            movieMap.set(m.tmdb_id, m)
+          }
+        }
+        items = items.map(item => {
+          const movie = movieMap.get(item.movie_id)
+          return {
+            ...item,
+            movie_title: item.movie_title || movie?.title,
+            movie_poster: item.movie_poster || movie?.poster_path,
+            movie_release_date: item.movie_release_date || movie?.release_date,
+          }
+        })
+      } catch { /* continue without movie metadata */ }
+    }
+
     if (watchSort === 'release_year') {
       items.sort((a, b) => {
-        const ya = a.movies?.release_date ? new Date(a.movies.release_date).getFullYear() : 0
-        const yb = b.movies?.release_date ? new Date(b.movies.release_date).getFullYear() : 0
+        const ya = a.movie_release_date ? new Date(a.movie_release_date).getFullYear() : 0
+        const yb = b.movie_release_date ? new Date(b.movie_release_date).getFullYear() : 0
         return yb - ya
       })
     }
@@ -193,12 +214,30 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props)
       setReviewsLoading(true)
       const { data } = await supabase
         .from('reviews')
-        .select('id, movie_id, score, body, created_at, movies(title, poster_path)')
+        .select('id, movie_id, score, body, created_at')
         .eq('user_id', user.id)
         .eq('is_draft', false)
         .order('created_at', { ascending: false })
         .limit(30)
-      setReviews((data as unknown as ReviewItem[]) || [])
+      let items = (data as unknown as ReviewItem[]) || []
+      // Merge movie metadata
+      if (items.length > 0) {
+        const movieIds = [...new Set(items.map(i => i.movie_id))]
+        try {
+          const { data: movieData } = await supabase.from('movies').select('tmdb_id, title, poster_path').in('tmdb_id', movieIds)
+          const movieMap = new Map<number, { title: string; poster_path: string | null }>()
+          if (movieData) {
+            for (const m of movieData as unknown as { tmdb_id: number; title: string; poster_path: string | null }[]) {
+              movieMap.set(m.tmdb_id, m)
+            }
+          }
+          items = items.map(item => {
+            const movie = movieMap.get(item.movie_id)
+            return { ...item, movie_title: item.movie_title || movie?.title, movie_poster: item.movie_poster || movie?.poster_path }
+          })
+        } catch { /* continue without movie metadata */ }
+      }
+      setReviews(items)
       setReviewsLoading(false)
     }
     fetch()
@@ -225,7 +264,7 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props)
       setTitlesLoading(true)
       const { data } = await supabase
         .from('user_earned_titles')
-        .select('id, earned_at, user_titles(name, description, icon, rarity)')
+        .select('id, earned_at, title_name, title_description, title_icon, title_rarity')
         .eq('user_id', user.id)
         .order('earned_at', { ascending: false })
       setTitles((data as unknown as TitleItem[]) || [])
@@ -673,10 +712,10 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props)
                 style={{
                   background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left',
                 }}>
-                {item.movies?.poster_path ? (
+                {item.movie_poster ? (
                   <img
-                    src={`${TMDB_IMG}/w300${item.movies.poster_path}`}
-                    alt={item.movies.title}
+                    src={`${TMDB_IMG}/w300${item.movie_poster}`}
+                    alt={item.movie_title || ''}
                     style={{ width: '100%', aspectRatio: '2/3', borderRadius: 8, objectFit: 'cover' }}
                     loading="lazy"
                   />
@@ -690,7 +729,7 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props)
                   </div>
                 )}
                 <div style={{ fontSize: 11, color: 'var(--fm-text)', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {item.movies?.title}
+                  {item.movie_title}
                 </div>
                 {item.score && (
                   <div style={{ fontSize: 10, marginTop: 2 }}>{renderStars(item.score)}</div>
@@ -724,15 +763,15 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props)
                   borderRadius: 10, border: '1px solid var(--fm-border)', background: 'var(--fm-bg-secondary)',
                   cursor: 'pointer', textAlign: 'left', width: '100%',
                 }}>
-                {rev.movies?.poster_path ? (
-                  <img src={`${TMDB_IMG}/w92${rev.movies.poster_path}`} alt=""
+                {rev.movie_poster ? (
+                  <img src={`${TMDB_IMG}/w92${rev.movie_poster}`} alt=""
                     style={{ width: 40, height: 60, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
                 ) : (
                   <div style={{ width: 40, height: 60, borderRadius: 6, background: 'var(--fm-bg-hover)', flexShrink: 0 }} />
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {rev.movies?.title}
+                    {rev.movie_title}
                   </div>
                   <div style={{ marginTop: 2 }}>{renderStars(rev.score)}</div>
                   {rev.body && (
@@ -819,20 +858,20 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props)
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {titles.map(t => {
-              const rarityColor = t.user_titles?.rarity === 'legendary' ? '#ff4444'
-                : t.user_titles?.rarity === 'epic' ? '#9c27b0'
-                : t.user_titles?.rarity === 'rare' ? '#3498db'
+              const rarityColor = t.title_rarity === 'legendary' ? '#ff4444'
+                : t.title_rarity === 'epic' ? '#9c27b0'
+                : t.title_rarity === 'rare' ? '#3498db'
                 : 'var(--fm-text-sub)'
               return (
-                <div key={t.id} title={t.user_titles?.description || ''}
+                <div key={t.id} title={t.title_description || ''}
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4,
                     padding: '6px 12px', borderRadius: 20,
                     background: `${rarityColor}15`, border: `1px solid ${rarityColor}40`,
                   }}>
-                  <span style={{ fontSize: 14 }}>{t.user_titles?.icon || '\uD83C\uDFC5'}</span>
+                  <span style={{ fontSize: 14 }}>{t.title_icon || '\uD83C\uDFC5'}</span>
                   <span style={{ fontSize: 12, fontWeight: 600, color: rarityColor }}>
-                    {t.user_titles?.name}
+                    {t.title_name}
                   </span>
                 </div>
               )

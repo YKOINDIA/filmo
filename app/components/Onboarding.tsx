@@ -183,23 +183,32 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
         if (!movie) continue
 
         const mediaType = movie.media_type === 'tv' || (movie.name && !movie.title) ? 'tv' : 'movie'
+        const movieTitle = movie.title || movie.name || ''
 
-        await supabase.from('movies').upsert({
-          id: movieId,
-          tmdb_id: movieId,
-          title: movie.title || movie.name || '',
-          poster_path: movie.poster_path,
-          genres: (movie.genre_ids || []).map(id => ({ id })),
-          vote_average: movie.vote_average || 0,
-          media_type: mediaType,
-        }, { onConflict: 'tmdb_id' })
+        // Cache movie (use string ID, match WorkDetail pattern)
+        try {
+          await supabase.from('movies').upsert({
+            id: String(movieId),
+            tmdb_id: movieId,
+            title: movieTitle,
+            poster_path: movie.poster_path,
+            genres: (movie.genre_ids || []).map(gid => ({ id: gid })),
+            vote_average: movie.vote_average || 0,
+            media_type: mediaType,
+          }, { onConflict: 'tmdb_id' })
+        } catch { /* movie cache failure is non-critical */ }
 
-        await supabase.from('watchlists').upsert({
-          user_id: userId,
-          movie_id: movieId,
-          status: 'watched',
-          score,
-        }, { onConflict: 'user_id,movie_id' })
+        // Create watchlist entry
+        try {
+          await supabase.from('watchlists').insert({
+            user_id: userId,
+            movie_id: movieId,
+            status: 'watched',
+            score,
+          })
+        } catch (e) {
+          console.error(`Watchlist save failed for movie ${movieId}:`, e)
+        }
       }
 
       // Save FAN! selections
@@ -210,13 +219,17 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
 
         const personType = person.known_for_department === 'Directing' ? 'director' : 'actor'
 
-        await supabase.from('fans').upsert({
-          user_id: userId,
-          person_type: personType,
-          person_id: person.id,
-          person_name: person.name,
-          person_image: person.profile_path,
-        }, { onConflict: 'user_id,person_type,person_id' })
+        try {
+          await supabase.from('fans').insert({
+            user_id: userId,
+            person_type: personType,
+            person_id: person.id,
+            person_name: person.name,
+            person_image: person.profile_path,
+          })
+        } catch (e) {
+          console.error(`Fan save failed for ${person.name}:`, e)
+        }
       }
 
       onComplete()
