@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { account, databases, DB_ID, COLLECTIONS, ID } from './lib/appwrite'
+import { account, databases, DB_ID, COLLECTIONS, ID, Query } from './lib/appwrite'
 import { checkLoginStreak } from './lib/points'
 import Dashboard from './components/Dashboard'
 import Search from './components/Search'
@@ -13,6 +13,8 @@ import Settings from './components/Settings'
 import Gamification from './components/Gamification'
 import NotificationBell from './components/NotificationBell'
 import Toast from './components/Toast'
+import Onboarding from './components/Onboarding'
+import { MIN_RATINGS_FOR_MATCH } from './lib/matchScore'
 
 type Tab = 'home' | 'search' | 'feed' | 'stats' | 'profile'
 
@@ -45,6 +47,7 @@ export default function Page() {
   const [selectedWorkType, setSelectedWorkType] = useState<'movie' | 'tv'>('movie')
   const [toastMsg, setToastMsg] = useState('')
   const [streakBonus, setStreakBonus] = useState(0)
+  const [needsOnboarding, setNeedsOnboarding] = useState(false)
 
   useEffect(() => {
     account.get()
@@ -80,6 +83,20 @@ export default function Page() {
       setUser(doc as unknown as User)
       const { bonus } = await checkLoginStreak(uid)
       if (bonus > 0) setStreakBonus(bonus)
+
+      // Check if user needs onboarding (< MIN_RATINGS_FOR_MATCH rated movies)
+      try {
+        const watchlists = await databases.listDocuments(DB_ID, COLLECTIONS.WATCHLISTS, [
+          Query.equal('user_id', uid),
+          Query.equal('status', 'watched'),
+          Query.limit(MIN_RATINGS_FOR_MATCH),
+        ])
+        // Filter for entries with a score
+        const ratedCount = watchlists.documents.filter(d => d.score != null && d.score > 0).length
+        if (ratedCount < MIN_RATINGS_FOR_MATCH) {
+          setNeedsOnboarding(true)
+        }
+      } catch { /* ignore — proceed to dashboard */ }
     } catch { /* user doc may not exist yet */ }
     setLoading(false)
   }
@@ -101,6 +118,7 @@ export default function Page() {
           bio: '',
         })
         setSession(acc)
+        setNeedsOnboarding(true)
         await loadUserProfile(acc.$id)
       } else {
         await account.createEmailPasswordSession(authEmail, authPassword)
@@ -203,6 +221,15 @@ export default function Page() {
           </p>
         </div>
       </div>
+    )
+  }
+
+  if (needsOnboarding) {
+    return (
+      <Onboarding
+        userId={user.id}
+        onComplete={() => setNeedsOnboarding(false)}
+      />
     )
   }
 
