@@ -1311,7 +1311,7 @@ export default function Search({ userId, onOpenWork }: {
   // --- Search results view ---
   const renderSearchView = () => {
     const filtered = searchResults.filter(r => {
-      const isAnnict = !!(r as Record<string, unknown>)._annict
+      const isAnnict = !!(r as unknown as Record<string, unknown>)._annict
       if (!r.poster_path && !isAnnict) return false
       if (activeTab === 'movie') return r.media_type === 'movie'
       if (activeTab === 'drama') return r.media_type === 'tv' && !isAnnict
