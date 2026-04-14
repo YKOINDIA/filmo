@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient, DB_ID, COLLECTIONS, ID } from '../../lib/appwrite-server'
+import { getSupabaseAdmin } from '../../lib/supabase-admin'
 
 export async function POST(request: NextRequest) {
   try {
     const { user_id, action } = await request.json()
-    const { databases } = createAdminClient()
+    const admin = getSupabaseAdmin()
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
                request.headers.get('x-real-ip') || 'unknown'
 
-    await databases.createDocument(DB_ID, COLLECTIONS.ACCESS_LOGS, ID.unique(), {
+    await admin.from('access_logs').insert({
       user_id: user_id || null,
       ip_hint: ip.substring(0, 20),
       action: action || 'page_view',

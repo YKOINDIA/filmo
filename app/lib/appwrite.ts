@@ -1,17 +1,12 @@
-import { Client, Account, Databases, Storage, Query, ID } from 'appwrite'
+/**
+ * Legacy compatibility layer.
+ * Filmo has migrated from Appwrite to Supabase.
+ * This file re-exports Supabase utilities for files that still import from appwrite.ts.
+ */
+export { getSupabase as default } from './supabase'
+export { getSupabaseAdmin as createAdminClient } from './supabase-admin'
 
-const client = new Client()
-  .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1')
-  .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!)
-
-export const account = new Account(client)
-export const databases = new Databases(client)
-export const storage = new Storage(client)
-export { Query, ID, client }
-
-// Database & Collection IDs
-export const DB_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || 'filmo_db'
-
+// Collection names (kept for reference — Supabase uses these as table names directly)
 export const COLLECTIONS = {
   USERS: 'users',
   MOVIES: 'movies',
@@ -44,23 +39,12 @@ export const COLLECTIONS = {
   USER_EARNED_TITLES: 'user_earned_titles',
   MONTHLY_BONUSES: 'monthly_bonuses',
   DAILY_LIKE_COUNTS: 'daily_like_counts',
+  VOICE_REVIEWS: 'voice_reviews',
+  VOICE_REACTIONS: 'voice_reactions',
 } as const
 
 export const STORAGE_BUCKETS = {
   AVATARS: 'avatars',
   IMAGES: 'images',
+  VOICE_REVIEWS: 'voice-reviews',
 } as const
-
-// Helper: get user document
-export async function getUserDoc(userId: string) {
-  try {
-    return await databases.getDocument(DB_ID, COLLECTIONS.USERS, userId)
-  } catch {
-    return null
-  }
-}
-
-// Helper: list documents with query
-export async function listDocs(collectionId: string, queries: string[] = [], limit = 25) {
-  return databases.listDocuments(DB_ID, collectionId, [...queries, Query.limit(limit)])
-}

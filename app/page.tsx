@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { account, databases, DB_ID, COLLECTIONS, ID, Query } from './lib/appwrite'
+import { supabase } from './lib/supabase'
 import { checkLoginStreak } from './lib/points'
 import Dashboard from './components/Dashboard'
 import Search from './components/Search'
@@ -50,12 +50,20 @@ export default function Page() {
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
 
   useEffect(() => {
-    account.get()
-      .then(acc => {
-        setSession(acc)
-        loadUserProfile(acc.$id)
-      })
-      .catch(() => setLoading(false))
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      if (s?.user) {
+        setSession(s)
+        loadUserProfile(s.user.id)
+      } else {
+        setLoading(false)
+      }
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s)
+      if (!s) { setUser(null) }
+    })
+    return () => subscription.unsubscribe()
   }, [])
 
   useEffect(() => {
@@ -79,24 +87,30 @@ export default function Page() {
 
   const loadUserProfile = async (uid: string) => {
     try {
-      const doc = await databases.getDocument(DB_ID, COLLECTIONS.USERS, uid)
-      setUser(doc as unknown as User)
-      const { bonus } = await checkLoginStreak(uid)
-      if (bonus > 0) setStreakBonus(bonus)
+      const { data: doc } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', uid)
+        .single()
+      if (doc) {
+        setUser(doc as unknown as User)
+        const { bonus } = await checkLoginStreak(uid)
+        if (bonus > 0) setStreakBonus(bonus)
 
-      // Check if user needs onboarding (< MIN_RATINGS_FOR_MATCH rated movies)
-      try {
-        const watchlists = await databases.listDocuments(DB_ID, COLLECTIONS.WATCHLISTS, [
-          Query.equal('user_id', uid),
-          Query.equal('status', 'watched'),
-          Query.limit(MIN_RATINGS_FOR_MATCH),
-        ])
-        // Filter for entries with a score
-        const ratedCount = watchlists.documents.filter(d => d.score != null && d.score > 0).length
-        if (ratedCount < MIN_RATINGS_FOR_MATCH) {
-          setNeedsOnboarding(true)
-        }
-      } catch { /* ignore — proceed to dashboard */ }
+        // Check if user needs onboarding (< MIN_RATINGS_FOR_MATCH rated movies)
+        try {
+          const { data: watchlists } = await supabase
+            .from('watchlists')
+            .select('id, score')
+            .eq('user_id', uid)
+            .eq('status', 'watched')
+            .limit(MIN_RATINGS_FOR_MATCH)
+          const ratedCount = (watchlists || []).filter(d => d.score != null && d.score > 0).length
+          if (ratedCount < MIN_RATINGS_FOR_MATCH) {
+            setNeedsOnboarding(true)
+          }
+        } catch { /* ignore — proceed to dashboard */ }
+      }
     } catch { /* user doc may not exist yet */ }
     setLoading(false)
   }
@@ -106,25 +120,38 @@ export default function Page() {
     setAuthLoading(true)
     try {
       if (authMode === 'signup') {
-        const acc = await account.create(ID.unique(), authEmail, authPassword, authName || authEmail.split('@')[0])
-        await account.createEmailPasswordSession(authEmail, authPassword)
-        const refCode = Math.random().toString(36).substring(2, 10)
-        await databases.createDocument(DB_ID, COLLECTIONS.USERS, acc.$id, {
+        const { data, error } = await supabase.auth.signUp({
           email: authEmail,
-          name: authName || authEmail.split('@')[0],
-          level: 1,
-          points: 0,
-          login_streak: 0,
-          bio: '',
+          password: authPassword,
+          options: {
+            data: { name: authName || authEmail.split('@')[0] },
+          },
         })
-        setSession(acc)
-        setNeedsOnboarding(true)
-        await loadUserProfile(acc.$id)
+        if (error) throw error
+        if (data.user) {
+          // The handle_new_user trigger creates the users row automatically.
+          // But we update with extra fields just in case:
+          await supabase.from('users').upsert({
+            id: data.user.id,
+            email: authEmail,
+            name: authName || authEmail.split('@')[0],
+            level: 1,
+            points: 0,
+            login_streak: 0,
+            bio: '',
+          })
+          setSession(data.session)
+          setNeedsOnboarding(true)
+          await loadUserProfile(data.user.id)
+        }
       } else {
-        await account.createEmailPasswordSession(authEmail, authPassword)
-        const acc = await account.get()
-        setSession(acc)
-        await loadUserProfile(acc.$id)
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: authEmail,
+          password: authPassword,
+        })
+        if (error) throw error
+        setSession(data.session)
+        if (data.user) await loadUserProfile(data.user.id)
       }
     } catch (e: unknown) {
       setAuthError(e instanceof Error ? e.message : 'エラーが発生しました')
@@ -133,7 +160,7 @@ export default function Page() {
   }
 
   const handleLogout = async () => {
-    await account.deleteSession('current')
+    await supabase.auth.signOut()
     setUser(null)
     setSession(null)
     setTab('home')

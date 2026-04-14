@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { account, databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite'
+import { supabase } from '../lib/supabase'
 
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'ykoindia@gmail.com'
 
@@ -62,8 +62,8 @@ export default function AdminPage() {
 
   const checkAdmin = async () => {
     try {
-      const acc = await account.get()
-      if (acc.email === ADMIN_EMAIL) {
+      const { data } = await supabase.auth.getSession()
+      if (data.session?.user?.email === ADMIN_EMAIL) {
         setIsAdmin(true)
       }
     } catch { /* not logged in */ }
@@ -86,21 +86,19 @@ export default function AdminPage() {
 
   const loadKPI = async () => {
     try {
-      const usersRes = await databases.listDocuments(DB_ID, COLLECTIONS.USERS, [Query.limit(1)])
-      const reviewsRes = await databases.listDocuments(DB_ID, COLLECTIONS.REVIEWS, [Query.limit(1)])
-      const watchesRes = await databases.listDocuments(DB_ID, COLLECTIONS.WATCHLISTS, [Query.limit(1)])
+      const { count: totalUsers } = await supabase.from('users').select('*', { count: 'exact', head: true })
+      const { count: totalReviews } = await supabase.from('reviews').select('*', { count: 'exact', head: true })
+      const { count: totalWatches } = await supabase.from('watchlists').select('*', { count: 'exact', head: true })
 
       const today = new Date().toISOString().split('T')[0]
-      const newToday = await databases.listDocuments(DB_ID, COLLECTIONS.USERS, [
-        Query.greaterThan('$createdAt', `${today}T00:00:00.000Z`),
-        Query.limit(1),
-      ])
+      const { count: newUsersToday } = await supabase.from('users').select('*', { count: 'exact', head: true })
+        .gt('created_at', `${today}T00:00:00.000Z`)
 
       setKpi({
-        totalUsers: usersRes.total,
-        newUsersToday: newToday.total,
-        totalReviews: reviewsRes.total,
-        totalWatches: watchesRes.total,
+        totalUsers: totalUsers ?? 0,
+        newUsersToday: newUsersToday ?? 0,
+        totalReviews: totalReviews ?? 0,
+        totalWatches: totalWatches ?? 0,
         avgLevel: 1,
       })
     } catch { /* ignore */ }
@@ -108,93 +106,75 @@ export default function AdminPage() {
 
   const loadUsers = async () => {
     try {
-      const queries = [Query.orderDesc('$createdAt'), Query.limit(50)]
-      if (userFilter === 'banned') queries.push(Query.equal('is_banned', true))
-      const res = await databases.listDocuments(DB_ID, COLLECTIONS.USERS, queries)
-      setUsers(res.documents)
+      let query = supabase.from('users').select('*').order('created_at', { ascending: false }).limit(50)
+      if (userFilter === 'banned') query = query.eq('is_banned', true)
+      const { data } = await query
+      setUsers(data ?? [])
     } catch { /* ignore */ }
   }
 
   const loadReviews = async () => {
     try {
-      const res = await databases.listDocuments(DB_ID, COLLECTIONS.REVIEWS, [
-        Query.orderDesc('$createdAt'),
-        Query.limit(50),
-      ])
-      setReviews(res.documents)
+      const { data } = await supabase.from('reviews').select('*').order('created_at', { ascending: false }).limit(50)
+      setReviews(data ?? [])
     } catch { /* ignore */ }
   }
 
   const loadAlerts = async () => {
     try {
-      const res = await databases.listDocuments(DB_ID, COLLECTIONS.ADMIN_ALERTS, [
-        Query.orderDesc('$createdAt'),
-        Query.limit(50),
-      ])
-      setAlerts(res.documents)
+      const { data } = await supabase.from('admin_alerts').select('*').order('created_at', { ascending: false }).limit(50)
+      setAlerts(data ?? [])
     } catch { /* ignore */ }
   }
 
   const loadDrafts = async () => {
     try {
-      const res = await databases.listDocuments(DB_ID, COLLECTIONS.X_POST_DRAFTS, [
-        Query.orderDesc('$createdAt'),
-        Query.limit(50),
-      ])
-      setDrafts(res.documents)
+      const { data } = await supabase.from('x_post_drafts').select('*').order('created_at', { ascending: false }).limit(50)
+      setDrafts(data ?? [])
     } catch { /* ignore */ }
   }
 
   const loadCoupons = async () => {
     try {
-      const res = await databases.listDocuments(DB_ID, COLLECTIONS.CAMPAIGN_COUPONS, [
-        Query.orderDesc('$createdAt'),
-        Query.limit(50),
-      ])
-      setCoupons(res.documents)
+      const { data } = await supabase.from('campaign_coupons').select('*').order('created_at', { ascending: false }).limit(50)
+      setCoupons(data ?? [])
     } catch { /* ignore */ }
   }
 
   const loadAnnouncements = async () => {
     try {
-      const res = await databases.listDocuments(DB_ID, COLLECTIONS.ANNOUNCEMENTS, [
-        Query.orderDesc('$createdAt'),
-        Query.limit(50),
-      ])
-      setAnnouncements(res.documents)
+      const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(50)
+      setAnnouncements(data ?? [])
     } catch { /* ignore */ }
   }
 
   const loadCronSettings = async () => {
     try {
-      const res = await databases.listDocuments(DB_ID, COLLECTIONS.CRON_SETTINGS, [Query.limit(20)])
-      setCronSettings(res.documents)
+      const { data } = await supabase.from('cron_settings').select('*').limit(20)
+      setCronSettings(data ?? [])
     } catch { /* ignore */ }
   }
 
   const loadFeedback = async () => {
     try {
-      const res = await databases.listDocuments(DB_ID, COLLECTIONS.FEEDBACK_THREADS, [
-        Query.orderDesc('$createdAt'),
-        Query.limit(50),
-      ])
-      setFeedbackThreads(res.documents)
+      const { data } = await supabase.from('feedback_threads').select('*').order('created_at', { ascending: false }).limit(50)
+      setFeedbackThreads(data ?? [])
     } catch { /* ignore */ }
   }
 
   const toggleBan = async (userId: string, isBanned: boolean) => {
-    await databases.updateDocument(DB_ID, COLLECTIONS.USERS, userId, { is_banned: !isBanned })
+    await supabase.from('users').update({ is_banned: !isBanned }).eq('id', userId)
     loadUsers()
   }
 
   const hideReview = async (reviewId: string, isHidden: boolean) => {
-    await databases.updateDocument(DB_ID, COLLECTIONS.REVIEWS, reviewId, { is_hidden: !isHidden })
+    await supabase.from('reviews').update({ is_hidden: !isHidden }).eq('id', reviewId)
     loadReviews()
   }
 
   const createDraft = async () => {
     if (!draftText.trim()) return
-    await databases.createDocument(DB_ID, COLLECTIONS.X_POST_DRAFTS, ID.unique(), {
+    await supabase.from('x_post_drafts').insert({
       text: draftText,
       status: 'draft',
     })
@@ -203,13 +183,13 @@ export default function AdminPage() {
   }
 
   const deleteDraft = async (id: string) => {
-    await databases.deleteDocument(DB_ID, COLLECTIONS.X_POST_DRAFTS, id)
+    await supabase.from('x_post_drafts').delete().eq('id', id)
     loadDrafts()
   }
 
   const createCoupon = async () => {
     if (!couponCode.trim()) return
-    await databases.createDocument(DB_ID, COLLECTIONS.CAMPAIGN_COUPONS, ID.unique(), {
+    await supabase.from('campaign_coupons').insert({
       code: couponCode,
       description: couponDesc,
       bonus_points: couponPoints,
@@ -223,7 +203,7 @@ export default function AdminPage() {
 
   const sendAnnouncement = async () => {
     if (!announceTitle.trim()) return
-    const acc = await account.get()
+    const { data } = await supabase.auth.getSession()
     await fetch('/api/announce', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -231,7 +211,7 @@ export default function AdminPage() {
         title: announceTitle,
         body: announceBody,
         type: announceType,
-        admin_email: acc.email,
+        admin_email: data.session?.user?.email,
       }),
     })
     setAnnounceTitle('')
@@ -240,32 +220,31 @@ export default function AdminPage() {
   }
 
   const toggleCron = async (id: string, enabled: boolean) => {
-    await databases.updateDocument(DB_ID, COLLECTIONS.CRON_SETTINGS, id, { enabled: !enabled })
+    await supabase.from('cron_settings').update({ enabled: !enabled }).eq('id', id)
     loadCronSettings()
   }
 
   const loadThreadMessages = async (threadId: string) => {
     setSelectedThread(threadId)
-    const res = await databases.listDocuments(DB_ID, COLLECTIONS.FEEDBACK_MESSAGES, [
-      Query.equal('thread_id', threadId),
-      Query.orderAsc('$createdAt'),
-      Query.limit(100),
-    ])
-    setThreadMessages(res.documents)
+    const { data } = await supabase.from('feedback_messages').select('*')
+      .eq('thread_id', threadId)
+      .order('created_at', { ascending: true })
+      .limit(100)
+    setThreadMessages(data ?? [])
   }
 
   const sendReply = async () => {
     if (!replyText.trim() || !selectedThread) return
-    await databases.createDocument(DB_ID, COLLECTIONS.FEEDBACK_MESSAGES, ID.unique(), {
+    await supabase.from('feedback_messages').insert({
       thread_id: selectedThread,
       body: replyText,
       is_admin: true,
     })
-    await databases.updateDocument(DB_ID, COLLECTIONS.FEEDBACK_THREADS, selectedThread, {
+    await supabase.from('feedback_threads').update({
       unread_user: true,
       unread_admin: false,
       status: 'in_progress',
-    })
+    }).eq('id', selectedThread)
     setReplyText('')
     loadThreadMessages(selectedThread)
   }
@@ -346,14 +325,14 @@ export default function AdminPage() {
             </select>
           </div>
           {users.filter(u => !userSearch || (u.name as string)?.includes(userSearch) || (u.email as string)?.includes(userSearch)).map(u => (
-            <div key={u.$id as string} style={{ ...S.card, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div key={u.id as string} style={{ ...S.card, display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--fm-bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600 }}>{String(u.name || '')} {u.is_banned ? <span style={{ color: 'var(--fm-danger)', fontSize: 11 }}>[BAN]</span> : null}</div>
                 <div style={{ fontSize: 12, color: 'var(--fm-text-sub)' }}>{u.email as string}</div>
                 <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>Lv.{u.level as number} / {u.points as number}pt / 連続{u.login_streak as number}日</div>
               </div>
-              <button onClick={() => toggleBan(u.$id as string, u.is_banned as boolean)} style={u.is_banned ? S.btn : S.btnDanger}>
+              <button onClick={() => toggleBan(u.id as string, u.is_banned as boolean)} style={u.is_banned ? S.btn : S.btnDanger}>
                 {u.is_banned ? 'BAN解除' : 'BAN'}
               </button>
             </div>
@@ -365,16 +344,16 @@ export default function AdminPage() {
       {tab === 'reviews' && (
         <div>
           {reviews.map(r => (
-            <div key={r.$id as string} style={{ ...S.card, opacity: r.is_hidden ? 0.5 : 1 }}>
+            <div key={r.id as string} style={{ ...S.card, opacity: r.is_hidden ? 0.5 : 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <span style={{ fontWeight: 600, fontSize: 14 }}>★{r.score as number} - Movie ID: {r.movie_id as number}</span>
-                <button onClick={() => hideReview(r.$id as string, r.is_hidden as boolean)} style={S.btnDanger}>
+                <button onClick={() => hideReview(r.id as string, r.is_hidden as boolean)} style={S.btnDanger}>
                   {r.is_hidden ? '表示' : '非表示'}
                 </button>
               </div>
               <div style={{ fontSize: 13, color: 'var(--fm-text-sub)' }}>{(r.body as string)?.substring(0, 200)}</div>
               <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 4 }}>
-                User: {r.user_id as string} / {new Date(r.$createdAt as string).toLocaleDateString('ja-JP')}
+                User: {r.user_id as string} / {new Date(r.created_at as string).toLocaleDateString('ja-JP')}
               </div>
             </div>
           ))}
@@ -411,7 +390,7 @@ export default function AdminPage() {
           {alerts.length === 0 ? (
             <div style={S.card}><span style={{ color: 'var(--fm-text-sub)' }}>アラートはありません</span></div>
           ) : alerts.map(a => (
-            <div key={a.$id as string} style={{
+            <div key={a.id as string} style={{
               ...S.card,
               borderLeft: `3px solid ${(a.severity as string) === 'critical' ? 'var(--fm-danger)' : (a.severity as string) === 'warning' ? 'var(--fm-warning)' : 'var(--fm-accent)'}`,
             }}>
@@ -426,7 +405,7 @@ export default function AdminPage() {
                 </span>
               </div>
               <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginTop: 4 }}>{JSON.stringify(a.detail)}</div>
-              <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 4 }}>{new Date(a.$createdAt as string).toLocaleString('ja-JP')}</div>
+              <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 4 }}>{new Date(a.created_at as string).toLocaleString('ja-JP')}</div>
             </div>
           ))}
         </div>
@@ -441,7 +420,7 @@ export default function AdminPage() {
             <button onClick={createDraft} style={S.btn}>下書き保存</button>
           </div>
           {drafts.map(d => (
-            <div key={d.$id as string} style={S.card}>
+            <div key={d.id as string} style={S.card}>
               <div style={{ fontSize: 13, marginBottom: 8 }}>{d.text as string}</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{
@@ -451,7 +430,7 @@ export default function AdminPage() {
                 }}>
                   {(d.status as string) === 'posted' ? '投稿済み' : '下書き'}
                 </span>
-                <button onClick={() => deleteDraft(d.$id as string)} style={S.btnDanger}>削除</button>
+                <button onClick={() => deleteDraft(d.id as string)} style={S.btnDanger}>削除</button>
               </div>
             </div>
           ))}
@@ -472,7 +451,7 @@ export default function AdminPage() {
             <button onClick={createCoupon} style={S.btn}>作成</button>
           </div>
           {coupons.map(c => (
-            <div key={c.$id as string} style={S.card}>
+            <div key={c.id as string} style={S.card}>
               <div style={{ fontWeight: 600 }}>{c.code as string}</div>
               <div style={{ fontSize: 12, color: 'var(--fm-text-sub)' }}>{c.description as string}</div>
               <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
@@ -498,11 +477,11 @@ export default function AdminPage() {
             <button onClick={sendAnnouncement} style={S.btn}>全ユーザーに送信</button>
           </div>
           {announcements.map(a => (
-            <div key={a.$id as string} style={S.card}>
+            <div key={a.id as string} style={S.card}>
               <div style={{ fontWeight: 600 }}>{a.title as string}</div>
               <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', marginTop: 4 }}>{a.body as string}</div>
               <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 4 }}>
-                送信数: {a.recipient_count as number} / {new Date(a.$createdAt as string).toLocaleDateString('ja-JP')}
+                送信数: {a.recipient_count as number} / {new Date(a.created_at as string).toLocaleDateString('ja-JP')}
               </div>
             </div>
           ))}
@@ -513,7 +492,7 @@ export default function AdminPage() {
       {tab === 'cron' && (
         <div>
           {cronSettings.map(c => (
-            <div key={c.$id as string} style={{ ...S.card, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div key={c.id as string} style={{ ...S.card, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <div style={{ fontWeight: 600 }}>{c.path as string}</div>
                 <div style={{ fontSize: 12, color: 'var(--fm-text-sub)' }}>
@@ -521,7 +500,7 @@ export default function AdminPage() {
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>ステータス: {(c.last_status as string) || '-'}</div>
               </div>
-              <button onClick={() => toggleCron(c.$id as string, c.enabled as boolean)}
+              <button onClick={() => toggleCron(c.id as string, c.enabled as boolean)}
                 style={{
                   ...S.btn,
                   background: c.enabled ? 'var(--fm-success)' : 'var(--fm-text-muted)',
@@ -538,7 +517,7 @@ export default function AdminPage() {
         <div>
           {!selectedThread ? (
             feedbackThreads.map(t => (
-              <div key={t.$id as string} onClick={() => loadThreadMessages(t.$id as string)}
+              <div key={t.id as string} onClick={() => loadThreadMessages(t.id as string)}
                 style={{ ...S.card, cursor: 'pointer' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ fontWeight: 600 }}>{t.subject as string}</span>
@@ -551,7 +530,7 @@ export default function AdminPage() {
                   </span>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginTop: 4 }}>
-                  {t.category as string} / {new Date(t.$createdAt as string).toLocaleDateString('ja-JP')}
+                  {t.category as string} / {new Date(t.created_at as string).toLocaleDateString('ja-JP')}
                   {t.unread_admin ? <span style={{ color: 'var(--fm-danger)', marginLeft: 8 }}>● 未読</span> : null}
                 </div>
               </div>
@@ -563,14 +542,14 @@ export default function AdminPage() {
               </button>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
                 {threadMessages.map(m => (
-                  <div key={m.$id as string} style={{
+                  <div key={m.id as string} style={{
                     ...S.card,
                     marginLeft: m.is_admin ? 40 : 0,
                     marginRight: m.is_admin ? 0 : 40,
                     background: m.is_admin ? 'rgba(108,92,231,0.1)' : 'var(--fm-bg-card)',
                   }}>
                     <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 4 }}>
-                      {m.is_admin ? '管理者' : 'ユーザー'} / {new Date(m.$createdAt as string).toLocaleString('ja-JP')}
+                      {m.is_admin ? '管理者' : 'ユーザー'} / {new Date(m.created_at as string).toLocaleString('ja-JP')}
                     </div>
                     <div style={{ fontSize: 14 }}>{m.body as string}</div>
                   </div>

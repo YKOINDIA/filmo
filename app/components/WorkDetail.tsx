@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase'
 import { addPoints, POINT_CONFIG } from '../lib/points'
 import { showToast } from '../lib/toast'
 import { buildTasteProfile, calculateMatchScore, type TasteProfile } from '../lib/matchScore'
+import VoiceReviewRecorder from './VoiceReviewRecorder'
+import VoiceReviewPlayer from './VoiceReviewPlayer'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -222,6 +224,14 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const [spoilerFilter, setSpoilerFilter] = useState<'all' | 'no_spoiler'>('all')
   const [revealedSpoilers, setRevealedSpoilers] = useState<Set<string>>(new Set())
 
+  // State: Voice reviews
+  const [voiceReviews, setVoiceReviews] = useState<{
+    id: string; user_id: string; storage_path: string; duration_seconds: number;
+    voice_mode: string; has_spoiler: boolean; created_at: string;
+    user_name?: string; user_avatar?: string | null;
+    reactions: { clap: number; laugh: number; replay: number };
+  }[]>([])
+
   // State: Cast fan
   const [fanIds, setFanIds] = useState<Set<number>>(new Set())
 
@@ -387,6 +397,43 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
     setReviews(enriched)
   }, [workId, userId])
 
+  const fetchVoiceReviews = useCallback(async () => {
+    const { data: vrs } = await supabase
+      .from('voice_reviews')
+      .select('id, user_id, storage_path, duration_seconds, voice_mode, has_spoiler, created_at')
+      .eq('movie_id', workId)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    if (!vrs || vrs.length === 0) { setVoiceReviews([]); return }
+
+    // Get user info
+    const userIds = [...new Set(vrs.map((v: { user_id: string }) => v.user_id))]
+    const { data: users } = await supabase.from('users').select('id, name, avatar_url').in('id', userIds)
+    const userMap = new Map((users || []).map((u: { id: string; name: string; avatar_url: string | null }) => [u.id, u]))
+
+    // Get reactions
+    const vrIds = vrs.map((v: { id: string }) => v.id)
+    const { data: rxns } = await supabase.from('voice_reactions').select('voice_review_id, sound_type').in('voice_review_id', vrIds)
+    const rxnMap: Record<string, { clap: number; laugh: number; replay: number }> = {}
+    for (const r of rxns || []) {
+      if (!rxnMap[r.voice_review_id]) rxnMap[r.voice_review_id] = { clap: 0, laugh: 0, replay: 0 }
+      const key = r.sound_type as 'clap' | 'laugh' | 'replay'
+      rxnMap[r.voice_review_id][key]++
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+    setVoiceReviews(vrs.map((v: { id: string; user_id: string; storage_path: string; duration_seconds: number; voice_mode: string; has_spoiler: boolean; created_at: string }) => {
+      const u = userMap.get(v.user_id)
+      return {
+        ...v,
+        user_name: u?.name || '匿名ユーザー',
+        user_avatar: u?.avatar_url,
+        reactions: rxnMap[v.id] || { clap: 0, laugh: 0, replay: 0 },
+        audioUrl: `${supabaseUrl}/storage/v1/object/public/voice-reviews/${v.storage_path}`,
+      }
+    }))
+  }, [workId])
+
   const fetchClipMemos = useCallback(async () => {
     const { data } = await supabase
       .from('watchlists')
@@ -403,9 +450,10 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
     fetchDetail()
     fetchUserData()
     fetchReviews()
+    fetchVoiceReviews()
     fetchClipMemos()
     scrollRef.current?.scrollTo(0, 0)
-  }, [fetchDetail, fetchUserData, fetchReviews, fetchClipMemos])
+  }, [fetchDetail, fetchUserData, fetchReviews, fetchVoiceReviews, fetchClipMemos])
 
   // Build taste profile once per mount
   useEffect(() => {
@@ -441,10 +489,11 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           user_id: userId, movie_id: workId, status,
         }
         if (score > 0) insertData.score = score
-        const insertResult = await supabase
+        const { data } = await supabase
           .from('watchlists')
           .insert(insertData)
-        const { data } = await insertResult.select('*').single()
+          .select('*')
+          .single()
         if (data) setWatchEntry(data as unknown as WatchlistEntry)
       }
       setCurrentStatus(status)
@@ -539,10 +588,11 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           .eq('id', myReview.id)
         setMyReview({ ...myReview, ...reviewData } as typeof myReview)
       } else {
-        const insertResult = await supabase
+        const { data } = await supabase
           .from('reviews')
           .insert(reviewData)
-        const { data } = await insertResult.select('*').single()
+          .select('*')
+          .single()
         if (data) setMyReview(data as unknown as ReviewEntry)
       }
 
@@ -1426,6 +1476,44 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           </div>
         </div>
       )}
+
+          {/* Voice Reviews Section */}
+          <div style={{ marginTop: 16 }}>
+            <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)', margin: '0 0 10px' }}>
+              🎙️ ボイスレビュー ({voiceReviews.length})
+            </h4>
+
+            {/* Voice Review Recorder */}
+            {detail && (
+              <div style={{ marginBottom: 12 }}>
+                <VoiceReviewRecorder
+                  movieId={workId}
+                  movieTitle={detail.title || detail.name || ''}
+                  userId={userId}
+                  onComplete={fetchVoiceReviews}
+                />
+              </div>
+            )}
+
+            {/* Voice Review List */}
+            {voiceReviews.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {voiceReviews.map(vr => (
+                  <VoiceReviewPlayer
+                    key={vr.id}
+                    audioUrl={(vr as unknown as { audioUrl: string }).audioUrl || `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/voice-reviews/${vr.storage_path}`}
+                    voiceReviewId={vr.id}
+                    userName={vr.user_name || '匿名'}
+                    userAvatar={vr.user_avatar}
+                    voiceMode={vr.voice_mode}
+                    durationSeconds={vr.duration_seconds}
+                    hasSpoiler={vr.has_spoiler}
+                    initialReactions={vr.reactions}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
 
       {/* ── 4b. Clip Panel: Memo + Match Score ── */}
       {currentStatus === 'want_to_watch' && (

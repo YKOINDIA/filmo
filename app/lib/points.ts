@@ -1,4 +1,4 @@
-import { databases, DB_ID, COLLECTIONS, Query, ID } from './appwrite'
+import { supabase } from './supabase'
 
 // Filmo レベルシステム（累積ポイント方式）
 export const LEVEL_TITLES = [
@@ -30,24 +30,28 @@ export const POINT_CONFIG = {
   GENRE_FIRST_REVIEW: 20,
   LOGIN_STREAK_7: 50,
   DAILY_LIKE_LIMIT: 50,
+  VOICE_REVIEW: 20,
 }
 
 export const addPoints = async (userId: string, pts: number, reason: string): Promise<void> => {
   try {
-    const userDoc = await databases.getDocument(DB_ID, COLLECTIONS.USERS, userId)
-    const oldPts = userDoc.points ?? 0
+    const { data: userDoc } = await supabase
+      .from('users')
+      .select('points')
+      .eq('id', userId)
+      .single()
+    const oldPts = userDoc?.points ?? 0
     const newPts = oldPts + pts
 
-    await databases.updateDocument(DB_ID, COLLECTIONS.USERS, userId, {
-      points: newPts,
-      level: getLevelFromPoints(newPts).level,
-    })
+    await supabase
+      .from('users')
+      .update({ points: newPts, level: getLevelFromPoints(newPts).level })
+      .eq('id', userId)
 
-    await databases.createDocument(DB_ID, COLLECTIONS.USER_POINTS, ID.unique(), {
+    await supabase.from('user_points').insert({
       user_id: userId,
       points: pts,
       reason,
-      created_at: new Date().toISOString(),
     })
 
     const oldLevel = getLevelFromPoints(oldPts)
@@ -64,13 +68,14 @@ export const addPoints = async (userId: string, pts: number, reason: string): Pr
 export const checkDailyLikeLimit = async (userId: string): Promise<boolean> => {
   const today = new Date().toISOString().split('T')[0]
   try {
-    const res = await databases.listDocuments(DB_ID, COLLECTIONS.DAILY_LIKE_COUNTS, [
-      Query.equal('user_id', userId),
-      Query.equal('date', today),
-      Query.limit(1),
-    ])
-    if (res.documents.length === 0) return true
-    return (res.documents[0].count ?? 0) < POINT_CONFIG.DAILY_LIKE_LIMIT
+    const { data } = await supabase
+      .from('daily_like_counts')
+      .select('count')
+      .eq('user_id', userId)
+      .eq('date', today)
+      .maybeSingle()
+    if (!data) return true
+    return (data.count ?? 0) < POINT_CONFIG.DAILY_LIKE_LIMIT
   } catch {
     return true
   }
@@ -79,17 +84,19 @@ export const checkDailyLikeLimit = async (userId: string): Promise<boolean> => {
 export const incrementDailyLikeCount = async (userId: string): Promise<void> => {
   const today = new Date().toISOString().split('T')[0]
   try {
-    const res = await databases.listDocuments(DB_ID, COLLECTIONS.DAILY_LIKE_COUNTS, [
-      Query.equal('user_id', userId),
-      Query.equal('date', today),
-      Query.limit(1),
-    ])
-    if (res.documents.length > 0) {
-      await databases.updateDocument(DB_ID, COLLECTIONS.DAILY_LIKE_COUNTS, res.documents[0].$id, {
-        count: (res.documents[0].count || 0) + 1,
-      })
+    const { data } = await supabase
+      .from('daily_like_counts')
+      .select('id, count')
+      .eq('user_id', userId)
+      .eq('date', today)
+      .maybeSingle()
+    if (data) {
+      await supabase
+        .from('daily_like_counts')
+        .update({ count: (data.count || 0) + 1 })
+        .eq('id', data.id)
     } else {
-      await databases.createDocument(DB_ID, COLLECTIONS.DAILY_LIKE_COUNTS, ID.unique(), {
+      await supabase.from('daily_like_counts').insert({
         user_id: userId,
         date: today,
         count: 1,
@@ -100,7 +107,13 @@ export const incrementDailyLikeCount = async (userId: string): Promise<void> => 
 
 export const checkLoginStreak = async (userId: string): Promise<{ streak: number; bonus: number }> => {
   try {
-    const userDoc = await databases.getDocument(DB_ID, COLLECTIONS.USERS, userId)
+    const { data: userDoc } = await supabase
+      .from('users')
+      .select('login_streak, last_login_date')
+      .eq('id', userId)
+      .single()
+    if (!userDoc) return { streak: 0, bonus: 0 }
+
     const today = new Date().toISOString().split('T')[0]
     const lastLogin = userDoc.last_login_date
 
@@ -115,10 +128,10 @@ export const checkLoginStreak = async (userId: string): Promise<{ streak: number
       newStreak = (userDoc.login_streak || 0) + 1
     }
 
-    await databases.updateDocument(DB_ID, COLLECTIONS.USERS, userId, {
-      login_streak: newStreak,
-      last_login_date: today,
-    })
+    await supabase
+      .from('users')
+      .update({ login_streak: newStreak, last_login_date: today })
+      .eq('id', userId)
 
     let bonus = 0
     if (newStreak > 0 && newStreak % 7 === 0) {
@@ -134,24 +147,28 @@ export const checkLoginStreak = async (userId: string): Promise<{ streak: number
 
 export const checkAndAwardTitles = async (userId: string): Promise<{ name: string; id: string }[]> => {
   try {
-    const titlesRes = await databases.listDocuments(DB_ID, COLLECTIONS.USER_TITLES, [Query.limit(100)])
-    const earnedRes = await databases.listDocuments(DB_ID, COLLECTIONS.USER_EARNED_TITLES, [
-      Query.equal('user_id', userId),
-      Query.limit(100),
-    ])
-    const earnedIds = new Set(earnedRes.documents.map(e => e.title_id))
+    const { data: allTitles } = await supabase
+      .from('user_titles')
+      .select('*')
+      .limit(100)
+    const { data: earned } = await supabase
+      .from('user_earned_titles')
+      .select('title_id')
+      .eq('user_id', userId)
+      .limit(100)
+
+    const earnedIds = new Set((earned || []).map(e => e.title_id))
     const newTitles: { name: string; id: string }[] = []
 
-    for (const title of titlesRes.documents) {
-      if (earnedIds.has(title.$id)) continue
+    for (const title of allTitles || []) {
+      if (earnedIds.has(title.id)) continue
       const met = await checkTitleCondition(userId, title)
       if (met) {
-        await databases.createDocument(DB_ID, COLLECTIONS.USER_EARNED_TITLES, ID.unique(), {
+        await supabase.from('user_earned_titles').insert({
           user_id: userId,
-          title_id: title.$id,
-          earned_at: new Date().toISOString(),
+          title_id: title.id,
         })
-        newTitles.push({ name: title.name, id: title.$id })
+        newTitles.push({ name: title.name, id: title.id })
       }
     }
     return newTitles
@@ -168,49 +185,53 @@ async function checkTitleCondition(userId: string, title: Record<string, unknown
   try {
     switch (condType) {
       case 'login_streak': {
-        const u = await databases.getDocument(DB_ID, COLLECTIONS.USERS, userId)
-        return (u.login_streak || 0) >= condValue
+        const { data: u } = await supabase.from('users').select('login_streak').eq('id', userId).single()
+        return (u?.login_streak || 0) >= condValue
       }
       case 'follower_count': {
-        const r = await databases.listDocuments(DB_ID, COLLECTIONS.FOLLOWS, [
-          Query.equal('following_id', userId), Query.limit(1),
-        ])
-        return (r.total || 0) >= condValue
+        const { count } = await supabase
+          .from('follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('following_id', userId)
+        return (count || 0) >= condValue
       }
       case 'likes_given': {
-        const r = await databases.listDocuments(DB_ID, COLLECTIONS.LIKES, [
-          Query.equal('user_id', userId), Query.limit(1),
-        ])
-        return (r.total || 0) >= condValue
+        const { count } = await supabase
+          .from('likes')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId)
+        return (count || 0) >= condValue
       }
       case 'score_count': {
         const score = condDetail.score as number
-        const r = await databases.listDocuments(DB_ID, COLLECTIONS.REVIEWS, [
-          Query.equal('user_id', userId),
-          Query.equal('score', score),
-          Query.equal('is_draft', false),
-          Query.limit(1),
-        ])
-        return (r.total || 0) >= condValue
+        const { count } = await supabase
+          .from('reviews')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('score', score)
+          .eq('is_draft', false)
+        return (count || 0) >= condValue
       }
       case 'long_review': {
         const minChars = condDetail.min_chars as number
-        const r = await databases.listDocuments(DB_ID, COLLECTIONS.REVIEWS, [
-          Query.equal('user_id', userId),
-          Query.equal('is_draft', false),
-          Query.limit(500),
-        ])
-        const count = r.documents.filter(d => (d.body?.length || 0) >= minChars).length
+        const { data: revs } = await supabase
+          .from('reviews')
+          .select('body')
+          .eq('user_id', userId)
+          .eq('is_draft', false)
+          .limit(500)
+        const count = (revs || []).filter(d => (d.body?.length || 0) >= minChars).length
         return count >= condValue
       }
       case 'short_review': {
         const maxChars = condDetail.max_chars as number
-        const r = await databases.listDocuments(DB_ID, COLLECTIONS.REVIEWS, [
-          Query.equal('user_id', userId),
-          Query.equal('is_draft', false),
-          Query.limit(500),
-        ])
-        const count = r.documents.filter(d => {
+        const { data: revs } = await supabase
+          .from('reviews')
+          .select('body')
+          .eq('user_id', userId)
+          .eq('is_draft', false)
+          .limit(500)
+        const count = (revs || []).filter(d => {
           const len = d.body?.length || 0
           return len > 0 && len <= maxChars
         }).length
@@ -220,13 +241,14 @@ async function checkTitleCondition(userId: string, title: Record<string, unknown
         const hourStart = condDetail.hour_start as number
         const hourEnd = condDetail.hour_end as number | undefined
         const day = condDetail.day as number | undefined
-        const r = await databases.listDocuments(DB_ID, COLLECTIONS.REVIEWS, [
-          Query.equal('user_id', userId),
-          Query.equal('is_draft', false),
-          Query.limit(500),
-        ])
-        const count = r.documents.filter(d => {
-          const dt = new Date(d.$createdAt)
+        const { data: revs } = await supabase
+          .from('reviews')
+          .select('created_at')
+          .eq('user_id', userId)
+          .eq('is_draft', false)
+          .limit(500)
+        const count = (revs || []).filter(d => {
+          const dt = new Date(d.created_at)
           const h = dt.getHours()
           if (day !== undefined && dt.getDay() !== day) return false
           if (hourEnd !== undefined) return h >= hourStart && h < hourEnd
@@ -236,19 +258,22 @@ async function checkTitleCondition(userId: string, title: Record<string, unknown
       }
       case 'genre_count': {
         const genreId = condDetail.genre_id as number
-        const wl = await databases.listDocuments(DB_ID, COLLECTIONS.WATCHLISTS, [
-          Query.equal('user_id', userId),
-          Query.equal('status', 'watched'),
-          Query.limit(500),
-        ])
-        let count = 0
-        for (const w of wl.documents) {
-          try {
-            const movie = await databases.getDocument(DB_ID, COLLECTIONS.MOVIES, w.movie_id)
-            const genres = JSON.parse(movie.genres || '[]')
-            if (genres.some((g: { id: number }) => g.id === genreId)) count++
-          } catch { /* skip */ }
-        }
+        const { data: wl } = await supabase
+          .from('watchlists')
+          .select('movie_id')
+          .eq('user_id', userId)
+          .eq('status', 'watched')
+          .limit(500)
+        if (!wl || wl.length === 0) return false
+        const movieIds = wl.map(w => w.movie_id)
+        const { data: movies } = await supabase
+          .from('movies')
+          .select('id, genres')
+          .in('id', movieIds)
+        const count = (movies || []).filter(m => {
+          const genres = (m.genres || []) as { id: number }[]
+          return genres.some(g => g.id === genreId)
+        }).length
         return count >= condValue
       }
       default:

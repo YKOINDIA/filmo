@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cronGuard } from '../../../lib/cronGuard'
-import { createAdminClient, DB_ID, COLLECTIONS, Query, ID } from '../../../lib/appwrite-server'
+import { getSupabaseAdmin } from '../../../lib/supabase-admin'
 
 export async function GET(req: NextRequest) {
   const guard = await cronGuard(req, 'sync-streaming')
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const TMDB_API_KEY = process.env.TMDB_API_KEY
     if (!TMDB_API_KEY) return NextResponse.json({ error: 'No TMDB key' }, { status: 500 })
 
-    const { databases } = createAdminClient()
+    const admin = getSupabaseAdmin()
 
     // 人気映画の配信情報を同期
     const res = await fetch(`https://api.themoviedb.org/3/movie/popular?api_key=${TMDB_API_KEY}&language=ja-JP&region=JP`)
@@ -29,23 +29,24 @@ export async function GET(req: NextRequest) {
             for (const prov of providers) {
               try {
                 // Check if service exists
-                const svcRes = await databases.listDocuments(DB_ID, COLLECTIONS.STREAMING_SERVICES, [
-                  Query.equal('tmdb_provider_id', prov.provider_id),
-                  Query.limit(1),
-                ])
-                const svcId = svcRes.documents[0]?.$id
+                const { data: svcData } = await admin.from('streaming_services')
+                  .select('*')
+                  .eq('tmdb_provider_id', prov.provider_id)
+                  .limit(1)
+
+                const svcId = svcData?.[0]?.id
                 if (!svcId) continue
 
                 // Upsert streaming availability
-                const existing = await databases.listDocuments(DB_ID, COLLECTIONS.STREAMING_AVAILABILITY, [
-                  Query.equal('movie_id', movie.id),
-                  Query.equal('service_id', svcId),
-                  Query.equal('availability_type', type),
-                  Query.limit(1),
-                ])
+                const { data: existing } = await admin.from('streaming_availability')
+                  .select('*')
+                  .eq('movie_id', movie.id)
+                  .eq('service_id', svcId)
+                  .eq('availability_type', type)
+                  .limit(1)
 
-                if (existing.documents.length === 0) {
-                  await databases.createDocument(DB_ID, COLLECTIONS.STREAMING_AVAILABILITY, ID.unique(), {
+                if (!existing || existing.length === 0) {
+                  await admin.from('streaming_availability').insert({
                     movie_id: movie.id,
                     service_id: svcId,
                     availability_type: type,
@@ -61,14 +62,15 @@ export async function GET(req: NextRequest) {
 
     // Cron設定更新
     try {
-      const settings = await databases.listDocuments(DB_ID, COLLECTIONS.CRON_SETTINGS, [
-        Query.equal('path', 'sync-streaming'),
-      ])
-      if (settings.documents.length > 0) {
-        await databases.updateDocument(DB_ID, COLLECTIONS.CRON_SETTINGS, settings.documents[0].$id, {
+      const { data: settings } = await admin.from('cron_settings')
+        .select('*')
+        .eq('path', 'sync-streaming')
+
+      if (settings && settings.length > 0) {
+        await admin.from('cron_settings').update({
           last_run: new Date().toISOString(),
           last_status: `synced ${synced}`,
-        })
+        }).eq('id', settings[0].id)
       }
     } catch { /* ignore */ }
 

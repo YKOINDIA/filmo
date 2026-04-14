@@ -71,7 +71,7 @@ export async function buildTasteProfile(userId: string): Promise<TasteProfile> {
   const movieIds = ratedEntries.map(w => w.movie_id)
   const scoreMap = new Map(ratedEntries.map(w => [w.movie_id, w.score!]))
 
-  // Appwrite limits query to 100 values in equal(), so batch
+  // Batch fetch movies (PostgREST has URL length limits for large IN queries)
   const movies: MovieRow[] = []
   for (let i = 0; i < movieIds.length; i += 100) {
     const batch = movieIds.slice(i, i + 100)
