@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+
+const TMDB_IMG_POSTER = 'https://image.tmdb.org/t/p/w342'
 import { getLevelFromPoints, LEVEL_TITLES } from '../lib/points'
 import Settings from './Settings'
 
@@ -740,6 +742,9 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props)
         )}
       </div>
 
+      {/* My Lists */}
+      <MyListsSection userId={user.id} />
+
       {/* My Reviews */}
       <div style={{
         background: 'var(--fm-bg-card)', borderRadius: 16, padding: 16,
@@ -900,6 +905,138 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props)
           ログアウト
         </button>
       </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* My Lists Section (inline in Profile)                                */
+/* ------------------------------------------------------------------ */
+
+interface MyList {
+  id: string
+  title: string
+  items_count: number
+  is_public: boolean
+  posters: string[]
+}
+
+function MyListsSection({ userId }: { userId: string }) {
+  const [lists, setLists] = useState<MyList[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetch = async () => {
+      setLoading(true)
+      const { data } = await supabase
+        .from('user_lists')
+        .select('id, title, items_count, is_public')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+        .limit(6)
+
+      const items = (data || []) as unknown as MyList[]
+
+      // Fetch posters for each list
+      if (items.length > 0) {
+        const listIds = items.map(i => i.id)
+        const { data: listItemsData } = await supabase
+          .from('list_items')
+          .select('list_id, movie_id')
+          .in('list_id', listIds)
+          .order('position', { ascending: true })
+
+        if (listItemsData) {
+          const listMovieMap = new Map<string, number[]>()
+          for (const li of listItemsData as unknown as { list_id: string; movie_id: number }[]) {
+            const existing = listMovieMap.get(li.list_id) || []
+            if (existing.length < 4) {
+              existing.push(li.movie_id)
+              listMovieMap.set(li.list_id, existing)
+            }
+          }
+
+          const allMovieIds = [...new Set([...listMovieMap.values()].flat())]
+          if (allMovieIds.length > 0) {
+            const { data: movieData } = await supabase
+              .from('movies')
+              .select('tmdb_id, poster_path')
+              .in('tmdb_id', allMovieIds)
+            const posterMap = new Map<number, string | null>()
+            if (movieData) {
+              for (const m of movieData as unknown as { tmdb_id: number; poster_path: string | null }[]) {
+                posterMap.set(m.tmdb_id, m.poster_path)
+              }
+            }
+            for (const item of items) {
+              item.posters = (listMovieMap.get(item.id) || [])
+                .map(mid => posterMap.get(mid))
+                .filter((p): p is string => p != null)
+            }
+          }
+        }
+      }
+
+      setLists(items)
+      setLoading(false)
+    }
+    fetch()
+  }, [userId])
+
+  if (loading) {
+    return (
+      <div style={{
+        background: 'var(--fm-bg-card)', borderRadius: 16, padding: 16,
+        border: '1px solid var(--fm-border)', marginBottom: 16,
+      }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fm-text)', margin: '0 0 12px' }}>Lists</h3>
+        <div style={{ color: 'var(--fm-text-sub)', fontSize: 13, textAlign: 'center', padding: 16 }}>読み込み中...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{
+      background: 'var(--fm-bg-card)', borderRadius: 16, padding: 16,
+      border: '1px solid var(--fm-border)', marginBottom: 16,
+    }}>
+      <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fm-text)', margin: '0 0 12px' }}>
+        Lists
+      </h3>
+      {lists.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 16, color: 'var(--fm-text-muted)', fontSize: 13 }}>
+          まだリストがありません
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {lists.map(list => (
+            <div key={list.id} style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '8px',
+              borderRadius: 8, background: 'var(--fm-bg-secondary)',
+            }}>
+              {/* Mini poster strip */}
+              <div style={{ display: 'flex', flexShrink: 0, gap: 1 }}>
+                {list.posters.length > 0 ? (
+                  list.posters.slice(0, 3).map((poster, i) => (
+                    <img key={i} src={`${TMDB_IMG_POSTER}${poster}`} alt=""
+                      style={{ width: 24, height: 36, borderRadius: 2, objectFit: 'cover' }} loading="lazy" />
+                  ))
+                ) : (
+                  <div style={{ width: 24, height: 36, borderRadius: 2, background: 'var(--fm-bg-hover)' }} />
+                )}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {list.title}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
+                  {list.items_count} films{!list.is_public && ' · Private'}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

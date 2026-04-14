@@ -144,7 +144,7 @@ async function upsertAnnictWorks(works: AnnictWorkNormalized[]): Promise<void> {
         .single()
       const newId = Math.min((minRow?.id || 0) - 1, -1)
 
-      await supabase.from('movies').insert({
+      await supabase.from('movies').upsert({
         id: newId,
         tmdb_id: null,
         annict_id: work.annict_id,
@@ -163,7 +163,7 @@ async function upsertAnnictWorks(works: AnnictWorkNormalized[]): Promise<void> {
         data_source: 'annict',
         is_verified: true,
         cached_at: new Date().toISOString(),
-      }).onConflict('annict_id').ignore()
+      }, { onConflict: 'annict_id', ignoreDuplicates: true })
     }
   }
 }

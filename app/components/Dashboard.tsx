@@ -181,16 +181,17 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
         .filmo-scroll-row::-webkit-scrollbar { display: none; }
         .filmo-poster-card:hover { transform: translateY(-6px) scale(1.03) !important; }
         .filmo-genre-chip:hover {
-          background: linear-gradient(135deg, #6c5ce7, #a29bfe) !important;
+          background: var(--fm-accent) !important;
           transform: scale(1.05) !important;
           color: #fff !important;
+          border-color: var(--fm-accent) !important;
         }
         .filmo-hero-btn:hover {
-          background: #a29bfe !important;
+          background: var(--fm-accent-light) !important;
           transform: scale(1.05) !important;
         }
         .filmo-more-link:hover {
-          color: #a29bfe !important;
+          color: var(--fm-accent-light) !important;
         }
       `}</style>
 
@@ -248,7 +249,7 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
           }}>
             <div style={{
               display: 'inline-block',
-              background: 'rgba(108,92,231,0.9)',
+              background: 'var(--fm-accent)',
               borderRadius: 6,
               padding: '4px 12px',
               fontSize: 12,
@@ -299,7 +300,7 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
                 onOpenWork(heroItem.id, getMediaType(heroItem))
               }}
               style={{
-                background: '#6c5ce7',
+                background: 'var(--fm-accent)',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 10,
@@ -308,7 +309,7 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
                 fontWeight: 700,
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
-                boxShadow: '0 4px 15px rgba(108,92,231,0.4)',
+                boxShadow: '0 4px 15px rgba(0,192,48,0.3)',
               }}
             >
               詳細を見る
@@ -453,13 +454,13 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
-                background: 'rgba(108,92,231,0.15)',
-                border: '1px solid rgba(108,92,231,0.3)',
+                background: 'rgba(0,192,48,0.12)',
+                border: '1px solid rgba(0,192,48,0.25)',
                 borderRadius: 24,
                 padding: '8px 18px',
                 fontSize: 14,
                 fontWeight: 600,
-                color: '#a29bfe',
+                color: 'var(--fm-accent-light)',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 whiteSpace: 'nowrap',
@@ -514,7 +515,7 @@ function Section({
           className="filmo-more-link"
           style={{
             fontSize: 13,
-            color: '#6c5ce7',
+            color: 'var(--fm-accent)',
             cursor: 'pointer',
             fontWeight: 600,
             transition: 'color 0.2s',
@@ -658,7 +659,7 @@ function PosterCard({
             background: matchScore >= 80
               ? 'rgba(46,204,138,0.9)'
               : matchScore >= 65
-                ? 'rgba(108,92,231,0.9)'
+                ? 'var(--fm-accent)'
                 : 'rgba(230,126,34,0.85)',
             backdropFilter: 'blur(6px)',
             borderRadius: 8,

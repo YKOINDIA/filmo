@@ -593,7 +593,7 @@ export default function AdminPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{r.title as string}</div>
-                  {r.original_title && <div style={{ fontSize: 12, color: 'var(--fm-text-muted)' }}>{r.original_title as string}</div>}
+                  {r.original_title ? <div style={{ fontSize: 12, color: 'var(--fm-text-muted)' }}>{String(r.original_title)}</div> : null}
                 </div>
                 <span style={{
                   fontSize: 11, padding: '2px 8px', borderRadius: 4, flexShrink: 0,
@@ -603,9 +603,9 @@ export default function AdminPage() {
                   {r.media_type === 'movie' ? '映画' : r.media_type === 'anime' ? 'アニメ' : 'ドラマ'}
                 </span>
               </div>
-              {r.description && <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 8 }}>{r.description as string}</div>}
+              {r.description ? <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 8 }}>{String(r.description)}</div> : null}
               <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 8 }}>
-                {r.year && `${r.year}年 / `}User: {(r.user_id as string).slice(0, 8)}... / {new Date(r.created_at as string).toLocaleDateString('ja-JP')}
+                {r.year ? `${r.year}年 / ` : ''}User: {String(r.user_id).slice(0, 8)}... / {new Date(r.created_at as string).toLocaleDateString('ja-JP')}
               </div>
               {workReqFilter === 'pending' && (
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -654,7 +654,7 @@ export default function AdminPage() {
                   <div style={{ wordBreak: 'break-word' }}>{p.proposed_value as string}</div>
                 </div>
               </div>
-              {p.reason && <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 8 }}>理由: {p.reason as string}</div>}
+              {p.reason ? <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 8 }}>理由: {String(p.reason)}</div> : null}
               <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 8 }}>
                 User: {(p.user_id as string).slice(0, 8)}...
               </div>
