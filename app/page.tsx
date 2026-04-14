@@ -15,6 +15,7 @@ import NotificationBell from './components/NotificationBell'
 import Toast from './components/Toast'
 import Onboarding from './components/Onboarding'
 import ShareCard from './components/ShareCard'
+import PersonDetail from './components/PersonDetail'
 import { MIN_RATINGS_FOR_MATCH } from './lib/matchScore'
 
 type Tab = 'home' | 'search' | 'feed' | 'stats' | 'profile'
@@ -46,6 +47,7 @@ export default function Page() {
   const [authLoading, setAuthLoading] = useState(false)
   const [selectedWorkId, setSelectedWorkId] = useState<number | null>(null)
   const [selectedWorkType, setSelectedWorkType] = useState<'movie' | 'tv'>('movie')
+  const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null)
   const [toastMsg, setToastMsg] = useState('')
   const [streakBonus, setStreakBonus] = useState(0)
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
@@ -169,12 +171,21 @@ export default function Page() {
   }
 
   const openWork = useCallback((id: number, type: 'movie' | 'tv' = 'movie') => {
+    setSelectedPersonId(null)
     setSelectedWorkId(id)
     setSelectedWorkType(type)
   }, [])
 
   const closeWork = useCallback(() => {
     setSelectedWorkId(null)
+  }, [])
+
+  const openPerson = useCallback((id: number) => {
+    setSelectedPersonId(id)
+  }, [])
+
+  const closePerson = useCallback(() => {
+    setSelectedPersonId(null)
   }, [])
 
   if (loading) {
@@ -262,6 +273,17 @@ export default function Page() {
     )
   }
 
+  if (selectedPersonId !== null) {
+    return (
+      <PersonDetail
+        personId={selectedPersonId}
+        userId={user.id}
+        onClose={closePerson}
+        onOpenWork={openWork}
+      />
+    )
+  }
+
   if (selectedWorkId !== null) {
     return (
       <WorkDetail
@@ -270,6 +292,7 @@ export default function Page() {
         userId={user.id}
         onClose={closeWork}
         onOpenWork={openWork}
+        onOpenPerson={openPerson}
       />
     )
   }
