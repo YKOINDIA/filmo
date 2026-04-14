@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient, DB_ID, COLLECTIONS, ID } from '../../lib/appwrite-server'
+import { getSupabaseAdmin } from '../../lib/supabase-admin'
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,8 +9,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
-    const { databases } = createAdminClient()
-    await databases.createDocument(DB_ID, COLLECTIONS.X_POST_DRAFTS, ID.unique(), {
+    const admin = getSupabaseAdmin()
+    await admin.from('x_post_drafts').insert({
       text,
       status: 'draft',
     })

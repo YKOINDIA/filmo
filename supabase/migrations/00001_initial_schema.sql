@@ -3,9 +3,9 @@
 -- 初期スキーマ
 -- ============================================
 
--- ユーザー
+-- ユーザー (Supabase Auth連携)
 CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL DEFAULT '',
   avatar_url TEXT,
@@ -458,6 +458,62 @@ CREATE TABLE IF NOT EXISTS daily_like_counts (
 );
 
 -- ============================================
+-- ボイスレビュー（Voiq統合）
+-- ============================================
+
+-- ボイスレビュー
+CREATE TABLE IF NOT EXISTS voice_reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  movie_id INTEGER REFERENCES movies(id) ON DELETE CASCADE,
+  storage_path TEXT NOT NULL UNIQUE,
+  duration_seconds INTEGER NOT NULL CHECK (duration_seconds BETWEEN 1 AND 60),
+  voice_mode TEXT NOT NULL DEFAULT 'original'
+    CHECK (voice_mode IN ('original', 'high', 'low', 'robot', 'telephone')),
+  transcript TEXT,
+  has_spoiler BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ボイスレビューリアクション
+CREATE TABLE IF NOT EXISTS voice_reactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  voice_review_id UUID NOT NULL REFERENCES voice_reviews(id) ON DELETE CASCADE,
+  sound_type TEXT NOT NULL CHECK (sound_type IN ('clap', 'laugh', 'replay')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
+-- Supabase Auth トリガー
+-- ============================================
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.users (id, email, name)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.email, ''),
+    COALESCE(
+      NEW.raw_user_meta_data ->> 'name',
+      split_part(COALESCE(NEW.email, 'user'), '@', 1)
+    )
+  )
+  ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user();
+
+-- ============================================
 -- インデックス
 -- ============================================
 CREATE INDEX IF NOT EXISTS idx_watchlists_user ON watchlists(user_id, status);
@@ -475,6 +531,9 @@ CREATE INDEX IF NOT EXISTS idx_episodes_movie ON episodes(movie_id);
 CREATE INDEX IF NOT EXISTS idx_episode_watches_user ON episode_watches(user_id);
 CREATE INDEX IF NOT EXISTS idx_movies_type ON movies(media_type);
 CREATE INDEX IF NOT EXISTS idx_movies_tmdb ON movies(tmdb_id);
+CREATE INDEX IF NOT EXISTS idx_voice_reviews_user ON voice_reviews(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_voice_reviews_movie ON voice_reviews(movie_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_voice_reactions_review ON voice_reactions(voice_review_id);
 
 -- ============================================
 -- RPC: ポイント加算
@@ -502,6 +561,8 @@ ALTER TABLE user_points ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_earned_titles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE daily_like_counts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE episode_watches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE voice_reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE voice_reactions ENABLE ROW LEVEL SECURITY;
 
 -- users: 自分のデータのみ更新可、プロフィールは公開
 CREATE POLICY users_select ON users FOR SELECT USING (true);
@@ -560,6 +621,16 @@ CREATE POLICY daily_like_counts_all ON daily_like_counts FOR ALL USING (auth.uid
 CREATE POLICY episode_watches_select ON episode_watches FOR SELECT USING (true);
 CREATE POLICY episode_watches_insert ON episode_watches FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY episode_watches_delete ON episode_watches FOR DELETE USING (auth.uid() = user_id);
+
+-- voice reviews: 公開読み取り、自分のみ書き込み
+CREATE POLICY voice_reviews_select ON voice_reviews FOR SELECT USING (true);
+CREATE POLICY voice_reviews_insert ON voice_reviews FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY voice_reviews_update ON voice_reviews FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY voice_reviews_delete ON voice_reviews FOR DELETE USING (auth.uid() = user_id);
+
+-- voice reactions: 誰でもリアクション可能
+CREATE POLICY voice_reactions_select ON voice_reactions FOR SELECT USING (true);
+CREATE POLICY voice_reactions_insert ON voice_reactions FOR INSERT WITH CHECK (true);
 
 -- 初期配信サービスデータ
 INSERT INTO streaming_services (name, logo_url, tmdb_provider_id) VALUES

@@ -48,12 +48,11 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
 
   const submitFeedback = async () => {
     if (!feedbackSubject.trim()) return
-    const insertResult = await supabase.from('feedback_threads').insert({
+    const { data } = await supabase.from('feedback_threads').insert({
       user_id: userId,
       category: feedbackCategory,
       subject: feedbackSubject,
-    })
-    const { data } = await insertResult.select('id').single()
+    }).select('id').single()
 
     if (data && feedbackBody.trim()) {
       await supabase.from('feedback_messages').insert({

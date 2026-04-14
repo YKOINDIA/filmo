@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient, DB_ID, COLLECTIONS, Query, ID } from '../../lib/appwrite-server'
+import { getSupabaseAdmin } from '../../lib/supabase-admin'
 
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'ykoindia@gmail.com'
 
@@ -12,35 +12,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
-    const { databases } = createAdminClient()
+    const admin = getSupabaseAdmin()
 
     // お知らせ作成
-    const announcement = await databases.createDocument(DB_ID, COLLECTIONS.ANNOUNCEMENTS, ID.unique(), {
+    const { data: announcement, error: annErr } = await admin.from('announcements').insert({
       title,
       body: announcementBody,
       type: type || 'info',
       send_push: send_push || false,
       send_email: send_email || false,
       recipient_count: 0,
-    })
+    }).select().single()
+
+    if (annErr || !announcement) {
+      throw new Error(annErr?.message || 'Failed to create announcement')
+    }
 
     // 全ユーザーに通知
-    const users = await databases.listDocuments(DB_ID, COLLECTIONS.USERS, [Query.limit(5000)])
+    const { data: users } = await admin.from('users').select('id').limit(5000)
     let count = 0
-    for (const user of users.documents) {
+    for (const user of (users || [])) {
       try {
-        await databases.createDocument(DB_ID, COLLECTIONS.USER_NOTIFICATIONS, ID.unique(), {
-          user_id: user.$id,
-          announcement_id: announcement.$id,
+        await admin.from('user_notifications').insert({
+          user_id: user.id,
+          announcement_id: announcement.id,
           is_read: false,
         })
         count++
       } catch { /* skip */ }
     }
 
-    await databases.updateDocument(DB_ID, COLLECTIONS.ANNOUNCEMENTS, announcement.$id, {
+    await admin.from('announcements').update({
       recipient_count: count,
-    })
+    }).eq('id', announcement.id)
 
     return NextResponse.json({ ok: true, recipient_count: count })
   } catch (e) {

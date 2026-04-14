@@ -1,52 +1,7 @@
-import { Client, Databases, Users, Query, ID } from 'node-appwrite'
-
-export function createAdminClient() {
-  const client = new Client()
-    .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1')
-    .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!)
-    .setKey(process.env.APPWRITE_API_KEY!)
-
-  return {
-    databases: new Databases(client),
-    users: new Users(client),
-    client,
-  }
-}
-
-export { Query, ID }
-
-export const DB_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || 'filmo_db'
-
-export const COLLECTIONS = {
-  USERS: 'users',
-  MOVIES: 'movies',
-  EPISODES: 'episodes',
-  WATCHLISTS: 'watchlists',
-  EPISODE_WATCHES: 'episode_watches',
-  REVIEWS: 'reviews',
-  LIKES: 'likes',
-  FOLLOWS: 'follows',
-  ACTORS: 'actors',
-  DIRECTORS: 'directors',
-  FANS: 'fans',
-  NOTIFICATIONS: 'notifications',
-  STREAMING_SERVICES: 'streaming_services',
-  STREAMING_AVAILABILITY: 'streaming_availability',
-  THEATER_SHOWINGS: 'theater_showings',
-  TV_SCHEDULES: 'tv_schedules',
-  ANNOUNCEMENTS: 'announcements',
-  USER_NOTIFICATIONS: 'user_notifications',
-  REVIEW_REPORTS: 'review_reports',
-  X_POST_DRAFTS: 'x_post_drafts',
-  ADMIN_ALERTS: 'admin_alerts',
-  ACCESS_LOGS: 'access_logs',
-  CRON_SETTINGS: 'cron_settings',
-  CAMPAIGN_COUPONS: 'campaign_coupons',
-  FEEDBACK_THREADS: 'feedback_threads',
-  FEEDBACK_MESSAGES: 'feedback_messages',
-  USER_POINTS: 'user_points',
-  USER_TITLES: 'user_titles',
-  USER_EARNED_TITLES: 'user_earned_titles',
-  MONTHLY_BONUSES: 'monthly_bonuses',
-  DAILY_LIKE_COUNTS: 'daily_like_counts',
-} as const
+/**
+ * Legacy compatibility layer for server-side.
+ * Filmo has migrated from Appwrite to Supabase.
+ */
+export { getSupabaseAdmin as createAdminClient } from './supabase-admin'
+export { getSupabaseServerClient } from './supabase-server'
+export { COLLECTIONS } from './appwrite'

@@ -1,48 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient, DB_ID, COLLECTIONS, Query } from '../../lib/appwrite-server'
+import { getSupabaseAdmin } from '../../lib/supabase-admin'
 
 export async function GET(request: NextRequest) {
   const type = request.nextUrl.searchParams.get('type') || 'watches'
 
   try {
-    const { databases } = createAdminClient()
+    const admin = getSupabaseAdmin()
 
     switch (type) {
       case 'points': {
-        const res = await databases.listDocuments(DB_ID, COLLECTIONS.USERS, [
-          Query.orderDesc('points'),
-          Query.limit(50),
-        ])
-        return NextResponse.json(res.documents.map((d, i) => ({
+        const { data } = await admin.from('users')
+          .select('*')
+          .order('points', { ascending: false })
+          .limit(50)
+        return NextResponse.json((data || []).map((d, i) => ({
           rank: i + 1,
-          userId: d.$id,
+          userId: d.id,
           name: d.name,
           avatar_url: d.avatar_url,
           value: d.points,
         })))
       }
       case 'streak': {
-        const res = await databases.listDocuments(DB_ID, COLLECTIONS.USERS, [
-          Query.orderDesc('login_streak'),
-          Query.limit(50),
-        ])
-        return NextResponse.json(res.documents.map((d, i) => ({
+        const { data } = await admin.from('users')
+          .select('*')
+          .order('login_streak', { ascending: false })
+          .limit(50)
+        return NextResponse.json((data || []).map((d, i) => ({
           rank: i + 1,
-          userId: d.$id,
+          userId: d.id,
           name: d.name,
           avatar_url: d.avatar_url,
           value: d.login_streak,
         })))
       }
       case 'watches': {
-        const res = await databases.listDocuments(DB_ID, COLLECTIONS.USERS, [
-          Query.orderDesc('points'),
-          Query.limit(50),
-        ])
+        const { data } = await admin.from('users')
+          .select('*')
+          .order('points', { ascending: false })
+          .limit(50)
         // For watches, we'd need to count per user - simplified for now
-        return NextResponse.json(res.documents.map((d, i) => ({
+        return NextResponse.json((data || []).map((d, i) => ({
           rank: i + 1,
-          userId: d.$id,
+          userId: d.id,
           name: d.name,
           avatar_url: d.avatar_url,
           value: d.points,

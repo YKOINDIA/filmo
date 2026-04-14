@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cronGuard } from '../../../lib/cronGuard'
-import { createAdminClient, DB_ID, COLLECTIONS, Query, ID } from '../../../lib/appwrite-server'
+import { getSupabaseAdmin } from '../../../lib/supabase-admin'
 
 export async function GET(req: NextRequest) {
   const guard = await cronGuard(req, 'daily-x-post')
@@ -19,8 +19,8 @@ export async function GET(req: NextRequest) {
       `${i + 1}. ${m.title} ⭐${m.vote_average.toFixed(1)}`
     ).join('\n')}\n\n#Filmo #映画 #映画レビュー`
 
-    const { databases } = createAdminClient()
-    await databases.createDocument(DB_ID, COLLECTIONS.X_POST_DRAFTS, ID.unique(), {
+    const admin = getSupabaseAdmin()
+    await admin.from('x_post_drafts').insert({
       text,
       status: 'posted',
       posted_at: new Date().toISOString(),
@@ -28,14 +28,15 @@ export async function GET(req: NextRequest) {
 
     // Cron設定更新
     try {
-      const settings = await databases.listDocuments(DB_ID, COLLECTIONS.CRON_SETTINGS, [
-        Query.equal('path', 'daily-x-post'),
-      ])
-      if (settings.documents.length > 0) {
-        await databases.updateDocument(DB_ID, COLLECTIONS.CRON_SETTINGS, settings.documents[0].$id, {
+      const { data: settings } = await admin.from('cron_settings')
+        .select('*')
+        .eq('path', 'daily-x-post')
+
+      if (settings && settings.length > 0) {
+        await admin.from('cron_settings').update({
           last_run: new Date().toISOString(),
           last_status: 'ok',
-        })
+        }).eq('id', settings[0].id)
       }
     } catch { /* ignore */ }
 
