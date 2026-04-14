@@ -47,6 +47,7 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
   const [page, setPage] = useState<OnboardingPage>(0)
   const [personSearch, setPersonSearch] = useState('')
   const [searchResults, setSearchResults] = useState<PersonItem[]>([])
+  const [selectedPeople, setSelectedPeople] = useState<Map<number, PersonItem>>(new Map())
   const [searching, setSearching] = useState(false)
 
   const ratedCount = Object.keys(ratings).length
@@ -165,10 +166,18 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
   }
 
   const toggleFan = (personId: number) => {
+    const allPeople = [...people, ...searchResults]
+    const person = allPeople.find(p => p.id === personId)
+
     setFanSelections(prev => {
       const next = new Set(prev)
-      if (next.has(personId)) next.delete(personId)
-      else next.add(personId)
+      if (next.has(personId)) {
+        next.delete(personId)
+        setSelectedPeople(sp => { const m = new Map(sp); m.delete(personId); return m })
+      } else {
+        next.add(personId)
+        if (person) setSelectedPeople(sp => new Map(sp).set(personId, person))
+      }
       return next
     })
   }
@@ -208,10 +217,12 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
       }
 
       // Save FAN! selections (batch insert)
-      const allPeople = [...people, ...searchResults]
+      // Use selectedPeople map which preserves all selected people across searches
+      const allPeopleMap = new Map<number, PersonItem>(selectedPeople)
+      for (const p of [...people, ...searchResults]) allPeopleMap.set(p.id, p)
       const fanRows = [...fanSelections]
         .map(personId => {
-          const person = allPeople.find(p => p.id === personId)
+          const person = allPeopleMap.get(personId)
           if (!person) return null
           return {
             user_id: userId,
