@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'Filmo',
   webDir: 'out',
   server: {
-    url: 'https://filmo.jp',
+    url: 'https://filmo.me',
     cleartext: false,
   },
   plugins: {

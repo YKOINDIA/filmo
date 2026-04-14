@@ -12,7 +12,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const APP_URL = 'https://filmo.jp'
+const APP_URL = 'https://filmo.me'
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
