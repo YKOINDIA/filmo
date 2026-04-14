@@ -649,7 +649,10 @@ export default function Search({ userId, onOpenWork }: {
     }
   }, [activeTab, debouncedQuery, browse.mode, fetchSection])
 
-  // Debounced search
+  // Client-side search cache (query -> { results, total_pages })
+  const searchCacheRef = useRef<Map<string, { results: TMDBItem[]; total_pages: number }>>(new Map())
+
+  // Debounced search (200ms for snappier feel)
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (!query.trim()) {
@@ -661,21 +664,34 @@ export default function Search({ userId, onOpenWork }: {
     }
     debounceRef.current = setTimeout(() => {
       setDebouncedQuery(query.trim())
-    }, 300)
+    }, 200)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [query])
 
-  // Execute search when debouncedQuery changes
+  // Execute search when debouncedQuery changes (keep previous results while loading)
   useEffect(() => {
     if (!debouncedQuery) return
+
+    // Return cached results instantly if available
+    const cached = searchCacheRef.current.get(debouncedQuery)
+    if (cached) {
+      setSearchResults(cached.results)
+      setSearchTotalPages(cached.total_pages)
+      setSearchPage(1)
+      return
+    }
+
     setSearchLoading(true)
-    setSearchResults([])
     setSearchPage(1)
     fetch(`/api/tmdb?action=search&query=${encodeURIComponent(debouncedQuery)}&page=1`)
       .then(r => r.json())
       .then(data => {
-        setSearchResults(data.results || [])
-        setSearchTotalPages(data.total_pages || 1)
+        const results = data.results || []
+        const total_pages = data.total_pages || 1
+        searchCacheRef.current.set(debouncedQuery, { results, total_pages })
+        // Only apply if this is still the current query
+        setSearchResults(results)
+        setSearchTotalPages(total_pages)
       })
       .catch(() => {})
       .finally(() => setSearchLoading(false))
