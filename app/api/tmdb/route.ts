@@ -1,19 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const TMDB_API_KEY = process.env.TMDB_API_KEY!
-const TMDB_BASE = 'https://api.themoviedb.org/3'
-
-async function tmdbFetch(path: string, params: Record<string, string> = {}) {
-  const url = new URL(`${TMDB_BASE}${path}`)
-  url.searchParams.set('api_key', TMDB_API_KEY)
-  url.searchParams.set('language', params.language || 'ja-JP')
-  for (const [k, v] of Object.entries(params)) {
-    if (k !== 'language') url.searchParams.set(k, v)
-  }
-  const res = await fetch(url.toString(), { next: { revalidate: 3600 } })
-  if (!res.ok) throw new Error(`TMDB API error: ${res.status}`)
-  return res.json()
-}
+import {
+  getMovieDetailCached,
+  getPersonDetailCached,
+  getGenresCached,
+  tmdbFetch,
+} from '@/app/lib/tmdb-cache'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
@@ -29,10 +20,8 @@ export async function GET(request: NextRequest) {
       }
       case 'detail': {
         const id = searchParams.get('id')!
-        const type = searchParams.get('type') || 'movie'
-        const data = await tmdbFetch(`/${type}/${id}`, {
-          append_to_response: 'credits,similar,watch/providers,videos,recommendations',
-        })
+        const type = (searchParams.get('type') || 'movie') as 'movie' | 'tv'
+        const data = await getMovieDetailCached(Number(id), type)
         return NextResponse.json(data)
       }
       case 'trending': {
@@ -67,12 +56,12 @@ export async function GET(request: NextRequest) {
       }
       case 'person': {
         const id = searchParams.get('id')!
-        const data = await tmdbFetch(`/person/${id}`, { append_to_response: 'combined_credits' })
+        const data = await getPersonDetailCached(Number(id))
         return NextResponse.json(data)
       }
       case 'genres': {
-        const type = searchParams.get('type') || 'movie'
-        const data = await tmdbFetch(`/genre/${type}/list`)
+        const type = (searchParams.get('type') || 'movie') as 'movie' | 'tv'
+        const data = await getGenresCached(type)
         return NextResponse.json(data)
       }
       case 'season': {
