@@ -14,6 +14,7 @@ import Gamification from './components/Gamification'
 import NotificationBell from './components/NotificationBell'
 import Toast from './components/Toast'
 import Onboarding from './components/Onboarding'
+import ShareCard from './components/ShareCard'
 import { MIN_RATINGS_FOR_MATCH } from './lib/matchScore'
 
 type Tab = 'home' | 'search' | 'feed' | 'stats' | 'profile'
@@ -48,6 +49,7 @@ export default function Page() {
   const [toastMsg, setToastMsg] = useState('')
   const [streakBonus, setStreakBonus] = useState(0)
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
+  const [levelUpData, setLevelUpData] = useState<{ level: number; title: string; color: string; totalPoints: number } | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
@@ -78,8 +80,7 @@ export default function Page() {
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
-      setToastMsg(`レベルアップ! Lv.${detail.level} ${detail.title}`)
-      setTimeout(() => setToastMsg(''), 5000)
+      setLevelUpData(detail)
     }
     window.addEventListener('filmo-levelup', handler)
     return () => window.removeEventListener('filmo-levelup', handler)
@@ -358,6 +359,16 @@ export default function Page() {
       </nav>
 
       {toastMsg && <Toast message={toastMsg} />}
+
+      {/* Level-up Share Card */}
+      {levelUpData && user && (
+        <ShareCard
+          type="level_up"
+          data={levelUpData}
+          userId={user.id}
+          onClose={() => setLevelUpData(null)}
+        />
+      )}
     </div>
   )
 }

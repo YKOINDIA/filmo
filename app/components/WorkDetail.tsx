@@ -7,6 +7,7 @@ import { showToast } from '../lib/toast'
 import { buildTasteProfile, calculateMatchScore, type TasteProfile } from '../lib/matchScore'
 import VoiceReviewRecorder from './VoiceReviewRecorder'
 import VoiceReviewPlayer from './VoiceReviewPlayer'
+import ShareCard from './ShareCard'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -247,6 +248,9 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   // State: Match score
   const [matchScore, setMatchScore] = useState<number | null>(null)
   const [tasteProfile, setTasteProfile] = useState<TasteProfile | null>(null)
+
+  // State: Share card
+  const [shareCardType, setShareCardType] = useState<'mark' | 'clip' | null>(null)
 
   // State: UI
   const [synopsisExpanded, setSynopsisExpanded] = useState(false)
@@ -558,6 +562,9 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       if (updateErr) throw new Error(updateErr.message)
       setWatchEntry({ ...watchEntry, ...updateData } as typeof watchEntry)
       showToast('保存しました')
+      if (currentStatus === 'want_to_watch' && (clipMemo.trim() || score > 0)) {
+        setShareCardType('clip')
+      }
     } catch (e) {
       console.error('Save watch details failed:', e)
       showToast('保存に失敗しました')
@@ -603,6 +610,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           : POINT_CONFIG.REVIEW_SHORT
         await addPoints(userId, pts, 'レビュー投稿')
         showToast(`✍️ レビューを投稿しました！ +${pts}pt`)
+        setShareCardType('mark')
       } else {
         showToast('下書きを保存しました')
       }
@@ -2160,6 +2168,34 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
       {/* Bottom spacing */}
       <div style={{ height: 60 }} />
+
+      {/* Share Card Modal */}
+      {shareCardType === 'mark' && detail && (
+        <ShareCard
+          type="mark"
+          data={{
+            title: detail.title || detail.name || '',
+            posterPath: detail.poster_path,
+            score,
+            reviewBody,
+          }}
+          userId={userId}
+          onClose={() => setShareCardType(null)}
+        />
+      )}
+      {shareCardType === 'clip' && detail && (
+        <ShareCard
+          type="clip"
+          data={{
+            title: detail.title || detail.name || '',
+            posterPath: detail.poster_path,
+            score,
+            memo: clipMemo,
+          }}
+          userId={userId}
+          onClose={() => setShareCardType(null)}
+        />
+      )}
     </div>
   )
 }
