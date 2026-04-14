@@ -26,6 +26,7 @@
     "nicknamePlaceholder": "MovieFan123",
     "processing": "Processing...",
     "createAccount": "Create Account",
+    "confirmEmail": "We sent you a confirmation email. Click the link to complete registration (check your spam folder if you don't see it).",
     "tagline": "Track films you've watched. Save those you want to see.",
     "taglineSub": "Tell your friends what's good."
   },
