@@ -43,23 +43,27 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
 
   const updateNotify = async (key: string, value: boolean) => {
     setNotifySettings(prev => ({ ...prev, [key]: value }))
-    await supabase.from('users').update({ [key]: value }).eq('id', userId)
+    const { error } = await supabase.from('users').update({ [key]: value }).eq('id', userId)
+    if (error) console.error('Notify update failed:', error)
   }
 
   const submitFeedback = async () => {
     if (!feedbackSubject.trim()) return
-    const { data } = await supabase.from('feedback_threads').insert({
+    const { data, error: threadErr } = await supabase.from('feedback_threads').insert({
       user_id: userId,
       category: feedbackCategory,
       subject: feedbackSubject,
     }).select('id').single()
 
+    if (threadErr) { showToast('送信に失敗しました'); return }
+
     if (data && feedbackBody.trim()) {
-      await supabase.from('feedback_messages').insert({
+      const { error: msgErr } = await supabase.from('feedback_messages').insert({
         thread_id: data.id,
         body: feedbackBody,
         is_admin: false,
       })
+      if (msgErr) console.error('Feedback message failed:', msgErr)
     }
     showToast('フィードバックを送信しました')
     setShowFeedback(false)
