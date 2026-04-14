@@ -82,10 +82,25 @@ export async function getMovieDetailCached(id: number, type: 'movie' | 'tv' = 'm
     number_of_episodes: fresh.number_of_episodes || null,
     status: fresh.status || null,
     full_response: fresh,
+    data_source: 'tmdb',
+    is_verified: true,
     cached_at: new Date().toISOString(),
   }, { onConflict: 'tmdb_id' })
 
   return fresh
+}
+
+/**
+ * ユーザー登録作品・Annict作品の詳細取得（TMDBにfallbackしない）
+ */
+export async function getUserWorkDetail(movieId: number) {
+  const supabase = getSupabaseAdmin()
+  const { data } = await supabase
+    .from('movies')
+    .select('*')
+    .eq('id', movieId)
+    .single()
+  return data
 }
 
 // --- 人物詳細キャッシュ ---

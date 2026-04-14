@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'ykoindia@gmail.com'
 
-type Tab = 'kpi' | 'users' | 'reviews' | 'segments' | 'community' | 'security' | 'xpost' | 'coupons' | 'announce' | 'cron' | 'feedback'
+type Tab = 'kpi' | 'users' | 'reviews' | 'segments' | 'community' | 'security' | 'xpost' | 'coupons' | 'announce' | 'cron' | 'feedback' | 'work_requests' | 'edit_proposals'
 
 export default function AdminPage() {
   const [isAdmin, setIsAdmin] = useState(false)
@@ -52,6 +52,14 @@ export default function AdminPage() {
   const [threadMessages, setThreadMessages] = useState<Record<string, unknown>[]>([])
   const [replyText, setReplyText] = useState('')
 
+  // Work requests state
+  const [workRequests, setWorkRequests] = useState<Record<string, unknown>[]>([])
+  const [workReqFilter, setWorkReqFilter] = useState<'pending' | 'approved' | 'rejected'>('pending')
+
+  // Edit proposals state
+  const [editProposals, setEditProposals] = useState<Record<string, unknown>[]>([])
+  const [editPropFilter, setEditPropFilter] = useState<'pending' | 'approved' | 'rejected'>('pending')
+
   useEffect(() => {
     checkAdmin()
   }, [])
@@ -81,6 +89,8 @@ export default function AdminPage() {
       case 'announce': await loadAnnouncements(); break
       case 'cron': await loadCronSettings(); break
       case 'feedback': await loadFeedback(); break
+      case 'work_requests': await loadWorkRequests(); break
+      case 'edit_proposals': await loadEditProposals(); break
     }
   }
 
@@ -160,6 +170,52 @@ export default function AdminPage() {
       const { data } = await supabase.from('feedback_threads').select('*').order('created_at', { ascending: false }).limit(50)
       setFeedbackThreads(data ?? [])
     } catch { /* ignore */ }
+  }
+
+  const loadWorkRequests = async () => {
+    try {
+      const res = await fetch(`/api/edit-proposals?action=work_requests&status=${workReqFilter}`)
+      const data = await res.json()
+      setWorkRequests(data.requests || [])
+    } catch { /* ignore */ }
+  }
+
+  const loadEditProposals = async () => {
+    try {
+      const res = await fetch(`/api/edit-proposals?action=list&status=${editPropFilter}`)
+      const data = await res.json()
+      setEditProposals(data.proposals || [])
+    } catch { /* ignore */ }
+  }
+
+  const handleWorkRequest = async (requestId: string, approve: boolean) => {
+    const { data: session } = await supabase.auth.getSession()
+    const adminId = session.session?.user?.id
+    await fetch('/api/edit-proposals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: approve ? 'approve_request' : 'reject_request',
+        requestId,
+        adminId,
+      }),
+    })
+    loadWorkRequests()
+  }
+
+  const handleEditProposal = async (proposalId: string, approve: boolean) => {
+    const { data: session } = await supabase.auth.getSession()
+    const adminId = session.session?.user?.id
+    await fetch('/api/edit-proposals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: approve ? 'approve' : 'reject',
+        proposalId,
+        adminId,
+      }),
+    })
+    loadEditProposals()
   }
 
   const toggleBan = async (userId: string, isBanned: boolean) => {
@@ -264,6 +320,8 @@ export default function AdminPage() {
     { key: 'announce', label: 'お知らせ' },
     { key: 'cron', label: 'Cron' },
     { key: 'feedback', label: 'フィードバック' },
+    { key: 'work_requests', label: '作品リクエスト' },
+    { key: 'edit_proposals', label: '修正提案' },
   ]
 
   const S = {
@@ -507,6 +565,105 @@ export default function AdminPage() {
                 }}>
                 {c.enabled ? 'ON' : 'OFF'}
               </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 作品リクエスト */}
+      {tab === 'work_requests' && (
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            {(['pending', 'approved', 'rejected'] as const).map(f => (
+              <button key={f} onClick={() => { setWorkReqFilter(f); setTimeout(loadWorkRequests, 100) }}
+                style={{
+                  ...S.btn,
+                  background: workReqFilter === f ? 'var(--fm-accent)' : 'var(--fm-bg-card)',
+                  color: workReqFilter === f ? '#fff' : 'var(--fm-text-sub)',
+                  border: '1px solid var(--fm-border)',
+                }}>
+                {f === 'pending' ? '未処理' : f === 'approved' ? '承認済' : '却下'}
+              </button>
+            ))}
+          </div>
+          {workRequests.length === 0 ? (
+            <div style={S.card}><span style={{ color: 'var(--fm-text-sub)' }}>リクエストはありません</span></div>
+          ) : workRequests.map(r => (
+            <div key={r.id as string} style={S.card}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{r.title as string}</div>
+                  {r.original_title && <div style={{ fontSize: 12, color: 'var(--fm-text-muted)' }}>{r.original_title as string}</div>}
+                </div>
+                <span style={{
+                  fontSize: 11, padding: '2px 8px', borderRadius: 4, flexShrink: 0,
+                  background: r.media_type === 'movie' ? 'var(--fm-accent)' : r.media_type === 'anime' ? '#e91e63' : 'var(--fm-success)',
+                  color: '#fff',
+                }}>
+                  {r.media_type === 'movie' ? '映画' : r.media_type === 'anime' ? 'アニメ' : 'ドラマ'}
+                </span>
+              </div>
+              {r.description && <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 8 }}>{r.description as string}</div>}
+              <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 8 }}>
+                {r.year && `${r.year}年 / `}User: {(r.user_id as string).slice(0, 8)}... / {new Date(r.created_at as string).toLocaleDateString('ja-JP')}
+              </div>
+              {workReqFilter === 'pending' && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => handleWorkRequest(r.id as string, true)} style={S.btn}>承認（作品作成）</button>
+                  <button onClick={() => handleWorkRequest(r.id as string, false)} style={S.btnDanger}>却下</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 修正提案 */}
+      {tab === 'edit_proposals' && (
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            {(['pending', 'approved', 'rejected'] as const).map(f => (
+              <button key={f} onClick={() => { setEditPropFilter(f); setTimeout(loadEditProposals, 100) }}
+                style={{
+                  ...S.btn,
+                  background: editPropFilter === f ? 'var(--fm-accent)' : 'var(--fm-bg-card)',
+                  color: editPropFilter === f ? '#fff' : 'var(--fm-text-sub)',
+                  border: '1px solid var(--fm-border)',
+                }}>
+                {f === 'pending' ? '未処理' : f === 'approved' ? '承認済' : '却下'}
+              </button>
+            ))}
+          </div>
+          {editProposals.length === 0 ? (
+            <div style={S.card}><span style={{ color: 'var(--fm-text-sub)' }}>提案はありません</span></div>
+          ) : editProposals.map(p => (
+            <div key={p.id as string} style={S.card}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontWeight: 600 }}>Movie ID: {p.movie_id as number} / {p.field_name as string}</span>
+                <span style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
+                  {new Date(p.created_at as string).toLocaleDateString('ja-JP')}
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                <div style={{ padding: 8, borderRadius: 6, background: 'rgba(255,0,0,0.05)', border: '1px solid rgba(255,0,0,0.15)', fontSize: 13 }}>
+                  <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 4 }}>現在の値</div>
+                  <div style={{ wordBreak: 'break-word' }}>{(p.current_value as string) || '（未設定）'}</div>
+                </div>
+                <div style={{ padding: 8, borderRadius: 6, background: 'rgba(0,255,0,0.05)', border: '1px solid rgba(0,255,0,0.15)', fontSize: 13 }}>
+                  <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 4 }}>提案する値</div>
+                  <div style={{ wordBreak: 'break-word' }}>{p.proposed_value as string}</div>
+                </div>
+              </div>
+              {p.reason && <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 8 }}>理由: {p.reason as string}</div>}
+              <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 8 }}>
+                User: {(p.user_id as string).slice(0, 8)}...
+              </div>
+              {editPropFilter === 'pending' && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => handleEditProposal(p.id as string, true)} style={S.btn}>承認（反映）</button>
+                  <button onClick={() => handleEditProposal(p.id as string, false)} style={S.btnDanger}>却下</button>
+                </div>
+              )}
             </div>
           ))}
         </div>

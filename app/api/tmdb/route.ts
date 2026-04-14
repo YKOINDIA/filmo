@@ -3,8 +3,11 @@ import {
   getMovieDetailCached,
   getPersonDetailCached,
   getGenresCached,
+  getUserWorkDetail,
   tmdbFetch,
 } from '@/app/lib/tmdb-cache'
+import { searchAnnictCached, getSeasonAnimeCached } from '@/app/lib/annict-cache'
+import type { AnnictWorkNormalized } from '@/app/lib/annict'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
@@ -19,9 +22,15 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(data)
       }
       case 'detail': {
-        const id = searchParams.get('id')!
+        const id = Number(searchParams.get('id')!)
         const type = (searchParams.get('type') || 'movie') as 'movie' | 'tv'
-        const data = await getMovieDetailCached(Number(id), type)
+        // 負のID = ユーザー登録作品、TMDBに問い合わせない
+        if (id < 0) {
+          const data = await getUserWorkDetail(id)
+          if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+          return NextResponse.json(data)
+        }
+        const data = await getMovieDetailCached(id, type)
         return NextResponse.json(data)
       }
       case 'trending': {
@@ -89,10 +98,58 @@ export async function GET(request: NextRequest) {
         const data = await tmdbFetch('/person/popular', { page })
         return NextResponse.json(data)
       }
+      // Annict連携
+      case 'annict_search': {
+        const query = searchParams.get('query') || ''
+        if (!query.trim()) return NextResponse.json({ results: [] })
+        try {
+          const results = await searchAnnictCached(query)
+          return NextResponse.json({ results: results.map(toTMDBShape) })
+        } catch {
+          return NextResponse.json({ results: [] })
+        }
+      }
+      case 'annict_season': {
+        const year = Number(searchParams.get('year') || new Date().getFullYear())
+        const season = (searchParams.get('season') || getCurrentSeason()) as 'spring' | 'summer' | 'autumn' | 'winter'
+        try {
+          const results = await getSeasonAnimeCached(year, season)
+          return NextResponse.json({ results: results.map(toTMDBShape) })
+        } catch {
+          return NextResponse.json({ results: [] })
+        }
+      }
       default:
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
     }
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
+}
+
+/** Annict結果をTMDB互換フォーマットに変換 */
+function toTMDBShape(w: AnnictWorkNormalized) {
+  return {
+    id: w.annict_id, // フロントではannict_idをそのまま使う（正のID）
+    name: w.title,
+    title: w.title,
+    poster_path: w.poster_path,
+    backdrop_path: null,
+    media_type: 'tv',
+    release_date: w.release_date,
+    first_air_date: w.release_date,
+    vote_average: w.vote_average,
+    overview: '',
+    genre_ids: [16], // アニメ
+    _annict: true, // Annict由来フラグ
+    _annict_id: w.annict_id,
+  }
+}
+
+function getCurrentSeason(): string {
+  const month = new Date().getMonth() + 1
+  if (month >= 1 && month <= 3) return 'winter'
+  if (month >= 4 && month <= 6) return 'spring'
+  if (month >= 7 && month <= 9) return 'summer'
+  return 'autumn'
 }
