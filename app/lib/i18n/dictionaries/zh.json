@@ -99,13 +99,32 @@
     "reviewCount": "评论"
   },
   "lists": {
+    "title": "片单",
     "create": "创建片单",
+    "newList": "+ 新建片单",
     "myLists": "我的片单",
+    "popular": "热门",
+    "recent": "最新",
     "public": "公开",
     "private": "私密",
     "ranked": "排名",
     "addToList": "加入片单",
-    "share": "分享"
+    "share": "分享",
+    "newListTitle": "新建片单",
+    "titleLabel": "标题",
+    "titlePlaceholder": "例：史上最佳科幻电影",
+    "descriptionLabel": "描述",
+    "descriptionPlaceholder": "这个片单是关于什么的？",
+    "makePublic": "公开",
+    "makePublicDesc": "其他用户可以浏览和通过链接分享",
+    "makeRanked": "排名形式",
+    "makeRankedDesc": "为作品排名显示（第1名、第2名...）",
+    "creating": "创建中...",
+    "noListsYet": "还没有片单",
+    "noListsFound": "没有找到片单",
+    "noListsHint": "创建你的第一个片单来整理和分享你的最爱。",
+    "noFilmsAdded": "还没有添加作品",
+    "filmsCount": "{count}部作品"
   },
   "settings": {
     "language": "语言",

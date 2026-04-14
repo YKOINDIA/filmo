@@ -99,13 +99,32 @@
     "reviewCount": "리뷰"
   },
   "lists": {
+    "title": "리스트",
     "create": "리스트 만들기",
+    "newList": "+ 새 리스트",
     "myLists": "내 리스트",
+    "popular": "인기",
+    "recent": "최신",
     "public": "공개",
     "private": "비공개",
     "ranked": "랭킹",
     "addToList": "리스트에 추가",
-    "share": "공유"
+    "share": "공유",
+    "newListTitle": "새 리스트",
+    "titleLabel": "제목",
+    "titlePlaceholder": "예: 역대 최고의 SF 영화",
+    "descriptionLabel": "설명",
+    "descriptionPlaceholder": "이 리스트에 대해 설명해주세요",
+    "makePublic": "공개하기",
+    "makePublicDesc": "다른 사용자가 URL로 조회·공유 가능",
+    "makeRanked": "랭킹 형식",
+    "makeRankedDesc": "작품에 순위를 매겨 표시 (1위, 2위...)",
+    "creating": "생성 중...",
+    "noListsYet": "아직 리스트가 없습니다",
+    "noListsFound": "리스트를 찾을 수 없습니다",
+    "noListsHint": "즐겨찾기를 정리하고 공유할 첫 번째 리스트를 만들어보세요.",
+    "noFilmsAdded": "아직 작품이 추가되지 않았습니다",
+    "filmsCount": "{count}작품"
   },
   "settings": {
     "language": "언어",

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import ListDetail from './ListDetail'
+import { useLocale } from '../lib/i18n'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -39,6 +40,7 @@ interface TMDBResult {
 type ViewMode = 'my' | 'popular' | 'recent'
 
 export default function UserLists({ userId, onOpenWork }: UserListsProps) {
+  const { t } = useLocale()
   const [viewMode, setViewMode] = useState<ViewMode>('my')
   const [lists, setLists] = useState<ListItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -192,7 +194,7 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--fm-text)', margin: 0, letterSpacing: 0.3 }}>
-          Lists
+          {t('lists.title')}
         </h1>
         <button
           onClick={() => setShowCreate(true)}
@@ -202,16 +204,16 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
             transition: 'opacity 0.15s',
           }}
         >
-          + New List
+          {t('lists.newList')}
         </button>
       </div>
 
       {/* View Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'var(--fm-bg-card)', borderRadius: 8, padding: 3 }}>
         {([
-          { key: 'my' as ViewMode, label: 'My Lists' },
-          { key: 'popular' as ViewMode, label: 'Popular' },
-          { key: 'recent' as ViewMode, label: 'Recent' },
+          { key: 'my' as ViewMode, label: t('lists.myLists') },
+          { key: 'popular' as ViewMode, label: t('lists.popular') },
+          { key: 'recent' as ViewMode, label: t('lists.recent') },
         ]).map(t => (
           <button key={t.key} onClick={() => setViewMode(t.key)}
             style={{
@@ -239,13 +241,13 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
             border: '1px solid var(--fm-border)', width: '100%', maxWidth: 440,
           }}>
             <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--fm-text)', margin: '0 0 20px' }}>
-              New List
+              {t('lists.newListTitle')}
             </h2>
 
             <div style={{ marginBottom: 14 }}>
-              <label style={{ display: 'block', fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 4, fontWeight: 500 }}>Title</label>
+              <label style={{ display: 'block', fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 4, fontWeight: 500 }}>{t('lists.titleLabel')}</label>
               <input value={newTitle} onChange={e => setNewTitle(e.target.value)}
-                placeholder="e.g. Best Sci-Fi of All Time"
+                placeholder={t('lists.titlePlaceholder')}
                 style={{
                   width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--fm-border)',
                   background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 14, boxSizing: 'border-box',
@@ -253,9 +255,9 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
             </div>
 
             <div style={{ marginBottom: 14 }}>
-              <label style={{ display: 'block', fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 4, fontWeight: 500 }}>Description</label>
+              <label style={{ display: 'block', fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 4, fontWeight: 500 }}>{t('lists.descriptionLabel')}</label>
               <textarea value={newDesc} onChange={e => setNewDesc(e.target.value)}
-                rows={3} placeholder="What's this list about?"
+                rows={3} placeholder={t('lists.descriptionPlaceholder')}
                 style={{
                   width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--fm-border)',
                   background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 14, resize: 'vertical',
@@ -268,16 +270,16 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
                 <input type="checkbox" checked={newPublic} onChange={e => setNewPublic(e.target.checked)}
                   style={{ width: 18, height: 18, accentColor: 'var(--fm-accent)' }} />
                 <div>
-                  <div style={{ fontWeight: 600, color: 'var(--fm-text)' }}>公開する</div>
-                  <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 1 }}>他のユーザーが閲覧・URLで共有可能</div>
+                  <div style={{ fontWeight: 600, color: 'var(--fm-text)' }}>{t('lists.makePublic')}</div>
+                  <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 1 }}>{t('lists.makePublicDesc')}</div>
                 </div>
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: 'var(--fm-text-sub)' }}>
                 <input type="checkbox" checked={newRanked} onChange={e => setNewRanked(e.target.checked)}
                   style={{ width: 18, height: 18, accentColor: 'var(--fm-accent)' }} />
                 <div>
-                  <div style={{ fontWeight: 600, color: 'var(--fm-text)' }}>ランキング形式</div>
-                  <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 1 }}>作品に順位をつけて表示（1位、2位...）</div>
+                  <div style={{ fontWeight: 600, color: 'var(--fm-text)' }}>{t('lists.makeRanked')}</div>
+                  <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 1 }}>{t('lists.makeRankedDesc')}</div>
                 </div>
               </label>
             </div>
@@ -289,7 +291,7 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
                   background: 'transparent', color: 'var(--fm-text-sub)', fontSize: 14,
                   fontWeight: 500, cursor: 'pointer',
                 }}>
-                Cancel
+                {t('common.cancel')}
               </button>
               <button onClick={handleCreate} disabled={creating || !newTitle.trim()}
                 style={{
@@ -297,7 +299,7 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
                   background: 'var(--fm-accent)', color: '#fff', fontSize: 14,
                   fontWeight: 600, cursor: 'pointer', opacity: creating || !newTitle.trim() ? 0.5 : 1,
                 }}>
-                {creating ? 'Creating...' : 'Create'}
+                {creating ? t('lists.creating') : t('lists.create')}
               </button>
             </div>
           </div>
@@ -321,11 +323,11 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--fm-text-muted)' }}><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           </div>
           <p style={{ color: 'var(--fm-text-sub)', fontSize: 15, marginBottom: 4 }}>
-            {viewMode === 'my' ? 'No lists yet' : 'No lists found'}
+            {viewMode === 'my' ? t('lists.noListsYet') : t('lists.noListsFound')}
           </p>
           {viewMode === 'my' && (
             <p style={{ color: 'var(--fm-text-muted)', fontSize: 13 }}>
-              Create your first list to organize and share your favorites.
+              {t('lists.noListsHint')}
             </p>
           )}
         </div>
@@ -367,7 +369,7 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
                     width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
                     color: 'var(--fm-text-muted)', fontSize: 13,
                   }}>
-                    No films added yet
+                    {t('lists.noFilmsAdded')}
                   </div>
                 )}
                 {/* Gradient overlay */}
@@ -402,7 +404,7 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
                       background: 'var(--fm-bg-secondary)', color: 'var(--fm-text-muted)',
                       flexShrink: 0,
                     }}>
-                      Private
+                      {t('lists.private')}
                     </span>
                   )}
                 </div>
@@ -418,7 +420,7 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
                       {list.user_name}
                     </span>
                   )}
-                  <span>{list.items_count} films</span>
+                  <span>{t('lists.filmsCount', { count: String(list.items_count) })}</span>
                   {list.likes_count > 0 && (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
@@ -426,7 +428,7 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
                     </span>
                   )}
                   {list.is_ranked && (
-                    <span style={{ color: 'var(--fm-accent)', fontWeight: 500 }}>Ranked</span>
+                    <span style={{ color: 'var(--fm-accent)', fontWeight: 500 }}>{t('lists.ranked')}</span>
                   )}
                 </div>
               </div>

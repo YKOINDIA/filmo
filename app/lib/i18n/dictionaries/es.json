@@ -99,13 +99,32 @@
     "reviewCount": "Reseñas"
   },
   "lists": {
+    "title": "Listas",
     "create": "Crear lista",
+    "newList": "+ Nueva lista",
     "myLists": "Mis listas",
+    "popular": "Populares",
+    "recent": "Recientes",
     "public": "Pública",
     "private": "Privada",
     "ranked": "Clasificación",
     "addToList": "Añadir a lista",
-    "share": "Compartir"
+    "share": "Compartir",
+    "newListTitle": "Nueva lista",
+    "titleLabel": "Título",
+    "titlePlaceholder": "Ej: Las mejores películas de ciencia ficción",
+    "descriptionLabel": "Descripción",
+    "descriptionPlaceholder": "¿De qué trata esta lista?",
+    "makePublic": "Hacer pública",
+    "makePublicDesc": "Otros usuarios pueden ver y compartir por URL",
+    "makeRanked": "Lista clasificada",
+    "makeRankedDesc": "Mostrar con clasificación (1°, 2°...)",
+    "creating": "Creando...",
+    "noListsYet": "Aún no hay listas",
+    "noListsFound": "No se encontraron listas",
+    "noListsHint": "Crea tu primera lista para organizar y compartir tus favoritos.",
+    "noFilmsAdded": "Aún no se han añadido películas",
+    "filmsCount": "{count} películas"
   },
   "settings": {
     "language": "Idioma",
