@@ -1227,9 +1227,46 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         )}
       </div>
 
-      {/* ── 4a. Mark Panel: Star + Review + Watch Details ── */}
+      {/* ── 4a. Mark Panel: Voice Review + Star + Review + Watch Details ── */}
       {(currentStatus === 'watched' || currentStatus === 'watching') && (
         <div style={{ ...s.section }}>
+          {/* Voice Review Recorder */}
+          {detail && (
+            <div style={{ marginBottom: 12 }}>
+              <VoiceReviewRecorder
+                movieId={workId}
+                movieTitle={detail.title || detail.name || ''}
+                userId={userId}
+                onComplete={fetchVoiceReviews}
+                onTranscript={text => { if (!reviewBody.trim()) setReviewBody(text) }}
+              />
+            </div>
+          )}
+
+          {/* Voice Review List */}
+          {voiceReviews.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)', margin: '0 0 10px' }}>
+                🎙️ ボイスレビュー ({voiceReviews.length})
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {voiceReviews.map(vr => (
+                  <VoiceReviewPlayer
+                    key={vr.id}
+                    audioUrl={(vr as unknown as { audioUrl: string }).audioUrl || `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/voice-reviews/${vr.storage_path}`}
+                    voiceReviewId={vr.id}
+                    userName={vr.user_name || '匿名'}
+                    userAvatar={vr.user_avatar}
+                    voiceMode={vr.voice_mode}
+                    durationSeconds={vr.duration_seconds}
+                    hasSpoiler={vr.has_spoiler}
+                    initialReactions={vr.reactions}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={s.card}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {/* Star rating */}
@@ -1480,47 +1517,25 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         </div>
       )}
 
-          {/* Voice Reviews Section */}
-          <div style={{ marginTop: 16 }}>
-            <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)', margin: '0 0 10px' }}>
-              🎙️ ボイスレビュー ({voiceReviews.length})
-            </h4>
 
-            {/* Voice Review Recorder */}
-            {detail && (
-              <div style={{ marginBottom: 12 }}>
-                <VoiceReviewRecorder
-                  movieId={workId}
-                  movieTitle={detail.title || detail.name || ''}
-                  userId={userId}
-                  onComplete={fetchVoiceReviews}
-                />
-              </div>
-            )}
-
-            {/* Voice Review List */}
-            {voiceReviews.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {voiceReviews.map(vr => (
-                  <VoiceReviewPlayer
-                    key={vr.id}
-                    audioUrl={(vr as unknown as { audioUrl: string }).audioUrl || `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/voice-reviews/${vr.storage_path}`}
-                    voiceReviewId={vr.id}
-                    userName={vr.user_name || '匿名'}
-                    userAvatar={vr.user_avatar}
-                    voiceMode={vr.voice_mode}
-                    durationSeconds={vr.duration_seconds}
-                    hasSpoiler={vr.has_spoiler}
-                    initialReactions={vr.reactions}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-      {/* ── 4b. Clip Panel: Memo + Match Score ── */}
+      {/* ── 4b. Clip Panel: Voice + Star + Memo + Match Score ── */}
       {currentStatus === 'want_to_watch' && (
         <div style={{ ...s.section }}>
+          {/* 期待の声 Recorder */}
+          {detail && (
+            <div style={{ marginBottom: 12 }}>
+              <VoiceReviewRecorder
+                movieId={workId}
+                movieTitle={detail.title || detail.name || ''}
+                userId={userId}
+                onComplete={fetchVoiceReviews}
+                onTranscript={text => { if (!clipMemo.trim()) setClipMemo(text) }}
+                label="期待の声"
+                promptText={`「${detail.title || detail.name || ''}」への期待を声で伝えよう`}
+              />
+            </div>
+          )}
+
           <div style={s.card}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {/* Expectation star rating */}
@@ -1550,57 +1565,6 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                   {clipMemo.length} / 500
                 </div>
               </div>
-
-              {/* Match score inline */}
-              {matchScore !== null && matchScore > 0 && (
-                <div style={{
-                  padding: '12px 16px',
-                  borderRadius: 10,
-                  background: 'linear-gradient(135deg, rgba(108,92,231,0.12), rgba(162,155,254,0.06))',
-                  border: '1px solid rgba(108,92,231,0.25)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                }}>
-                  <div style={{
-                    position: 'relative',
-                    width: 44, height: 44, flexShrink: 0,
-                  }}>
-                    <svg width="44" height="44" viewBox="0 0 44 44" style={{ transform: 'rotate(-90deg)' }}>
-                      <circle cx="22" cy="22" r="18" fill="none"
-                        stroke="rgba(108,92,231,0.2)" strokeWidth="3.5" />
-                      <circle cx="22" cy="22" r="18" fill="none"
-                        stroke={matchScore >= 80 ? '#2ecc8a' : matchScore >= 60 ? '#6c5ce7' : '#e67e22'}
-                        strokeWidth="3.5"
-                        strokeDasharray={`${(matchScore / 100) * 113.1} 113.1`}
-                        strokeLinecap="round"
-                        style={{ transition: 'stroke-dasharray 0.8s ease' }}
-                      />
-                    </svg>
-                    <div style={{
-                      position: 'absolute', inset: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 13, fontWeight: 800,
-                      color: matchScore >= 80 ? '#2ecc8a' : matchScore >= 60 ? '#a29bfe' : '#e67e22',
-                    }}>
-                      {matchScore}%
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fm-text)' }}>
-                      マッチ度 {matchScore}%
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--fm-text-sub)', lineHeight: 1.4 }}>
-                      {matchScore >= 80
-                        ? 'あなたの好みにとても合いそう!'
-                        : matchScore >= 65
-                          ? 'あなたの好みに合う可能性あり'
-                          : 'あなたの好みとはやや異なるかも'
-                      }
-                    </div>
-                  </div>
-                </div>
-              )}
 
               <button
                 style={s.primaryBtn}

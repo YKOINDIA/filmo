@@ -10,6 +10,9 @@ interface VoiceReviewRecorderProps {
   movieTitle: string
   userId: string
   onComplete?: () => void
+  onTranscript?: (text: string) => void
+  label?: string
+  promptText?: string
 }
 
 const MAX_DURATION_FREE = 15
@@ -20,6 +23,9 @@ export default function VoiceReviewRecorder({
   movieTitle,
   userId,
   onComplete,
+  onTranscript,
+  label = 'ボイスレビュー',
+  promptText,
 }: VoiceReviewRecorderProps) {
   const isPremium = false // TODO: check from user profile
   const maxDuration = isPremium ? MAX_DURATION_PREMIUM : MAX_DURATION_FREE
@@ -42,6 +48,11 @@ export default function VoiceReviewRecorder({
   const timerRef = useRef<number | null>(null)
   const previewUrlRef = useRef<string | null>(null)
   const processingRunRef = useRef(0)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null)
+  const transcriptRef = useRef('')
+  const onTranscriptRef = useRef(onTranscript)
+  onTranscriptRef.current = onTranscript
 
   useEffect(() => {
     return () => {
@@ -98,6 +109,36 @@ export default function VoiceReviewRecorder({
     void run()
   }, [sourceBlob, voiceMode])
 
+  const startSpeechRecognition = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition || !onTranscriptRef.current) return
+    try {
+      const recognition = new SpeechRecognition()
+      recognition.lang = 'ja-JP'
+      recognition.continuous = true
+      recognition.interimResults = false
+      transcriptRef.current = ''
+      recognition.onresult = (e: { results: Iterable<{ isFinal: boolean; 0: { transcript: string } }> }) => {
+        const parts: string[] = []
+        for (const result of e.results) {
+          if (result.isFinal) parts.push(result[0].transcript)
+        }
+        transcriptRef.current = parts.join('')
+      }
+      recognition.start()
+      recognitionRef.current = recognition
+    } catch { /* Speech API not available — silently skip */ }
+  }
+
+  const stopSpeechRecognition = () => {
+    try { recognitionRef.current?.stop() } catch { /* ignore */ }
+    recognitionRef.current = null
+    if (transcriptRef.current && onTranscriptRef.current) {
+      onTranscriptRef.current(transcriptRef.current)
+    }
+  }
+
   const startRecording = async () => {
     try {
       setStatus('')
@@ -116,11 +157,13 @@ export default function VoiceReviewRecorder({
         setIsRecording(false)
         resetTimer()
         stopTracks()
+        stopSpeechRecognition()
       }
 
       recorder.start()
       setSeconds(0)
       setIsRecording(true)
+      startSpeechRecognition()
 
       timerRef.current = window.setInterval(() => {
         setSeconds(cur => {
@@ -182,7 +225,7 @@ export default function VoiceReviewRecorder({
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: 18 }}>🎙️</span>
         <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--fm-text)' }}>
-          ボイスレビュー
+          {label}
         </span>
         <span style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginLeft: 'auto' }}>
           最大{maxDuration}秒
@@ -190,7 +233,7 @@ export default function VoiceReviewRecorder({
       </div>
 
       <p style={{ fontSize: 12, color: 'var(--fm-text-sub)', margin: '0 0 12px' }}>
-        「{movieTitle}」について声でレビューしよう
+        {promptText || `「${movieTitle}」について声でレビューしよう`}
       </p>
 
       {/* Voice mode selector */}
