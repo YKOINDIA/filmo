@@ -706,14 +706,24 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const handleToggleEpisode = async (seasonNumber: number, episodeNumber: number) => {
     const key = `s${seasonNumber}e${episodeNumber}`
 
-    // Look up episode UUID from episodes table
+    // Find episode metadata from TMDB data already loaded
+    const tmdbEp = seasonEpisodes[seasonNumber]?.find(e => e.episode_number === episodeNumber)
+
+    // Upsert episode into DB (ensures it exists before tracking watches)
     const { data: ep } = await supabase
       .from('episodes')
+      .upsert({
+        movie_id: workId,
+        season_number: seasonNumber,
+        episode_number: episodeNumber,
+        title: tmdbEp?.name || null,
+        overview: tmdbEp?.overview || null,
+        air_date: tmdbEp?.air_date || null,
+        runtime: tmdbEp?.runtime || null,
+        still_path: tmdbEp?.still_path || null,
+      }, { onConflict: 'movie_id,season_number,episode_number' })
       .select('id')
-      .eq('movie_id', workId)
-      .eq('season_number', seasonNumber)
-      .eq('episode_number', episodeNumber)
-      .maybeSingle()
+      .single()
 
     if (!ep) return
 
@@ -729,6 +739,62 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         .from('episode_watches')
         .insert({ user_id: userId, episode_id: ep.id })
       setEpisodeWatches(prev => new Set(prev).add(key))
+    }
+  }
+
+  const handleToggleAllEpisodes = async (seasonNumber: number) => {
+    const episodes = seasonEpisodes[seasonNumber] || []
+    if (episodes.length === 0) return
+
+    const allWatched = episodes.every(
+      ep => episodeWatches.has(`s${seasonNumber}e${ep.episode_number}`)
+    )
+
+    // Upsert all episodes into DB first
+    const rows = episodes.map(ep => ({
+      movie_id: workId,
+      season_number: seasonNumber,
+      episode_number: ep.episode_number,
+      title: ep.name || null,
+      overview: ep.overview || null,
+      air_date: ep.air_date || null,
+      runtime: ep.runtime || null,
+      still_path: ep.still_path || null,
+    }))
+    const { data: dbEps } = await supabase
+      .from('episodes')
+      .upsert(rows, { onConflict: 'movie_id,season_number,episode_number' })
+      .select('id, episode_number')
+
+    if (!dbEps || dbEps.length === 0) return
+
+    if (allWatched) {
+      // Remove all watches for this season
+      const epIds = dbEps.map((e: { id: string }) => e.id)
+      await supabase
+        .from('episode_watches')
+        .delete()
+        .eq('user_id', userId)
+        .in('episode_id', epIds)
+      setEpisodeWatches(prev => {
+        const n = new Set(prev)
+        episodes.forEach(ep => n.delete(`s${seasonNumber}e${ep.episode_number}`))
+        return n
+      })
+    } else {
+      // Mark all as watched
+      const watchRows = dbEps.map((e: { id: string }) => ({
+        user_id: userId,
+        episode_id: e.id,
+      }))
+      await supabase
+        .from('episode_watches')
+        .upsert(watchRows, { onConflict: 'user_id,episode_id' })
+      setEpisodeWatches(prev => {
+        const n = new Set(prev)
+        episodes.forEach(ep => n.add(`s${seasonNumber}e${ep.episode_number}`))
+        return n
+      })
     }
   }
 
@@ -2128,8 +2194,20 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                           textAlign: 'center', padding: 20,
                           color: 'var(--fm-text-muted)', fontSize: 13,
                         }}>エピソード情報がありません</div>
-                      ) : (
-                        episodes.map(ep => {
+                      ) : (<>
+                        <button
+                          onClick={() => handleToggleAllEpisodes(season.season_number)}
+                          style={{
+                            width: '100%', padding: '8px 0', marginBottom: 8,
+                            border: '1px solid var(--fm-border)', borderRadius: 6,
+                            background: watchedCount === totalEps ? 'var(--fm-bg-hover)' : 'var(--fm-accent)',
+                            color: watchedCount === totalEps ? 'var(--fm-text-sub)' : '#fff',
+                            fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                          }}
+                        >
+                          {watchedCount === totalEps ? '全話チェック解除' : `全${totalEps}話を視聴済みにする`}
+                        </button>
+                        {episodes.map(ep => {
                           const key = `s${season.season_number}e${ep.episode_number}`
                           const watched = episodeWatches.has(key)
                           return (
@@ -2157,8 +2235,8 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                               </div>
                             </div>
                           )
-                        })
-                      )}
+                        })}
+                      </>)}
                     </div>
                   )}
                 </div>
