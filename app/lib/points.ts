@@ -31,6 +31,13 @@ export const POINT_CONFIG = {
   LOGIN_STREAK_7: 50,
   DAILY_LIKE_LIMIT: 50,
   VOICE_REVIEW: 20,
+  // データ貢献
+  REGISTER_WORK: 15,            // 新作品を簡易登録
+  REQUEST_WORK: 5,              // 作品リクエスト送信
+  EDIT_PROPOSAL_APPROVED: 10,   // 修正提案が承認
+  PERSON_PROPOSAL_APPROVED: 10, // キャスト提案が承認
+  ADD_CAST_INFO: 5,             // ユーザー作品にキャスト追加
+  FIRST_DATA_CONTRIBUTION: 30,  // 初めてのデータ貢献ボーナス
 }
 
 export const addPoints = async (userId: string, pts: number, reason: string): Promise<void> => {
@@ -61,6 +68,48 @@ export const addPoints = async (userId: string, pts: number, reason: string): Pr
       window.dispatchEvent(new CustomEvent('filmo-levelup', {
         detail: { ...newLevel, totalPoints: newPts }
       }))
+    }
+  } catch { /* ignore */ }
+}
+
+/**
+ * データ貢献に対してポイントを付与する。
+ * 初回貢献ボーナスの判定も行う。
+ */
+export const awardContributionPoints = async (
+  userId: string,
+  contributionType: string,
+  points: number,
+  reason: string,
+  referenceId?: string,
+  movieId?: number,
+): Promise<void> => {
+  try {
+    // 初回データ貢献ボーナスチェック
+    const { count } = await supabase
+      .from('data_contributions')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('status', 'awarded')
+
+    const isFirst = (count || 0) === 0
+
+    // 貢献ログ記録
+    await supabase.from('data_contributions').insert({
+      user_id: userId,
+      contribution_type: contributionType,
+      reference_id: referenceId,
+      movie_id: movieId,
+      points_awarded: points,
+      status: 'awarded',
+    })
+
+    // ポイント付与
+    await addPoints(userId, points, reason)
+
+    // 初回ボーナス
+    if (isFirst) {
+      await addPoints(userId, POINT_CONFIG.FIRST_DATA_CONTRIBUTION, '初めてのデータ貢献ボーナス')
     }
   } catch { /* ignore */ }
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import WorkRegisterModal from './WorkRegisterModal'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -605,6 +606,7 @@ export default function Search({ userId, onOpenWork }: {
     mode: 'home', label: '', items: [], loading: false, page: 1, totalPages: 1,
   })
 
+  const [showRegisterModal, setShowRegisterModal] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
 
   // --- Helpers ---
@@ -646,6 +648,7 @@ export default function Search({ userId, onOpenWork }: {
     } else if (activeTab === 'anime') {
       fetchSection('trending_anime', '今注目のアニメ', '/api/tmdb?action=discover&type=tv&with_genres=16&sort_by=popularity.desc', 'tv')
       fetchSection('airing_anime', '放送中', '/api/tmdb?action=on_the_air', 'tv')
+      fetchSection('annict_season', '今期のアニメ (Annict)', '/api/tmdb?action=annict_season', 'tv')
     }
   }, [activeTab, debouncedQuery, browse.mode, fetchSection])
 
@@ -683,19 +686,38 @@ export default function Search({ userId, onOpenWork }: {
 
     setSearchLoading(true)
     setSearchPage(1)
-    fetch(`/api/tmdb?action=search&query=${encodeURIComponent(debouncedQuery)}&page=1`)
-      .then(r => r.json())
-      .then(data => {
-        const results = data.results || []
-        const total_pages = data.total_pages || 1
+
+    // TMDB検索 + アニメタブならAnnict検索も並列実行
+    const fetches: Promise<unknown>[] = [
+      fetch(`/api/tmdb?action=search&query=${encodeURIComponent(debouncedQuery)}&page=1`).then(r => r.json()),
+    ]
+    if (activeTab === 'anime') {
+      fetches.push(
+        fetch(`/api/tmdb?action=annict_search&query=${encodeURIComponent(debouncedQuery)}`).then(r => r.json()).catch(() => ({ results: [] }))
+      )
+    }
+
+    Promise.all(fetches)
+      .then(([tmdbData, annictData]: unknown[]) => {
+        const tmdb = tmdbData as { results?: TMDBItem[]; total_pages?: number }
+        const results = tmdb.results || []
+        const total_pages = tmdb.total_pages || 1
+
+        // Annict結果をマージ（TMDB IDと重複しないもののみ）
+        if (annictData) {
+          const annict = annictData as { results?: TMDBItem[] }
+          const tmdbIds = new Set(results.map(r => r.id))
+          const annictUnique = (annict.results || []).filter(r => !tmdbIds.has(r.id))
+          results.push(...annictUnique)
+        }
+
         searchCacheRef.current.set(debouncedQuery, { results, total_pages })
-        // Only apply if this is still the current query
         setSearchResults(results)
         setSearchTotalPages(total_pages)
       })
       .catch(() => {})
       .finally(() => setSearchLoading(false))
-  }, [debouncedQuery])
+  }, [debouncedQuery, activeTab])
 
   const loadMoreSearch = async () => {
     const nextPage = searchPage + 1
@@ -896,7 +918,7 @@ export default function Search({ userId, onOpenWork }: {
         <div style={{ position: 'relative', aspectRatio: '2/3' }}>
           {item.poster_path ? (
             <img
-              src={`${TMDB_IMG}/w342${item.poster_path}`}
+              src={item.poster_path.startsWith('http') ? item.poster_path : `${TMDB_IMG}/w342${item.poster_path}`}
               alt={getTitle(item)}
               style={S.posterImg}
               loading="lazy"
@@ -1289,10 +1311,11 @@ export default function Search({ userId, onOpenWork }: {
   // --- Search results view ---
   const renderSearchView = () => {
     const filtered = searchResults.filter(r => {
-      if (!r.poster_path) return false
+      const isAnnict = !!(r as Record<string, unknown>)._annict
+      if (!r.poster_path && !isAnnict) return false
       if (activeTab === 'movie') return r.media_type === 'movie'
-      if (activeTab === 'drama') return r.media_type === 'tv'
-      if (activeTab === 'anime') return r.media_type === 'tv' || r.genre_ids?.includes(16)
+      if (activeTab === 'drama') return r.media_type === 'tv' && !isAnnict
+      if (activeTab === 'anime') return isAnnict || r.media_type === 'tv' || r.genre_ids?.includes(16)
       return true
     })
 
@@ -1307,6 +1330,15 @@ export default function Search({ userId, onOpenWork }: {
               <div style={S.emptyState}>
                 <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
                 <div style={{ fontSize: 15 }}>「{debouncedQuery}」に一致する結果がありません</div>
+                <button
+                  onClick={() => setShowRegisterModal(true)}
+                  style={{ marginTop: 16, padding: '10px 20px', borderRadius: 10, border: 'none', background: 'var(--fm-accent)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  この作品を登録する
+                </button>
+                <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginTop: 8 }}>
+                  見つからない作品を登録して記録を始めましょう
+                </div>
               </div>
             )}
             {searchPage < searchTotalPages && filtered.length > 0 && (
@@ -1491,6 +1523,15 @@ export default function Search({ userId, onOpenWork }: {
           ? renderBrowseView()
           : renderHomeView()
       }
+
+      {showRegisterModal && (
+        <WorkRegisterModal
+          userId={userId}
+          initialQuery={debouncedQuery || query}
+          onClose={() => setShowRegisterModal(false)}
+          onOpenWork={onOpenWork}
+        />
+      )}
     </div>
   )
 }

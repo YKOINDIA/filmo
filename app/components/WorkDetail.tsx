@@ -8,6 +8,7 @@ import { buildTasteProfile, calculateMatchScore, type TasteProfile } from '../li
 import VoiceReviewRecorder from './VoiceReviewRecorder'
 import VoiceReviewPlayer from './VoiceReviewPlayer'
 import ShareCard from './ShareCard'
+import EditProposalModal from './EditProposalModal'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -94,6 +95,7 @@ interface TMDBDetail {
   budget?: number
   revenue?: number
   spoken_languages?: { english_name: string; name: string; iso_639_1: string }[]
+  data_source?: string  // 'tmdb' | 'annict' | 'user'
 }
 
 type SortMode = 'newest' | 'likes' | 'score_high' | 'score_low'
@@ -255,6 +257,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
   // State: UI
   const [synopsisExpanded, setSynopsisExpanded] = useState(false)
+  const [editProposal, setEditProposal] = useState<{ fieldName: string; fieldLabel: string; currentValue: string } | null>(null)
   const [showAllCast, setShowAllCast] = useState(false)
   const [showAllCrew, setShowAllCrew] = useState(false)
 
@@ -266,6 +269,46 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
     try {
       setLoading(true)
       setError(null)
+
+      // ユーザー登録作品（負のID）はローカルDBから取得
+      if (workId < 0) {
+        const res = await fetch(`/api/tmdb?action=detail&id=${workId}&type=${workType}`)
+        if (!res.ok) throw new Error(`API error: ${res.status}`)
+        const row = await res.json()
+        // DB行をTMDB風のオブジェクトに変換
+        const asDetail: TMDBDetail = {
+          id: row.id,
+          title: row.title || '',
+          name: row.title || '',
+          original_title: row.original_title || '',
+          original_name: row.original_title || '',
+          overview: row.overview || '',
+          poster_path: row.poster_path || null,
+          backdrop_path: row.backdrop_path || null,
+          release_date: row.release_date || '',
+          first_air_date: row.release_date || '',
+          runtime: row.runtime || null,
+          vote_average: row.vote_average || 0,
+          vote_count: row.vote_count || 0,
+          genres: row.genres || [],
+          production_countries: row.production_countries || [],
+          credits: row.credits || { cast: [], crew: [] },
+          similar: { results: [] },
+          recommendations: { results: [] },
+          videos: { results: [] },
+          seasons: [],
+          tagline: '',
+          status: row.status || '',
+          production_companies: [],
+          number_of_seasons: row.number_of_seasons || 0,
+          number_of_episodes: row.number_of_episodes || 0,
+          data_source: row.data_source || 'user',
+        }
+        setDetail(asDetail)
+        setProviders(null)
+        return
+      }
+
       const res = await fetch(`/api/tmdb?action=detail&id=${workId}&type=${workType}`)
       if (!res.ok) throw new Error(`API error: ${res.status}`)
       const data: TMDBDetail = await res.json()
@@ -904,6 +947,10 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       fontSize: 16, fontWeight: 700, color: 'var(--fm-text)',
       marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8,
     },
+    pencilBtn: {
+      background: 'none', border: 'none', cursor: 'pointer',
+      fontSize: 14, padding: 4, opacity: 0.5, flexShrink: 0,
+    },
     actionRow: {
       display: 'flex', gap: 8, flexWrap: 'wrap' as const,
       padding: '16px', alignItems: 'center',
@@ -1146,6 +1193,14 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       </div>
 
       {/* Hero row: poster + title */}
+      {/* ユーザー登録作品バナー */}
+      {detail.data_source === 'user' && (
+        <div style={{ margin: '0 16px 8px', padding: '10px 14px', borderRadius: 10, background: 'linear-gradient(135deg, rgba(108,92,231,0.15), rgba(162,155,254,0.08))', border: '1px solid var(--fm-accent)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+          <span>📝</span>
+          <span style={{ color: 'var(--fm-text-sub)' }}>この作品はユーザーが登録しました（TMDB未登録）</span>
+        </div>
+      )}
+
       <div style={s.heroRow}>
         {detail.poster_path ? (
           <img
@@ -1160,7 +1215,14 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           }}>🎬</div>
         )}
         <div style={s.heroInfo}>
-          <h1 style={s.title}>{title}</h1>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+            <h1 style={{ ...s.title, flex: 1 }}>{title}</h1>
+            <button
+              onClick={() => setEditProposal({ fieldName: 'title', fieldLabel: 'タイトル', currentValue: title })}
+              style={s.pencilBtn}
+              title="タイトルの修正を提案"
+            >✏️</button>
+          </div>
           {originalTitle && originalTitle !== title && (
             <div style={s.originalTitle}>{originalTitle}</div>
           )}
@@ -1759,7 +1821,14 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       {/* ── 6. Overview (with expand/collapse) ── */}
       {detail.overview && (
         <div style={s.section}>
-          <h3 style={s.sectionTitle}>あらすじ</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h3 style={s.sectionTitle}>あらすじ</h3>
+            <button
+              onClick={() => setEditProposal({ fieldName: 'overview', fieldLabel: 'あらすじ', currentValue: detail.overview })}
+              style={s.pencilBtn}
+              title="あらすじの修正を提案"
+            >✏️</button>
+          </div>
           <div style={{ position: 'relative' }}>
             <p style={{
               ...s.overview,
@@ -2274,6 +2343,21 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           }}
           userId={userId}
           onClose={() => setShareCardType(null)}
+        />
+      )}
+
+      {/* 修正提案モーダル */}
+      {editProposal && detail && (
+        <EditProposalModal
+          userId={userId}
+          movieId={detail.id}
+          fieldName={editProposal.fieldName}
+          fieldLabel={editProposal.fieldLabel}
+          currentValue={editProposal.currentValue}
+          onClose={() => setEditProposal(null)}
+          onSubmitted={() => {
+            showToast('提案が送信されました')
+          }}
         />
       )}
     </div>
