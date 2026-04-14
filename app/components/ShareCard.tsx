@@ -165,7 +165,7 @@ async function drawMarkCard(
   ctx.font = '28px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#4fc3f7'; ctx.textAlign = 'center'
   ctx.fillText('#映画レビュー  #Filmo  #Mark', W / 2, H - 64)
   ctx.font = '20px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#444'
-  ctx.fillText('filmo.app', W / 2, H - 30)
+  ctx.fillText('filmo.me', W / 2, H - 30)
 }
 
 // ── Clip! Expectation Card ─────────────────────────────────────────────────
@@ -269,7 +269,7 @@ async function drawClipCard(
   ctx.font = '28px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#4fc3f7'; ctx.textAlign = 'center'
   ctx.fillText('#観たい映画  #Filmo  #Clip', W / 2, H - 64)
   ctx.font = '20px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#444'
-  ctx.fillText('filmo.app', W / 2, H - 30)
+  ctx.fillText('filmo.me', W / 2, H - 30)
 }
 
 // ── Level Up Card ──────────────────────────────────────────────────────────
@@ -362,7 +362,7 @@ function drawLevelUpCard(
   ctx.font = '30px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#4fc3f7'
   ctx.fillText('#映画好き  #Filmo  #レベルアップ', W / 2, H - 78)
   ctx.font = '22px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#444'
-  ctx.fillText('filmo.app', W / 2, H - 38)
+  ctx.fillText('filmo.me', W / 2, H - 38)
 }
 
 // ── Share text builders ────────────────────────────────────────────────────
