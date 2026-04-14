@@ -120,7 +120,7 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
         <SettingRow label="新作公開通知" desc="Fan!登録した人物の新作">
           <ToggleSwitch checked={notifySettings.notify_new_release} onChange={v => updateNotify('notify_new_release', v)} />
         </SettingRow>
-        <SettingRow label="配信開始通知" desc="Clip!作品の配信開始">
+        <SettingRow label="配信開始通知" desc="Watchlist作品の配信開始">
           <ToggleSwitch checked={notifySettings.notify_streaming} onChange={v => updateNotify('notify_streaming', v)} />
         </SettingRow>
         <SettingRow label="フォロー通知" desc="新しいフォロワー">
