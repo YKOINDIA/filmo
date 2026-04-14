@@ -206,6 +206,10 @@ button, a, input, select, textarea {
 }
 .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Letterboxd-style section divider */
 .section-divider {
   border: none;
