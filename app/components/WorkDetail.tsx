@@ -278,6 +278,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       const title = data.title || data.name || ''
       const releaseDate = data.release_date || data.first_air_date || null
       await supabase.from('movies').upsert({
+        id: data.id,
         tmdb_id: data.id,
         title,
         original_title: data.original_title || data.original_name || title,
