@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './lib/supabase'
 import { checkLoginStreak } from './lib/points'
+import { useLocale } from './lib/i18n'
 import Dashboard from './components/Dashboard'
 import Search from './components/Search'
 import WorkDetail from './components/WorkDetail'
@@ -36,6 +37,7 @@ interface User {
 }
 
 export default function Page() {
+  const { t, tmdbLang } = useLocale()
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<unknown>(null)
   const [loading, setLoading] = useState(true)
@@ -159,7 +161,7 @@ export default function Page() {
         if (data.user) await loadUserProfile(data.user.id)
       }
     } catch (e: unknown) {
-      setAuthError(e instanceof Error ? e.message : 'エラーが発生しました')
+      setAuthError(e instanceof Error ? e.message : t('common.error'))
     }
     setAuthLoading(false)
   }
@@ -195,7 +197,7 @@ export default function Page() {
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 16 }}>🎬</div>
           <div style={{ color: 'var(--fm-accent)', fontSize: 24, fontWeight: 700 }}>Filmo</div>
-          <div style={{ color: 'var(--fm-text-sub)', marginTop: 8 }}>読み込み中...</div>
+          <div style={{ color: 'var(--fm-text-sub)', marginTop: 8 }}>{t('common.loading')}</div>
         </div>
       </div>
     )
@@ -207,8 +209,8 @@ export default function Page() {
         <div style={{ width: '100%', maxWidth: 400 }}>
           <div style={{ textAlign: 'center', marginBottom: 40 }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: 3, color: 'var(--fm-text)', textTransform: 'uppercase', marginBottom: 8 }}>Filmo</h1>
-            <p style={{ color: 'var(--fm-text-sub)', marginTop: 4, fontSize: 14 }}>Track films you've watched. Save those you want to see.</p>
-            <p style={{ color: 'var(--fm-text-muted)', marginTop: 2, fontSize: 13 }}>Tell your friends what's good.</p>
+            <p style={{ color: 'var(--fm-text-sub)', marginTop: 4, fontSize: 14 }}>{t('auth.tagline')}</p>
+            <p style={{ color: 'var(--fm-text-muted)', marginTop: 2, fontSize: 13 }}>{t('auth.taglineSub')}</p>
           </div>
 
           <div style={{ display: 'flex', marginBottom: 24, background: 'var(--fm-bg-card)', borderRadius: 12, padding: 4 }}>
@@ -220,7 +222,7 @@ export default function Page() {
                   color: authMode === m ? '#fff' : 'var(--fm-text-sub)',
                   fontWeight: 600, fontSize: 14, transition: 'all 0.2s',
                 }}>
-                {m === 'login' ? 'ログイン' : '新規登録'}
+                {m === 'login' ? t('auth.login') : t('auth.signup')}
               </button>
             ))}
           </div>
@@ -228,18 +230,18 @@ export default function Page() {
           <div style={{ background: 'var(--fm-bg-card)', borderRadius: 16, padding: 24, border: '1px solid var(--fm-border)' }}>
             {authMode === 'signup' && (
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6 }}>ニックネーム</label>
-                <input value={authName} onChange={e => setAuthName(e.target.value)} placeholder="シネマ太郎"
+                <label style={{ display: 'block', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6 }}>{t('auth.nickname')}</label>
+                <input value={authName} onChange={e => setAuthName(e.target.value)} placeholder={t('auth.nicknamePlaceholder')}
                   style={{ width: '100%', padding: '12px 16px', borderRadius: 10, border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 15, boxSizing: 'border-box' }} />
               </div>
             )}
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6 }}>メールアドレス</label>
+              <label style={{ display: 'block', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6 }}>{t('auth.email')}</label>
               <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="your@email.com"
                 style={{ width: '100%', padding: '12px 16px', borderRadius: 10, border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 15, boxSizing: 'border-box' }} />
             </div>
             <div style={{ marginBottom: 20 }}>
-              <label style={{ display: 'block', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6 }}>パスワード</label>
+              <label style={{ display: 'block', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6 }}>{t('auth.password')}</label>
               <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="••••••••"
                 onKeyDown={e => e.key === 'Enter' && handleAuth()}
                 style={{ width: '100%', padding: '12px 16px', borderRadius: 10, border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 15, boxSizing: 'border-box' }} />
@@ -254,7 +256,7 @@ export default function Page() {
                 color: '#fff', fontWeight: 700, fontSize: 15, opacity: authLoading ? 0.7 : 1,
                 transition: 'opacity 0.2s',
               }}>
-              {authLoading ? '処理中...' : authMode === 'login' ? 'ログイン' : 'アカウント作成'}
+              {authLoading ? t('auth.processing') : authMode === 'login' ? t('auth.login') : t('auth.createAccount')}
             </button>
           </div>
 
@@ -330,7 +332,7 @@ export default function Page() {
         }}>
           <span style={{ fontSize: 20 }}>🔥</span>
           <span style={{ fontSize: 14 }}>
-            <strong>{user.login_streak}日連続ログイン!</strong> +{streakBonus}pt獲得
+            <strong>{t('streak.bonus', { days: String(user.login_streak) })}</strong> {t('streak.points', { points: String(streakBonus) })}
           </span>
           <button onClick={() => setStreakBonus(0)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--fm-text-sub)', cursor: 'pointer', fontSize: 16 }}>×</button>
         </div>
@@ -363,12 +365,12 @@ export default function Page() {
         display: 'flex', justifyContent: 'space-around', padding: '6px 0 max(6px, env(safe-area-inset-bottom))',
       }}>
         {([
-          { key: 'home', label: 'Home', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
-          { key: 'search', label: 'Search', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> },
-          { key: 'feed', label: 'Feed', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> },
-          { key: 'lists', label: 'Lists', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> },
-          { key: 'profile', label: 'Profile', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4-4v2"/><circle cx="12" cy="7" r="4"/></svg> },
-        ] as { key: Tab; label: string; icon: React.ReactNode }[]).map(item => (
+          { key: 'home', labelKey: 'nav.home', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
+          { key: 'search', labelKey: 'nav.search', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> },
+          { key: 'feed', labelKey: 'nav.feed', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> },
+          { key: 'lists', labelKey: 'nav.lists', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> },
+          { key: 'profile', labelKey: 'nav.profile', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4-4v2"/><circle cx="12" cy="7" r="4"/></svg> },
+        ] as { key: Tab; labelKey: string; icon: React.ReactNode }[]).map(item => (
           <button key={item.key} onClick={() => setTab(item.key)}
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
@@ -378,7 +380,7 @@ export default function Page() {
               letterSpacing: 0.3,
             }}>
             {item.icon}
-            {item.label}
+            {t(item.labelKey)}
           </button>
         ))}
       </nav>

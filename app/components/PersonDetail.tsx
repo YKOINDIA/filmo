@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { useTmdbFetch } from '../lib/i18n'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -47,6 +48,7 @@ type FilterTab = 'all' | 'movie' | 'tv'
 type RoleTab = 'cast' | 'crew'
 
 export default function PersonDetail({ personId, userId, onClose, onOpenWork }: PersonDetailProps) {
+  const tmdbFetch = useTmdbFetch()
   const [person, setPerson] = useState<PersonData | null>(null)
   const [loading, setLoading] = useState(true)
   const [filterTab, setFilterTab] = useState<FilterTab>('all')
@@ -61,7 +63,7 @@ export default function PersonDetail({ personId, userId, onClose, onOpenWork }: 
 
     const fetchPerson = async () => {
       try {
-        const res = await fetch(`/api/tmdb?action=person&id=${personId}`)
+        const res = await tmdbFetch(`/api/tmdb?action=person&id=${personId}`)
         const data = await res.json()
         setPerson(data)
 

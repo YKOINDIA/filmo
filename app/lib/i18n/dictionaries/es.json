@@ -1,0 +1,130 @@
+{
+  "common": {
+    "loading": "Cargando...",
+    "error": "Ocurrió un error",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "close": "Cerrar",
+    "confirm": "Confirmar",
+    "search": "Buscar",
+    "more": "Ver más",
+    "back": "Volver",
+    "retry": "Reintentar",
+    "noResults": "No se encontraron resultados",
+    "showMore": "Ver más",
+    "showLess": "Ver menos"
+  },
+  "auth": {
+    "login": "Iniciar sesión",
+    "signup": "Registrarse",
+    "logout": "Cerrar sesión",
+    "nickname": "Apodo",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "nicknamePlaceholder": "CineFan123",
+    "processing": "Procesando...",
+    "createAccount": "Crear cuenta",
+    "tagline": "Registra las películas que has visto. Guarda las que quieres ver.",
+    "taglineSub": "Comparte buenas películas con tus amigos."
+  },
+  "nav": {
+    "home": "Inicio",
+    "search": "Buscar",
+    "feed": "Feed",
+    "lists": "Listas",
+    "profile": "Perfil"
+  },
+  "streak": {
+    "bonus": "¡{days} días seguidos!",
+    "points": "+{points}pt ganados"
+  },
+  "review": {
+    "title": "Reseñas",
+    "write": "Escribir reseña",
+    "edit": "Editar reseña",
+    "placeholder": "Comparte tu opinión sobre esta obra...",
+    "spoiler": "Contiene spoilers",
+    "spoilerWarning": "Esta reseña contiene spoilers",
+    "showSpoiler": "Mostrar",
+    "hideSpoiler": "Ocultar spoilers",
+    "likes": "Me gusta",
+    "newest": "Más recientes",
+    "sortByLikes": "Más gustados",
+    "scoreHigh": "Mayor puntuación",
+    "scoreLow": "Menor puntuación",
+    "noReviews": "Aún no hay reseñas",
+    "translate": "Traducir",
+    "translating": "Traduciendo...",
+    "showOriginal": "Ver original",
+    "translatedFrom": "Traducido de {lang}"
+  },
+  "work": {
+    "watchStatus": {
+      "watched": "Visto",
+      "watching": "Viendo",
+      "want_to_watch": "Quiero ver",
+      "dropped": "Abandonado",
+      "on_hold": "En pausa"
+    },
+    "rating": "Puntuación",
+    "overview": "Sinopsis",
+    "cast": "Reparto",
+    "crew": "Equipo",
+    "similar": "Títulos similares",
+    "recommendations": "Recomendaciones",
+    "streaming": "Dónde ver",
+    "watchMethod": "Método de visualización",
+    "memo": "Notas",
+    "memoPlaceholder": "Notas personales..."
+  },
+  "search": {
+    "placeholder": "Buscar películas, series, personas...",
+    "movies": "Películas",
+    "tv": "Series",
+    "anime": "Anime",
+    "people": "Personas",
+    "userWorks": "Obras de usuarios",
+    "trending": "Tendencias",
+    "discover": "Descubrir"
+  },
+  "profile": {
+    "stats": "Estadísticas",
+    "achievements": "Logros",
+    "settings": "Ajustes",
+    "followers": "Seguidores",
+    "following": "Siguiendo",
+    "watchedCount": "Vistos",
+    "reviewCount": "Reseñas"
+  },
+  "lists": {
+    "create": "Crear lista",
+    "myLists": "Mis listas",
+    "public": "Pública",
+    "private": "Privada",
+    "ranked": "Clasificación",
+    "addToList": "Añadir a lista",
+    "share": "Compartir"
+  },
+  "settings": {
+    "language": "Idioma",
+    "theme": "Tema",
+    "dark": "Oscuro",
+    "light": "Claro",
+    "notifications": "Notificaciones",
+    "autoTranslate": "Traducir reseñas automáticamente",
+    "autoTranslateDesc": "Traduce automáticamente las reseñas en otros idiomas"
+  },
+  "feed": {
+    "activity": "Actividad",
+    "watched": "{name} vio {title}",
+    "reviewed": "{name} reseñó {title}",
+    "liked": "{name} dio me gusta a una reseña",
+    "noActivity": "Aún no hay actividad"
+  },
+  "translation": {
+    "poweredBy": "Traducido por {provider}",
+    "autoDetected": "Idioma detectado automáticamente"
+  }
+}

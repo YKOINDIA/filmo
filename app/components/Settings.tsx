@@ -4,9 +4,12 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../lib/useTheme'
 import { showToast } from '../lib/toast'
+import { useLocale } from '../lib/i18n'
+import LanguageSelector from './LanguageSelector'
 
 export default function Settings({ userId, onBack }: { userId: string; onBack: () => void }) {
   const { theme, toggle } = useTheme()
+  const { t } = useLocale()
   const [notifySettings, setNotifySettings] = useState({
     notify_new_release: true,
     notify_streaming: true,
@@ -104,18 +107,23 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
       {/* ヘッダー */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--fm-text)', cursor: 'pointer', fontSize: 20 }}>←</button>
-        <h2 style={{ fontSize: 20, fontWeight: 700 }}>設定</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 700 }}>{t('profile.settings')}</h2>
+      </div>
+
+      {/* 言語 */}
+      <div style={{ background: 'var(--fm-bg-card)', borderRadius: 12, padding: 16, border: '1px solid var(--fm-border)', marginBottom: 16 }}>
+        <LanguageSelector />
       </div>
 
       {/* テーマ */}
       <div style={{ background: 'var(--fm-bg-card)', borderRadius: 12, padding: '4px 16px', border: '1px solid var(--fm-border)', marginBottom: 16 }}>
-        <SettingRow label="ダークモード" desc="画面の配色を切り替え">
+        <SettingRow label={t('settings.theme')} desc={theme === 'dark' ? t('settings.dark') : t('settings.light')}>
           <ToggleSwitch checked={theme === 'dark'} onChange={toggle} />
         </SettingRow>
       </div>
 
       {/* 通知設定 */}
-      <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', fontWeight: 600, marginBottom: 8, marginLeft: 4 }}>通知設定</div>
+      <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', fontWeight: 600, marginBottom: 8, marginLeft: 4 }}>{t('settings.notifications')}</div>
       <div style={{ background: 'var(--fm-bg-card)', borderRadius: 12, padding: '4px 16px', border: '1px solid var(--fm-border)', marginBottom: 16 }}>
         <SettingRow label="新作公開通知" desc="Fan!登録した人物の新作">
           <ToggleSwitch checked={notifySettings.notify_new_release} onChange={v => updateNotify('notify_new_release', v)} />

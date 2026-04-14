@@ -12,13 +12,15 @@ import type { AnnictWorkNormalized } from '@/app/lib/annict'
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
   const action = searchParams.get('action')
+  // Accept language override from client (e.g. "en-US", "ko-KR")
+  const lang = searchParams.get('lang') || undefined
 
   try {
     switch (action) {
       case 'search': {
         const query = searchParams.get('query') || ''
         const page = searchParams.get('page') || '1'
-        const data = await tmdbFetch('/search/multi', { query, page, region: 'JP' })
+        const data = await tmdbFetch('/search/multi', { query, page, region: 'JP', ...(lang && { language: lang }) })
         return NextResponse.json(data)
       }
       case 'detail': {
@@ -30,32 +32,32 @@ export async function GET(request: NextRequest) {
           if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
           return NextResponse.json(data)
         }
-        const data = await getMovieDetailCached(id, type)
+        const data = await getMovieDetailCached(id, type, lang)
         return NextResponse.json(data)
       }
       case 'trending': {
         const mediaType = searchParams.get('media_type') || 'all'
-        const data = await tmdbFetch(`/trending/${mediaType}/week`)
+        const data = await tmdbFetch(`/trending/${mediaType}/week`, { ...(lang && { language: lang }) })
         return NextResponse.json(data)
       }
       case 'now_playing': {
         const page = searchParams.get('page') || '1'
-        const data = await tmdbFetch('/movie/now_playing', { region: 'JP', page })
+        const data = await tmdbFetch('/movie/now_playing', { region: 'JP', page, ...(lang && { language: lang }) })
         return NextResponse.json(data)
       }
       case 'upcoming': {
         const page = searchParams.get('page') || '1'
-        const data = await tmdbFetch('/movie/upcoming', { region: 'JP', page })
+        const data = await tmdbFetch('/movie/upcoming', { region: 'JP', page, ...(lang && { language: lang }) })
         return NextResponse.json(data)
       }
       case 'on_the_air': {
         const page = searchParams.get('page') || '1'
-        const data = await tmdbFetch('/tv/on_the_air', { page })
+        const data = await tmdbFetch('/tv/on_the_air', { page, ...(lang && { language: lang }) })
         return NextResponse.json(data)
       }
       case 'discover': {
         const type = searchParams.get('type') || 'movie'
-        const params: Record<string, string> = { watch_region: 'JP' }
+        const params: Record<string, string> = { watch_region: 'JP', ...(lang && { language: lang }) }
         for (const key of ['with_genres', 'sort_by', 'page', 'primary_release_date.gte', 'primary_release_date.lte', 'first_air_date.gte', 'first_air_date.lte', 'vote_count.gte', 'vote_count.lte', 'vote_average.gte', 'with_runtime.gte', 'with_runtime.lte', 'with_watch_providers', 'with_watch_monetization_types', 'with_origin_country', 'with_companies']) {
           const val = searchParams.get(key)
           if (val) params[key] = val
@@ -65,18 +67,18 @@ export async function GET(request: NextRequest) {
       }
       case 'person': {
         const id = searchParams.get('id')!
-        const data = await getPersonDetailCached(Number(id))
+        const data = await getPersonDetailCached(Number(id), lang)
         return NextResponse.json(data)
       }
       case 'genres': {
         const type = (searchParams.get('type') || 'movie') as 'movie' | 'tv'
-        const data = await getGenresCached(type)
+        const data = await getGenresCached(type, lang)
         return NextResponse.json(data)
       }
       case 'season': {
         const id = searchParams.get('id')!
         const season = searchParams.get('season_number') || '1'
-        const data = await tmdbFetch(`/tv/${id}/season/${season}`)
+        const data = await tmdbFetch(`/tv/${id}/season/${season}`, { ...(lang && { language: lang }) })
         return NextResponse.json(data)
       }
       case 'search_company': {
