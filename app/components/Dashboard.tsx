@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { buildTasteProfile, calculateGenreMatchScore, type TasteProfile } from '../lib/matchScore'
+import { useTmdbFetch } from '../lib/i18n'
 
 const TMDB_IMG_POSTER = 'https://image.tmdb.org/t/p/w342'
 const TMDB_IMG_BACKDROP = 'https://image.tmdb.org/t/p/w1280'
@@ -48,6 +49,7 @@ interface SectionLoadingState {
 }
 
 export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
+  const tmdbFetch = useTmdbFetch()
   const [trending, setTrending] = useState<MediaItem[]>([])
   const [nowPlaying, setNowPlaying] = useState<MediaItem[]>([])
   const [upcoming, setUpcoming] = useState<MediaItem[]>([])
@@ -65,7 +67,7 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
 
   const fetchTrending = useCallback(async () => {
     try {
-      const res = await fetch('/api/tmdb?action=trending')
+      const res = await tmdbFetch('/api/tmdb?action=trending')
       if (!res.ok) throw new Error('Failed to fetch trending')
       const data = await res.json()
       setTrending(data.results || [])
@@ -78,7 +80,7 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
 
   const fetchNowPlaying = useCallback(async () => {
     try {
-      const res = await fetch('/api/tmdb?action=now_playing')
+      const res = await tmdbFetch('/api/tmdb?action=now_playing')
       if (!res.ok) throw new Error('Failed to fetch now playing')
       const data = await res.json()
       setNowPlaying(data.results || [])
@@ -91,7 +93,7 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
 
   const fetchUpcoming = useCallback(async () => {
     try {
-      const res = await fetch('/api/tmdb?action=upcoming')
+      const res = await tmdbFetch('/api/tmdb?action=upcoming')
       if (!res.ok) throw new Error('Failed to fetch upcoming')
       const data = await res.json()
       setUpcoming(data.results || [])
@@ -104,7 +106,7 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
 
   const fetchTvDramas = useCallback(async () => {
     try {
-      const res = await fetch('/api/tmdb?action=discover&type=tv')
+      const res = await tmdbFetch('/api/tmdb?action=discover&type=tv')
       if (!res.ok) throw new Error('Failed to fetch TV dramas')
       const data = await res.json()
       setTvDramas(data.results || [])
@@ -117,7 +119,7 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
 
   const fetchAnime = useCallback(async () => {
     try {
-      const res = await fetch('/api/tmdb?action=discover&type=tv&with_genres=16')
+      const res = await tmdbFetch('/api/tmdb?action=discover&type=tv&with_genres=16')
       if (!res.ok) throw new Error('Failed to fetch anime')
       const data = await res.json()
       setAnime(data.results || [])

@@ -1,0 +1,130 @@
+{
+  "common": {
+    "loading": "로딩 중...",
+    "error": "오류가 발생했습니다",
+    "save": "저장",
+    "cancel": "취소",
+    "delete": "삭제",
+    "edit": "편집",
+    "close": "닫기",
+    "confirm": "확인",
+    "search": "검색",
+    "more": "더 보기",
+    "back": "뒤로",
+    "retry": "재시도",
+    "noResults": "결과가 없습니다",
+    "showMore": "더 보기",
+    "showLess": "접기"
+  },
+  "auth": {
+    "login": "로그인",
+    "signup": "회원가입",
+    "logout": "로그아웃",
+    "nickname": "닉네임",
+    "email": "이메일",
+    "password": "비밀번호",
+    "nicknamePlaceholder": "영화팬123",
+    "processing": "처리 중...",
+    "createAccount": "계정 만들기",
+    "tagline": "본 영화를 기록하고, 보고 싶은 영화를 저장하세요.",
+    "taglineSub": "친구들에게 좋은 작품을 알려주세요."
+  },
+  "nav": {
+    "home": "홈",
+    "search": "검색",
+    "feed": "피드",
+    "lists": "리스트",
+    "profile": "프로필"
+  },
+  "streak": {
+    "bonus": "{days}일 연속 로그인!",
+    "points": "+{points}pt 획득"
+  },
+  "review": {
+    "title": "리뷰",
+    "write": "리뷰 작성",
+    "edit": "리뷰 수정",
+    "placeholder": "이 작품에 대한 감상을 적어보세요...",
+    "spoiler": "스포일러 포함",
+    "spoilerWarning": "스포일러가 포함된 리뷰입니다",
+    "showSpoiler": "보기",
+    "hideSpoiler": "스포일러 숨기기",
+    "likes": "좋아요",
+    "newest": "최신순",
+    "sortByLikes": "좋아요순",
+    "scoreHigh": "높은 평점순",
+    "scoreLow": "낮은 평점순",
+    "noReviews": "아직 리뷰가 없습니다",
+    "translate": "번역하기",
+    "translating": "번역 중...",
+    "showOriginal": "원문 보기",
+    "translatedFrom": "{lang}에서 번역됨"
+  },
+  "work": {
+    "watchStatus": {
+      "watched": "시청 완료",
+      "watching": "시청 중",
+      "want_to_watch": "보고 싶어요",
+      "dropped": "중단",
+      "on_hold": "보류"
+    },
+    "rating": "평점",
+    "overview": "줄거리",
+    "cast": "출연진",
+    "crew": "제작진",
+    "similar": "비슷한 작품",
+    "recommendations": "추천",
+    "streaming": "스트리밍 정보",
+    "watchMethod": "시청 방법",
+    "memo": "메모",
+    "memoPlaceholder": "개인 메모..."
+  },
+  "search": {
+    "placeholder": "영화, 드라마, 인물 검색...",
+    "movies": "영화",
+    "tv": "드라마",
+    "anime": "애니메이션",
+    "people": "인물",
+    "userWorks": "사용자 작품",
+    "trending": "트렌드",
+    "discover": "탐색"
+  },
+  "profile": {
+    "stats": "통계",
+    "achievements": "업적",
+    "settings": "설정",
+    "followers": "팔로워",
+    "following": "팔로잉",
+    "watchedCount": "시청 완료",
+    "reviewCount": "리뷰"
+  },
+  "lists": {
+    "create": "리스트 만들기",
+    "myLists": "내 리스트",
+    "public": "공개",
+    "private": "비공개",
+    "ranked": "랭킹",
+    "addToList": "리스트에 추가",
+    "share": "공유"
+  },
+  "settings": {
+    "language": "언어",
+    "theme": "테마",
+    "dark": "다크",
+    "light": "라이트",
+    "notifications": "알림",
+    "autoTranslate": "리뷰 자동 번역",
+    "autoTranslateDesc": "다른 언어의 리뷰를 자동으로 번역합니다"
+  },
+  "feed": {
+    "activity": "활동",
+    "watched": "{name}님이 {title}을(를) 시청했습니다",
+    "reviewed": "{name}님이 {title}에 리뷰를 남겼습니다",
+    "liked": "{name}님이 리뷰에 좋아요를 눌렀습니다",
+    "noActivity": "아직 활동이 없습니다"
+  },
+  "translation": {
+    "poweredBy": "번역: {provider}",
+    "autoDetected": "언어가 자동 감지되었습니다"
+  }
+}

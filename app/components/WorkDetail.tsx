@@ -9,6 +9,8 @@ import VoiceReviewRecorder from './VoiceReviewRecorder'
 import VoiceReviewPlayer from './VoiceReviewPlayer'
 import ShareCard from './ShareCard'
 import EditProposalModal from './EditProposalModal'
+import TranslateButton from './TranslateButton'
+import { useLocale } from '../lib/i18n'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -198,6 +200,7 @@ function LoadingSpinner() {
 // ── Main Component ─────────────────────────────────────────────────────────
 
 export default function WorkDetail({ workId, workType, userId, onClose, onOpenWork, onOpenPerson }: WorkDetailProps) {
+  const { t, tmdbLang } = useLocale()
   // State: TMDB data
   const [detail, setDetail] = useState<TMDBDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -272,7 +275,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
       // ユーザー登録作品（負のID）はローカルDBから取得
       if (workId < 0) {
-        const res = await fetch(`/api/tmdb?action=detail&id=${workId}&type=${workType}`)
+        const res = await fetch(`/api/tmdb?action=detail&id=${workId}&type=${workType}&lang=${tmdbLang}`)
         if (!res.ok) throw new Error(`API error: ${res.status}`)
         const row = await res.json()
         // DB行をTMDB風のオブジェクトに変換
@@ -309,7 +312,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         return
       }
 
-      const res = await fetch(`/api/tmdb?action=detail&id=${workId}&type=${workType}`)
+      const res = await fetch(`/api/tmdb?action=detail&id=${workId}&type=${workType}&lang=${tmdbLang}`)
       if (!res.ok) throw new Error(`API error: ${res.status}`)
       const data: TMDBDetail = await res.json()
       setDetail(data)
@@ -1633,16 +1636,20 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                         display: 'inline-block', padding: '2px 8px', borderRadius: 4,
                         background: 'rgba(255,107,107,0.15)', color: 'var(--fm-danger)',
                         fontSize: 11, fontWeight: 600, marginBottom: 6,
-                      }}>⚠ ネタバレあり</div>
+                      }}>⚠ {t('review.spoiler')}</div>
                       <div className="spoiler-text revealed"
                         style={{ padding: '4px 0', fontSize: 14, lineHeight: 1.7 }}>
                         {review.body}
                       </div>
+                      {review.body && <TranslateButton reviewId={review.id} text={review.body} />}
                     </>
                   ) : (
-                    <p style={{ fontSize: 14, color: 'var(--fm-text)', lineHeight: 1.7, margin: 0 }}>
-                      {review.body}
-                    </p>
+                    <>
+                      <p style={{ fontSize: 14, color: 'var(--fm-text)', lineHeight: 1.7, margin: 0 }}>
+                        {review.body}
+                      </p>
+                      {review.body && <TranslateButton reviewId={review.id} text={review.body} />}
+                    </>
                   )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
                     <button style={s.likeBtn(review.liked_by_me)} onClick={() => handleLike(review)}>

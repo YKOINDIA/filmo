@@ -28,6 +28,7 @@ function isWithinHours(cachedAt: string, hours: number): boolean {
 async function tmdbFetchRaw(path: string, params: Record<string, string> = {}) {
   const url = new URL(`${TMDB_BASE}${path}`)
   url.searchParams.set('api_key', TMDB_API_KEY)
+  // Allow language override; fallback to ja-JP
   url.searchParams.set('language', params.language || 'ja-JP')
   for (const [k, v] of Object.entries(params)) {
     if (k !== 'language') url.searchParams.set(k, v)
@@ -39,7 +40,15 @@ async function tmdbFetchRaw(path: string, params: Record<string, string> = {}) {
 
 // --- 映画・TV詳細キャッシュ ---
 
-export async function getMovieDetailCached(id: number, type: 'movie' | 'tv' = 'movie') {
+export async function getMovieDetailCached(id: number, type: 'movie' | 'tv' = 'movie', language?: string) {
+  // Non-default language: fetch directly from TMDB (no DB cache for translated data)
+  if (language && language !== 'ja-JP') {
+    return tmdbFetchRaw(`/${type}/${id}`, {
+      language,
+      append_to_response: 'credits,similar,watch/providers,videos,recommendations',
+    })
+  }
+
   const supabase = getSupabaseAdmin()
 
   // 1. キャッシュ確認
@@ -105,7 +114,15 @@ export async function getUserWorkDetail(movieId: number) {
 
 // --- 人物詳細キャッシュ ---
 
-export async function getPersonDetailCached(id: number) {
+export async function getPersonDetailCached(id: number, language?: string) {
+  // Non-default language: fetch directly from TMDB
+  if (language && language !== 'ja-JP') {
+    return tmdbFetchRaw(`/person/${id}`, {
+      language,
+      append_to_response: 'combined_credits',
+    })
+  }
+
   const supabase = getSupabaseAdmin()
 
   // 1. キャッシュ確認（actors → directors の順で探す）
@@ -145,8 +162,9 @@ export async function getPersonDetailCached(id: number) {
 
 const genresMemoryCache: Record<string, { data: unknown; fetchedAt: number }> = {}
 
-export async function getGenresCached(type: 'movie' | 'tv' = 'movie') {
-  const cacheKey = `genres_${type}`
+export async function getGenresCached(type: 'movie' | 'tv' = 'movie', language?: string) {
+  const lang = language || 'ja-JP'
+  const cacheKey = `genres_${type}_${lang}`
 
   // インメモリキャッシュ確認（最速）
   const mem = genresMemoryCache[cacheKey]
@@ -155,7 +173,7 @@ export async function getGenresCached(type: 'movie' | 'tv' = 'movie') {
   }
 
   // TMDBから取得（ジャンルは軽量なのでDB不要、メモリキャッシュのみ）
-  const fresh = await tmdbFetchRaw(`/genre/${type}/list`)
+  const fresh = await tmdbFetchRaw(`/genre/${type}/list`, { language: lang })
   genresMemoryCache[cacheKey] = { data: fresh, fetchedAt: Date.now() }
   return fresh
 }

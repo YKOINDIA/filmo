@@ -1,0 +1,130 @@
+{
+  "common": {
+    "loading": "加载中...",
+    "error": "发生了错误",
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "edit": "编辑",
+    "close": "关闭",
+    "confirm": "确认",
+    "search": "搜索",
+    "more": "查看更多",
+    "back": "返回",
+    "retry": "重试",
+    "noResults": "没有找到结果",
+    "showMore": "展开",
+    "showLess": "收起"
+  },
+  "auth": {
+    "login": "登录",
+    "signup": "注册",
+    "logout": "退出",
+    "nickname": "昵称",
+    "email": "邮箱",
+    "password": "密码",
+    "nicknamePlaceholder": "电影迷123",
+    "processing": "处理中...",
+    "createAccount": "创建账号",
+    "tagline": "记录看过的电影，收藏想看的电影。",
+    "taglineSub": "告诉朋友哪些值得看。"
+  },
+  "nav": {
+    "home": "首页",
+    "search": "搜索",
+    "feed": "动态",
+    "lists": "片单",
+    "profile": "我的"
+  },
+  "streak": {
+    "bonus": "连续登录{days}天！",
+    "points": "+{points}pt 获得"
+  },
+  "review": {
+    "title": "评论",
+    "write": "写评论",
+    "edit": "编辑评论",
+    "placeholder": "分享你对这部作品的看法...",
+    "spoiler": "含剧透",
+    "spoilerWarning": "此评论包含剧透",
+    "showSpoiler": "显示",
+    "hideSpoiler": "隐藏剧透",
+    "likes": "点赞",
+    "newest": "最新",
+    "sortByLikes": "最多点赞",
+    "scoreHigh": "最高评分",
+    "scoreLow": "最低评分",
+    "noReviews": "暂无评论",
+    "translate": "翻译",
+    "translating": "翻译中...",
+    "showOriginal": "显示原文",
+    "translatedFrom": "由{lang}翻译"
+  },
+  "work": {
+    "watchStatus": {
+      "watched": "已看",
+      "watching": "在看",
+      "want_to_watch": "想看",
+      "dropped": "弃看",
+      "on_hold": "搁置"
+    },
+    "rating": "评分",
+    "overview": "简介",
+    "cast": "演员",
+    "crew": "主创",
+    "similar": "相似作品",
+    "recommendations": "推荐",
+    "streaming": "在线观看",
+    "watchMethod": "观看方式",
+    "memo": "备注",
+    "memoPlaceholder": "个人备注..."
+  },
+  "search": {
+    "placeholder": "搜索电影、电视剧、人物...",
+    "movies": "电影",
+    "tv": "电视剧",
+    "anime": "动漫",
+    "people": "人物",
+    "userWorks": "用户作品",
+    "trending": "热门",
+    "discover": "发现"
+  },
+  "profile": {
+    "stats": "统计",
+    "achievements": "成就",
+    "settings": "设置",
+    "followers": "粉丝",
+    "following": "关注",
+    "watchedCount": "已看",
+    "reviewCount": "评论"
+  },
+  "lists": {
+    "create": "创建片单",
+    "myLists": "我的片单",
+    "public": "公开",
+    "private": "私密",
+    "ranked": "排名",
+    "addToList": "加入片单",
+    "share": "分享"
+  },
+  "settings": {
+    "language": "语言",
+    "theme": "主题",
+    "dark": "深色",
+    "light": "浅色",
+    "notifications": "通知",
+    "autoTranslate": "自动翻译评论",
+    "autoTranslateDesc": "自动翻译其他语言的评论"
+  },
+  "feed": {
+    "activity": "动态",
+    "watched": "{name}看了{title}",
+    "reviewed": "{name}评论了{title}",
+    "liked": "{name}点赞了一条评论",
+    "noActivity": "暂无动态"
+  },
+  "translation": {
+    "poweredBy": "翻译：{provider}",
+    "autoDetected": "语言已自动检测"
+  }
+}

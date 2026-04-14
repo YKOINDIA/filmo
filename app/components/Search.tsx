@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import WorkRegisterModal from './WorkRegisterModal'
+import { useTmdbFetch, useLocale } from '../lib/i18n'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -590,6 +591,8 @@ export default function Search({ userId, onOpenWork }: {
   userId: string
   onOpenWork: (id: number, type?: 'movie' | 'tv') => void
 }) {
+  const tmdbFetch = useTmdbFetch()
+  const { t } = useLocale()
   const [activeTab, setActiveTab] = useState<TabKey>('movie')
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -619,7 +622,7 @@ export default function Search({ userId, onOpenWork }: {
   const fetchSection = useCallback(async (key: string, title: string, url: string, mediaType?: 'movie' | 'tv') => {
     setSections(prev => ({ ...prev, [key]: { title, items: prev[key]?.items || [], loading: true } }))
     try {
-      const res = await fetch(url)
+      const res = await tmdbFetch(url)
       const data = await res.json()
       const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
         ...item,
@@ -689,11 +692,11 @@ export default function Search({ userId, onOpenWork }: {
 
     // TMDB検索 + アニメタブならAnnict検索も並列実行
     const fetches: Promise<unknown>[] = [
-      fetch(`/api/tmdb?action=search&query=${encodeURIComponent(debouncedQuery)}&page=1`).then(r => r.json()),
+      tmdbFetch(`/api/tmdb?action=search&query=${encodeURIComponent(debouncedQuery)}&page=1`).then(r => r.json()),
     ]
     if (activeTab === 'anime') {
       fetches.push(
-        fetch(`/api/tmdb?action=annict_search&query=${encodeURIComponent(debouncedQuery)}`).then(r => r.json()).catch(() => ({ results: [] }))
+        tmdbFetch(`/api/tmdb?action=annict_search&query=${encodeURIComponent(debouncedQuery)}`).then(r => r.json()).catch(() => ({ results: [] }))
       )
     }
 
@@ -723,7 +726,7 @@ export default function Search({ userId, onOpenWork }: {
     const nextPage = searchPage + 1
     setSearchLoading(true)
     try {
-      const res = await fetch(`/api/tmdb?action=search&query=${encodeURIComponent(debouncedQuery)}&page=${nextPage}`)
+      const res = await tmdbFetch(`/api/tmdb?action=search&query=${encodeURIComponent(debouncedQuery)}&page=${nextPage}`)
       const data = await res.json()
       setSearchResults(prev => [...prev, ...(data.results || [])])
       setSearchPage(nextPage)
@@ -738,7 +741,7 @@ export default function Search({ userId, onOpenWork }: {
     const extraGenre = activeTab === 'anime' ? `16,${genreId}` : String(genreId)
     setBrowse({ mode: 'genre', label: genreName, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
     try {
-      const res = await fetch(`/api/tmdb?action=discover&type=${mediaType}&with_genres=${extraGenre}&page=${page}&sort_by=popularity.desc`)
+      const res = await tmdbFetch(`/api/tmdb?action=discover&type=${mediaType}&with_genres=${extraGenre}&page=${page}&sort_by=popularity.desc`)
       const data = await res.json()
       const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
         ...item,
@@ -764,7 +767,7 @@ export default function Search({ userId, onOpenWork }: {
     const dateKey = mediaType === 'movie' ? 'primary_release_date' : 'first_air_date'
     setBrowse({ mode: 'year', label, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
     try {
-      const res = await fetch(`/api/tmdb?action=discover&type=${mediaType}&${dateKey}.gte=${gte}&${dateKey}.lte=${lte}&page=${page}&sort_by=popularity.desc`)
+      const res = await tmdbFetch(`/api/tmdb?action=discover&type=${mediaType}&${dateKey}.gte=${gte}&${dateKey}.lte=${lte}&page=${page}&sort_by=popularity.desc`)
       const data = await res.json()
       const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
         ...item,
@@ -786,7 +789,7 @@ export default function Search({ userId, onOpenWork }: {
     const mediaType = activeTab === 'movie' ? 'movie' : 'tv'
     setBrowse({ mode: 'provider', label: providerName, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
     try {
-      const res = await fetch(`/api/tmdb?action=discover&type=${mediaType}&with_watch_providers=${providerId}&with_watch_monetization_types=flatrate&page=${page}&sort_by=popularity.desc`)
+      const res = await tmdbFetch(`/api/tmdb?action=discover&type=${mediaType}&with_watch_providers=${providerId}&with_watch_monetization_types=flatrate&page=${page}&sort_by=popularity.desc`)
       const data = await res.json()
       const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
         ...item,
@@ -812,7 +815,7 @@ export default function Search({ userId, onOpenWork }: {
       if (award.voteAvgMin) url += `&vote_average.gte=${award.voteAvgMin}`
       if (award.voteMax) url += `&vote_count.lte=${award.voteMax}`
       if (award.country) url += `&with_origin_country=${award.country}`
-      const res = await fetch(url)
+      const res = await tmdbFetch(url)
       const data = await res.json()
       const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
         ...item,
@@ -834,7 +837,7 @@ export default function Search({ userId, onOpenWork }: {
     const mediaType = activeTab === 'movie' ? 'movie' : 'tv'
     setBrowse({ mode: 'country', label: countryName, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
     try {
-      const res = await fetch(`/api/tmdb?action=discover&type=${mediaType}&with_origin_country=${countryCode}&page=${page}&sort_by=popularity.desc`)
+      const res = await tmdbFetch(`/api/tmdb?action=discover&type=${mediaType}&with_origin_country=${countryCode}&page=${page}&sort_by=popularity.desc`)
       const data = await res.json()
       const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
         ...item,
@@ -859,7 +862,7 @@ export default function Search({ userId, onOpenWork }: {
       let companyId = COMPANY_ID_MAP[companyName]
       if (!companyId) {
         // Search TMDB for the company by name
-        const searchRes = await fetch(`/api/tmdb?action=search_company&query=${encodeURIComponent(companyName)}`)
+        const searchRes = await tmdbFetch(`/api/tmdb?action=search_company&query=${encodeURIComponent(companyName)}`)
         const searchData = await searchRes.json()
         companyId = searchData.results?.[0]?.id
       }
@@ -867,7 +870,7 @@ export default function Search({ userId, onOpenWork }: {
         setBrowse(prev => ({ ...prev, loading: false, items: [] }))
         return
       }
-      const res = await fetch(`/api/tmdb?action=discover&type=movie&with_companies=${companyId}&page=${page}&sort_by=popularity.desc`)
+      const res = await tmdbFetch(`/api/tmdb?action=discover&type=movie&with_companies=${companyId}&page=${page}&sort_by=popularity.desc`)
       const data = await res.json()
       const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
         ...item,

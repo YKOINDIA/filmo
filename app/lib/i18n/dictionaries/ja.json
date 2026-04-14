@@ -1,0 +1,130 @@
+{
+  "common": {
+    "loading": "読み込み中...",
+    "error": "エラーが発生しました",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "edit": "編集",
+    "close": "閉じる",
+    "confirm": "確認",
+    "search": "検索",
+    "more": "もっと見る",
+    "back": "戻る",
+    "retry": "再試行",
+    "noResults": "結果が見つかりません",
+    "showMore": "もっと見る",
+    "showLess": "閉じる"
+  },
+  "auth": {
+    "login": "ログイン",
+    "signup": "新規登録",
+    "logout": "ログアウト",
+    "nickname": "ニックネーム",
+    "email": "メールアドレス",
+    "password": "パスワード",
+    "nicknamePlaceholder": "シネマ太郎",
+    "processing": "処理中...",
+    "createAccount": "アカウント作成",
+    "tagline": "観た映画を記録。観たい映画を保存。",
+    "taglineSub": "友達にいい作品を教えよう。"
+  },
+  "nav": {
+    "home": "ホーム",
+    "search": "検索",
+    "feed": "フィード",
+    "lists": "リスト",
+    "profile": "プロフィール"
+  },
+  "streak": {
+    "bonus": "{days}日連続ログイン!",
+    "points": "+{points}pt獲得"
+  },
+  "review": {
+    "title": "レビュー",
+    "write": "レビューを書く",
+    "edit": "レビューを編集",
+    "placeholder": "この作品の感想を書いてみましょう...",
+    "spoiler": "ネタバレあり",
+    "spoilerWarning": "ネタバレを含むレビューです",
+    "showSpoiler": "表示する",
+    "hideSpoiler": "ネタバレを非表示",
+    "likes": "いいね",
+    "newest": "新着",
+    "sortByLikes": "いいね順",
+    "scoreHigh": "高評価順",
+    "scoreLow": "低評価順",
+    "noReviews": "まだレビューがありません",
+    "translate": "翻訳する",
+    "translating": "翻訳中...",
+    "showOriginal": "原文を表示",
+    "translatedFrom": "{lang}から翻訳"
+  },
+  "work": {
+    "watchStatus": {
+      "watched": "視聴済み",
+      "watching": "視聴中",
+      "want_to_watch": "観たい",
+      "dropped": "中断",
+      "on_hold": "一時中断"
+    },
+    "rating": "評価",
+    "overview": "あらすじ",
+    "cast": "キャスト",
+    "crew": "スタッフ",
+    "similar": "類似作品",
+    "recommendations": "おすすめ",
+    "streaming": "配信情報",
+    "watchMethod": "視聴方法",
+    "memo": "メモ",
+    "memoPlaceholder": "個人的なメモ..."
+  },
+  "search": {
+    "placeholder": "映画・ドラマ・人物を検索...",
+    "movies": "映画",
+    "tv": "ドラマ",
+    "anime": "アニメ",
+    "people": "人物",
+    "userWorks": "ユーザー作品",
+    "trending": "トレンド",
+    "discover": "探す"
+  },
+  "profile": {
+    "stats": "統計",
+    "achievements": "実績",
+    "settings": "設定",
+    "followers": "フォロワー",
+    "following": "フォロー中",
+    "watchedCount": "視聴済み",
+    "reviewCount": "レビュー"
+  },
+  "lists": {
+    "create": "リスト作成",
+    "myLists": "マイリスト",
+    "public": "公開",
+    "private": "非公開",
+    "ranked": "ランキング",
+    "addToList": "リストに追加",
+    "share": "共有"
+  },
+  "settings": {
+    "language": "言語",
+    "theme": "テーマ",
+    "dark": "ダーク",
+    "light": "ライト",
+    "notifications": "通知",
+    "autoTranslate": "レビュー自動翻訳",
+    "autoTranslateDesc": "他言語のレビューを自動で翻訳します"
+  },
+  "feed": {
+    "activity": "アクティビティ",
+    "watched": "{name}が{title}を視聴しました",
+    "reviewed": "{name}が{title}にレビューを投稿しました",
+    "liked": "{name}がレビューにいいねしました",
+    "noActivity": "アクティビティはまだありません"
+  },
+  "translation": {
+    "poweredBy": "翻訳: {provider}",
+    "autoDetected": "言語を自動検出しました"
+  }
+}

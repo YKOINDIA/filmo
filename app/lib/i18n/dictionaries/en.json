@@ -1,0 +1,130 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "confirm": "Confirm",
+    "search": "Search",
+    "more": "See more",
+    "back": "Back",
+    "retry": "Retry",
+    "noResults": "No results found",
+    "showMore": "Show more",
+    "showLess": "Show less"
+  },
+  "auth": {
+    "login": "Log In",
+    "signup": "Sign Up",
+    "logout": "Log Out",
+    "nickname": "Nickname",
+    "email": "Email",
+    "password": "Password",
+    "nicknamePlaceholder": "MovieFan123",
+    "processing": "Processing...",
+    "createAccount": "Create Account",
+    "tagline": "Track films you've watched. Save those you want to see.",
+    "taglineSub": "Tell your friends what's good."
+  },
+  "nav": {
+    "home": "Home",
+    "search": "Search",
+    "feed": "Feed",
+    "lists": "Lists",
+    "profile": "Profile"
+  },
+  "streak": {
+    "bonus": "{days}-day login streak!",
+    "points": "+{points}pt earned"
+  },
+  "review": {
+    "title": "Reviews",
+    "write": "Write a review",
+    "edit": "Edit review",
+    "placeholder": "Share your thoughts about this title...",
+    "spoiler": "Contains spoilers",
+    "spoilerWarning": "This review contains spoilers",
+    "showSpoiler": "Show",
+    "hideSpoiler": "Hide spoilers",
+    "likes": "Likes",
+    "newest": "Newest",
+    "sortByLikes": "Most liked",
+    "scoreHigh": "Highest rated",
+    "scoreLow": "Lowest rated",
+    "noReviews": "No reviews yet",
+    "translate": "Translate",
+    "translating": "Translating...",
+    "showOriginal": "Show original",
+    "translatedFrom": "Translated from {lang}"
+  },
+  "work": {
+    "watchStatus": {
+      "watched": "Watched",
+      "watching": "Watching",
+      "want_to_watch": "Want to watch",
+      "dropped": "Dropped",
+      "on_hold": "On hold"
+    },
+    "rating": "Rating",
+    "overview": "Overview",
+    "cast": "Cast",
+    "crew": "Crew",
+    "similar": "Similar titles",
+    "recommendations": "Recommendations",
+    "streaming": "Where to watch",
+    "watchMethod": "Watch method",
+    "memo": "Notes",
+    "memoPlaceholder": "Personal notes..."
+  },
+  "search": {
+    "placeholder": "Search movies, shows, people...",
+    "movies": "Movies",
+    "tv": "TV Shows",
+    "anime": "Anime",
+    "people": "People",
+    "userWorks": "User works",
+    "trending": "Trending",
+    "discover": "Discover"
+  },
+  "profile": {
+    "stats": "Stats",
+    "achievements": "Achievements",
+    "settings": "Settings",
+    "followers": "Followers",
+    "following": "Following",
+    "watchedCount": "Watched",
+    "reviewCount": "Reviews"
+  },
+  "lists": {
+    "create": "Create list",
+    "myLists": "My Lists",
+    "public": "Public",
+    "private": "Private",
+    "ranked": "Ranked",
+    "addToList": "Add to list",
+    "share": "Share"
+  },
+  "settings": {
+    "language": "Language",
+    "theme": "Theme",
+    "dark": "Dark",
+    "light": "Light",
+    "notifications": "Notifications",
+    "autoTranslate": "Auto-translate reviews",
+    "autoTranslateDesc": "Automatically translate reviews in other languages"
+  },
+  "feed": {
+    "activity": "Activity",
+    "watched": "{name} watched {title}",
+    "reviewed": "{name} reviewed {title}",
+    "liked": "{name} liked a review",
+    "noActivity": "No activity yet"
+  },
+  "translation": {
+    "poweredBy": "Translated by {provider}",
+    "autoDetected": "Language auto-detected"
+  }
+}
