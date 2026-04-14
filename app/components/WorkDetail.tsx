@@ -19,6 +19,7 @@ interface WorkDetailProps {
   userId: string
   onClose: () => void
   onOpenWork: (id: number, type?: 'movie' | 'tv') => void
+  onOpenPerson?: (id: number) => void
 }
 
 interface Genre { id: number; name: string }
@@ -194,7 +195,7 @@ function LoadingSpinner() {
 
 // ── Main Component ─────────────────────────────────────────────────────────
 
-export default function WorkDetail({ workId, workType, userId, onClose, onOpenWork }: WorkDetailProps) {
+export default function WorkDetail({ workId, workType, userId, onClose, onOpenWork, onOpenPerson }: WorkDetailProps) {
   // State: TMDB data
   const [detail, setDetail] = useState<TMDBDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1941,7 +1942,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           {/* Cast scroll */}
           <div style={s.hScroll}>
             {(showAllCast ? cast : cast.slice(0, 10)).map(person => (
-              <div key={person.id} style={s.personCard}>
+              <div key={person.id} style={s.personCard} onClick={() => onOpenPerson?.(person.id)}>
                 {person.profile_path ? (
                   <img src={`${TMDB_IMG}/w185${person.profile_path}`} alt={person.name} style={s.personImg} />
                 ) : (
@@ -1953,7 +1954,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                 <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {person.character}
                 </div>
-                <button style={s.fanBtn(fanIds.has(person.id))} onClick={() => handleToggleFan(person.id, person.name)}>
+                <button style={s.fanBtn(fanIds.has(person.id))} onClick={(e) => { e.stopPropagation(); handleToggleFan(person.id, person.name) }}>
                   {fanIds.has(person.id) ? 'Fan! ✓' : 'Fan!'}
                 </button>
               </div>
@@ -1975,7 +1976,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
               <div style={s.card}>
                 {/* Directors */}
                 {directors.map(d => (
-                  <div key={`dir-${d.id}`} style={s.crewRow}>
+                  <div key={`dir-${d.id}`} style={{ ...s.crewRow, cursor: 'pointer' }} onClick={() => onOpenPerson?.(d.id)}>
                     {d.profile_path ? (
                       <img src={`${TMDB_IMG}/w185${d.profile_path}`} alt={d.name}
                         style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
@@ -1986,14 +1987,14 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>{d.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--fm-text-sub)' }}>監督</div>
                     </div>
-                    <button style={s.fanBtn(fanIds.has(d.id))} onClick={() => handleToggleFan(d.id, d.name)}>
+                    <button style={s.fanBtn(fanIds.has(d.id))} onClick={(e) => { e.stopPropagation(); handleToggleFan(d.id, d.name) }}>
                       {fanIds.has(d.id) ? 'Fan! ✓' : 'Fan!'}
                     </button>
                   </div>
                 ))}
                 {/* Writers */}
                 {writers.map(w => (
-                  <div key={`wr-${w.id}`} style={s.crewRow}>
+                  <div key={`wr-${w.id}`} style={{ ...s.crewRow, cursor: 'pointer' }} onClick={() => onOpenPerson?.(w.id)}>
                     {w.profile_path ? (
                       <img src={`${TMDB_IMG}/w185${w.profile_path}`} alt={w.name}
                         style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
@@ -2004,7 +2005,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>{w.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--fm-text-sub)' }}>脚本</div>
                     </div>
-                    <button style={s.fanBtn(fanIds.has(w.id))} onClick={() => handleToggleFan(w.id, w.name)}>
+                    <button style={s.fanBtn(fanIds.has(w.id))} onClick={(e) => { e.stopPropagation(); handleToggleFan(w.id, w.name) }}>
                       {fanIds.has(w.id) ? 'Fan! ✓' : 'Fan!'}
                     </button>
                   </div>
@@ -2013,7 +2014,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                 {showAllCrew && (
                   <>
                     {composers.map(c => (
-                      <div key={`comp-${c.id}`} style={s.crewRow}>
+                      <div key={`comp-${c.id}`} style={{ ...s.crewRow, cursor: 'pointer' }} onClick={() => onOpenPerson?.(c.id)}>
                         <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--fm-bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'var(--fm-text-muted)' }}>🎵</div>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>{c.name}</div>
@@ -2022,7 +2023,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                       </div>
                     ))}
                     {cinematographers.map(c => (
-                      <div key={`cin-${c.id}`} style={s.crewRow}>
+                      <div key={`cin-${c.id}`} style={{ ...s.crewRow, cursor: 'pointer' }} onClick={() => onOpenPerson?.(c.id)}>
                         <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--fm-bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'var(--fm-text-muted)' }}>📷</div>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>{c.name}</div>
@@ -2031,7 +2032,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                       </div>
                     ))}
                     {editors.map(e => (
-                      <div key={`ed-${e.id}`} style={s.crewRow}>
+                      <div key={`ed-${e.id}`} style={{ ...s.crewRow, cursor: 'pointer' }} onClick={() => onOpenPerson?.(e.id)}>
                         <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--fm-bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'var(--fm-text-muted)' }}>✂️</div>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>{e.name}</div>
