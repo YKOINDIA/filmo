@@ -186,50 +186,46 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
         const movieTitle = movie.title || movie.name || ''
 
         // Cache movie (use string ID, match WorkDetail pattern)
-        try {
-          await supabase.from('movies').upsert({
-            id: String(movieId),
-            tmdb_id: movieId,
-            title: movieTitle,
-            poster_path: movie.poster_path,
-            genres: (movie.genre_ids || []).map(gid => ({ id: gid })),
-            vote_average: movie.vote_average || 0,
-            media_type: mediaType,
-          }, { onConflict: 'tmdb_id' })
-        } catch { /* movie cache failure is non-critical */ }
+        const { error: movieErr } = await supabase.from('movies').upsert({
+          id: String(movieId),
+          tmdb_id: movieId,
+          title: movieTitle,
+          poster_path: movie.poster_path,
+          genres: (movie.genre_ids || []).map(gid => ({ id: gid })),
+          vote_average: movie.vote_average || 0,
+          media_type: mediaType,
+        }, { onConflict: 'tmdb_id' })
+        if (movieErr) console.error(`Movie cache failed for ${movieId}:`, movieErr)
 
         // Create watchlist entry
-        try {
-          await supabase.from('watchlists').insert({
-            user_id: userId,
-            movie_id: movieId,
-            status: 'watched',
-            score,
-          })
-        } catch (e) {
-          console.error(`Watchlist save failed for movie ${movieId}:`, e)
-        }
+        const { error: wlError } = await supabase.from('watchlists').insert({
+          user_id: userId,
+          movie_id: movieId,
+          status: 'watched',
+          score,
+        })
+        if (wlError) console.error(`Watchlist save failed for movie ${movieId}:`, wlError)
       }
 
-      // Save FAN! selections
+      // Save FAN! selections (batch insert)
       const allPeople = [...people, ...searchResults]
-      for (const personId of fanSelections) {
-        const person = allPeople.find(p => p.id === personId)
-        if (!person) continue
-
-        const personType = person.known_for_department === 'Directing' ? 'director' : 'actor'
-
-        try {
-          await supabase.from('fans').insert({
+      const fanRows = [...fanSelections]
+        .map(personId => {
+          const person = allPeople.find(p => p.id === personId)
+          if (!person) return null
+          return {
             user_id: userId,
-            person_type: personType,
+            person_type: person.known_for_department === 'Directing' ? 'director' : 'actor',
             person_id: person.id,
             person_name: person.name,
             person_image: person.profile_path,
-          })
-        } catch (e) {
-          console.error(`Fan save failed for ${person.name}:`, e)
-        }
+          }
+        })
+        .filter(Boolean)
+
+      if (fanRows.length > 0) {
+        const { error: fanError } = await supabase.from('fans').insert(fanRows)
+        if (fanError) console.error('Fan save failed:', fanError)
       }
 
       onComplete()

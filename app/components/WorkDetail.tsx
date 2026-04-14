@@ -479,21 +479,23 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       if (watchEntry) {
         const updateData: Record<string, unknown> = { status }
         if (score > 0) updateData.score = score
-        await supabase
+        const { error: updateErr } = await supabase
           .from('watchlists')
           .update(updateData)
           .eq('id', watchEntry.id)
+        if (updateErr) throw new Error(updateErr.message)
         setWatchEntry({ ...watchEntry, status })
       } else {
         const insertData: Record<string, unknown> = {
           user_id: userId, movie_id: workId, status,
         }
         if (score > 0) insertData.score = score
-        const { data } = await supabase
+        const { data, error: insertErr } = await supabase
           .from('watchlists')
           .insert(insertData)
           .select('*')
           .single()
+        if (insertErr) throw new Error(insertErr.message)
         if (data) setWatchEntry(data as unknown as WatchlistEntry)
       }
       setCurrentStatus(status)
@@ -516,14 +518,11 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const handleScoreChange = async (newScore: number) => {
     setScore(newScore)
     if (watchEntry && newScore > 0) {
-      try {
-        await supabase
-          .from('watchlists')
-          .update({ score: newScore })
-          .eq('id', watchEntry.id)
-      } catch (e) {
-        console.error('Score update failed:', e)
-      }
+      const { error } = await supabase
+        .from('watchlists')
+        .update({ score: newScore })
+        .eq('id', watchEntry.id)
+      if (error) console.error('Score update failed:', error)
     }
   }
 
@@ -552,13 +551,11 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         setSavingWatchlist(false)
         return
       }
-      const result = await supabase
+      const { error: updateErr } = await supabase
         .from('watchlists')
         .update(updateData)
         .eq('id', watchEntry.id)
-      if (result && (result as { error?: unknown }).error) {
-        throw (result as { error: unknown }).error
-      }
+      if (updateErr) throw new Error(updateErr.message)
       setWatchEntry({ ...watchEntry, ...updateData } as typeof watchEntry)
       showToast('保存しました')
     } catch (e) {
@@ -582,17 +579,19 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       if (score > 0) reviewData.score = score
 
       if (myReview) {
-        await supabase
+        const { error: revErr } = await supabase
           .from('reviews')
           .update({ ...reviewData, updated_at: new Date().toISOString() })
           .eq('id', myReview.id)
+        if (revErr) throw new Error(revErr.message)
         setMyReview({ ...myReview, ...reviewData } as typeof myReview)
       } else {
-        const { data } = await supabase
+        const { data, error: revErr } = await supabase
           .from('reviews')
           .insert(reviewData)
           .select('*')
           .single()
+        if (revErr) throw new Error(revErr.message)
         if (data) setMyReview(data as unknown as ReviewEntry)
       }
 
@@ -619,11 +618,12 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const handleLike = async (review: ReviewWithUser) => {
     if (review.liked_by_me) {
       // Unlike
-      await supabase
+      const { error: delErr } = await supabase
         .from('likes')
         .delete()
         .eq('review_id', review.id)
         .eq('user_id', userId)
+      if (delErr) { console.error('Unlike failed:', delErr); return }
       setReviews(prev =>
         prev.map(r => r.id === review.id
           ? { ...r, liked_by_me: false, likes_count: r.likes_count - 1 }
@@ -631,9 +631,10 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       )
     } else {
       // Like
-      await supabase
+      const { error: likeErr } = await supabase
         .from('likes')
         .insert({ review_id: review.id, user_id: userId })
+      if (likeErr) { console.error('Like failed:', likeErr); return }
       setReviews(prev =>
         prev.map(r => r.id === review.id
           ? { ...r, liked_by_me: true, likes_count: r.likes_count + 1 }
@@ -649,17 +650,19 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
   const handleToggleFan = async (personId: number, personName: string) => {
     if (fanIds.has(personId)) {
-      await supabase
+      const { error: delErr } = await supabase
         .from('fans')
         .delete()
         .eq('user_id', userId)
         .eq('person_id', personId)
+      if (delErr) { console.error('Fan delete failed:', delErr); return }
       setFanIds(prev => { const n = new Set(prev); n.delete(personId); return n })
       showToast(`${personName} のファンを解除しました`)
     } else {
-      await supabase
+      const { error: fanErr } = await supabase
         .from('fans')
         .insert({ user_id: userId, person_id: personId, person_name: personName })
+      if (fanErr) { console.error('Fan insert failed:', fanErr); return }
       setFanIds(prev => new Set(prev).add(personId))
       showToast(`${personName} のファンになりました！`)
     }

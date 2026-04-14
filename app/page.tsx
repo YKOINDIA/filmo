@@ -131,7 +131,7 @@ export default function Page() {
         if (data.user) {
           // The handle_new_user trigger creates the users row automatically.
           // But we update with extra fields just in case:
-          await supabase.from('users').upsert({
+          const { error: upsertError } = await supabase.from('users').upsert({
             id: data.user.id,
             email: authEmail,
             name: authName || authEmail.split('@')[0],
@@ -140,6 +140,7 @@ export default function Page() {
             login_streak: 0,
             bio: '',
           })
+          if (upsertError) console.error('User upsert failed:', upsertError)
           setSession(data.session)
           setNeedsOnboarding(true)
           await loadUserProfile(data.user.id)
