@@ -96,13 +96,13 @@ async function drawMarkCard(
   ctx.fillStyle = '#e91e63'; ctx.textAlign = 'center'
   ctx.fillText('🎬  Filmo', W / 2, 108)
 
-  // "Mark!" badge
+  // "Watched" badge
   rr(ctx, W / 2 - 160, 130, 320, 64, 32)
   const badge = ctx.createLinearGradient(W / 2 - 160, 0, W / 2 + 160, 0)
   badge.addColorStop(0, '#4a0e2e'); badge.addColorStop(0.5, '#e91e63'); badge.addColorStop(1, '#4a0e2e')
   ctx.fillStyle = badge; ctx.fill()
   ctx.font = 'bold 36px system-ui, -apple-system, sans-serif'; ctx.fillStyle = 'white'
-  ctx.fillText('✍️  Mark!', W / 2, 174)
+  ctx.fillText('✓  Watched', W / 2, 174)
 
   // Poster
   let posterY = 220
@@ -197,13 +197,13 @@ async function drawClipCard(
   ctx.fillStyle = '#3498db'; ctx.textAlign = 'center'
   ctx.fillText('🎬  Filmo', W / 2, 108)
 
-  // "Clip!" badge
+  // "Watchlist" badge
   rr(ctx, W / 2 - 160, 130, 320, 64, 32)
   const badge = ctx.createLinearGradient(W / 2 - 160, 0, W / 2 + 160, 0)
   badge.addColorStop(0, '#0e2a3d'); badge.addColorStop(0.5, '#3498db'); badge.addColorStop(1, '#0e2a3d')
   ctx.fillStyle = badge; ctx.fill()
   ctx.font = 'bold 36px system-ui, -apple-system, sans-serif'; ctx.fillStyle = 'white'
-  ctx.fillText('📌  Clip!', W / 2, 174)
+  ctx.fillText('📌  Watchlist', W / 2, 174)
 
   // Poster
   let posterY = 220
@@ -244,7 +244,7 @@ async function drawClipCard(
 
     ctx.font = '28px system-ui, -apple-system, sans-serif'
     ctx.fillStyle = '#2ecc8a'; ctx.textAlign = 'left'
-    ctx.fillText('🎯 観たい理由', 80, posterY + 130)
+    ctx.fillText('🎯 Watchlistの理由', 80, posterY + 130)
 
     ctx.font = '30px system-ui, -apple-system, sans-serif'
     ctx.fillStyle = '#ccc'
@@ -267,7 +267,7 @@ async function drawClipCard(
   ctx.strokeStyle = '#3498db28'; ctx.lineWidth = 1
   ctx.beginPath(); ctx.moveTo(60, H - 108); ctx.lineTo(W - 60, H - 108); ctx.stroke()
   ctx.font = '28px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#4fc3f7'; ctx.textAlign = 'center'
-  ctx.fillText('#観たい映画  #Filmo  #Clip', W / 2, H - 64)
+  ctx.fillText('#Watchlist  #Filmo', W / 2, H - 64)
   ctx.font = '20px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#444'
   ctx.fillText('filmo.me', W / 2, H - 30)
 }
@@ -371,11 +371,11 @@ function buildShareText(type: CardType, data: ShareCardData): string {
   if (type === 'mark') {
     const d = data as MarkData
     const stars = d.score > 0 ? ' ' + '★'.repeat(Math.round(d.score)) : ''
-    return `「${d.title}」を観ました！${stars}\n#映画レビュー #Filmo #Mark`
+    return `「${d.title}」を観ました！${stars}\n#Watched #Filmo`
   }
   if (type === 'clip') {
     const d = data as ClipData
-    return `「${d.title}」が気になる！\n#観たい映画 #Filmo #Clip`
+    return `「${d.title}」が気になる！\n#Watchlist #Filmo`
   }
   // level_up
   const d = data as LevelUpData
@@ -485,7 +485,7 @@ export default function ShareCard({ type, data, userId, onClose }: Props) {
     await handleDownload()
   }
 
-  const cardLabel = type === 'mark' ? '✍️ Mark! カード' : type === 'clip' ? '📌 Clip! カード' : '🎉 レベルアップカード'
+  const cardLabel = type === 'mark' ? '✓ Watched カード' : type === 'clip' ? '📌 Watchlist カード' : '🎉 レベルアップカード'
   const accentColor = type === 'mark' ? '#e91e63' : type === 'clip' ? '#3498db' : '#9b59b6'
 
   return (

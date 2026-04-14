@@ -507,11 +507,11 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
       if (status === 'watched') {
         await addPoints(userId, POINT_CONFIG.WATCH_COMPLETE, '鑑賞完了')
-        showToast('🎬 鑑賞済みにしました！ +' + POINT_CONFIG.WATCH_COMPLETE + 'pt')
+        showToast('✓ Watched に追加しました！ +' + POINT_CONFIG.WATCH_COMPLETE + 'pt')
       } else if (status === 'want_to_watch') {
-        showToast('📌 観たいリストに追加しました')
+        showToast('📌 Watchlist に追加しました')
       } else if (status === 'watching') {
-        showToast('📺 視聴中にしました')
+        showToast('📺 Watching に設定しました')
       }
     } catch {
       showToast('エラーが発生しました')
@@ -533,7 +533,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
   const handleSaveWatchDetails = async () => {
     if (!watchEntry) {
-      showToast('先にMark!またはClip!ボタンを押してください')
+      showToast('先にWatchedまたはWatchlistボタンを押してください')
       return
     }
     setSavingWatchlist(true)
@@ -1282,14 +1282,14 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           onClick={() => handleStatusChange('watched')}
           disabled={savingWatchlist}
         >
-          ✓ Mark!（鑑賞済み）
+          ✓ Watched
         </button>
         <button
           style={s.actionBtn(currentStatus === 'want_to_watch')}
           onClick={() => handleStatusChange('want_to_watch')}
           disabled={savingWatchlist}
         >
-          📌 Clip!（観たい）
+          📌 Watchlist
         </button>
         {workType === 'tv' && (
           <button
@@ -1297,7 +1297,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
             onClick={() => handleStatusChange('watching')}
             disabled={savingWatchlist}
           >
-            📺 観てる中
+            📺 Watching
           </button>
         )}
       </div>
@@ -1654,7 +1654,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           {/* みんなの「なぜ観たい」 inline */}
           <div style={{ marginTop: 16 }}>
             <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)', margin: '0 0 10px' }}>
-              📌 みんなが観たい理由 ({clipMemos.length})
+              📌 みんなのWatchlist理由 ({clipMemos.length})
             </h4>
             {clipMemos.length === 0 ? (
               <p style={{ color: 'var(--fm-text-muted)', fontSize: 14, textAlign: 'center', padding: 20 }}>

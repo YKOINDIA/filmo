@@ -188,8 +188,8 @@ export default function Feed({ userId, onOpenWork }: {
 
   const actionText = (item: FeedItem) => {
     if (item.type === 'review') return 'がレビューしました'
-    if (item.type === 'watch') return 'を鑑賞済みにしました'
-    return 'をClip!しました'
+    if (item.type === 'watch') return 'をWatchedしました'
+    return 'をWatchlistに追加しました'
   }
 
   return (
