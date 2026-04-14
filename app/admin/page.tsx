@@ -593,7 +593,7 @@ export default function AdminPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{r.title as string}</div>
-                  {r.original_title && <div style={{ fontSize: 12, color: 'var(--fm-text-muted)' }}>{r.original_title as string}</div>}
+                  {r.original_title ? <div style={{ fontSize: 12, color: 'var(--fm-text-muted)' }}>{String(r.original_title)}</div> : null}
                 </div>
                 <span style={{
                   fontSize: 11, padding: '2px 8px', borderRadius: 4, flexShrink: 0,
