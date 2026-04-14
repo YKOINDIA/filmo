@@ -47,6 +47,7 @@ export default function Page() {
   const [authPassword, setAuthPassword] = useState('')
   const [authName, setAuthName] = useState('')
   const [authError, setAuthError] = useState('')
+  const [authSuccess, setAuthSuccess] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
   const [selectedWorkId, setSelectedWorkId] = useState<number | null>(null)
   const [selectedWorkType, setSelectedWorkType] = useState<'movie' | 'tv'>('movie')
@@ -123,6 +124,7 @@ export default function Page() {
 
   const handleAuth = async () => {
     setAuthError('')
+    setAuthSuccess('')
     setAuthLoading(true)
     try {
       if (authMode === 'signup') {
@@ -134,6 +136,12 @@ export default function Page() {
           },
         })
         if (error) throw error
+        if (data.user && !data.session) {
+          // Email confirmation required — show success message
+          setAuthSuccess(t('auth.confirmEmail'))
+          setAuthLoading(false)
+          return
+        }
         if (data.user) {
           // The handle_new_user trigger creates the users row automatically.
           // But we update with extra fields just in case:
@@ -215,7 +223,7 @@ export default function Page() {
 
           <div style={{ display: 'flex', marginBottom: 24, background: 'var(--fm-bg-card)', borderRadius: 12, padding: 4 }}>
             {(['login', 'signup'] as const).map(m => (
-              <button key={m} onClick={() => { setAuthMode(m); setAuthError('') }}
+              <button key={m} onClick={() => { setAuthMode(m); setAuthError(''); setAuthSuccess('') }}
                 style={{
                   flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
                   background: authMode === m ? 'var(--fm-accent)' : 'transparent',
@@ -247,6 +255,7 @@ export default function Page() {
                 style={{ width: '100%', padding: '12px 16px', borderRadius: 10, border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 15, boxSizing: 'border-box' }} />
             </div>
 
+            {authSuccess && <div style={{ color: 'var(--fm-accent)', fontSize: 13, marginBottom: 12, padding: '12px', background: 'rgba(0,192,48,0.1)', borderRadius: 8, lineHeight: 1.5 }}>{authSuccess}</div>}
             {authError && <div style={{ color: 'var(--fm-danger)', fontSize: 13, marginBottom: 12, padding: '8px 12px', background: 'rgba(255,107,107,0.1)', borderRadius: 8 }}>{authError}</div>}
 
             <button onClick={handleAuth} disabled={authLoading}

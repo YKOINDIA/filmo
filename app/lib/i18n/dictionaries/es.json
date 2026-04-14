@@ -26,6 +26,7 @@
     "nicknamePlaceholder": "CineFan123",
     "processing": "Procesando...",
     "createAccount": "Crear cuenta",
+    "confirmEmail": "Te enviamos un correo de confirmación. Haz clic en el enlace para completar el registro (revisa la carpeta de spam si no lo ves).",
     "tagline": "Registra las películas que has visto. Guarda las que quieres ver.",
     "taglineSub": "Comparte buenas películas con tus amigos."
   },

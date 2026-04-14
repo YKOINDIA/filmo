@@ -26,6 +26,7 @@
     "nicknamePlaceholder": "电影迷123",
     "processing": "处理中...",
     "createAccount": "创建账号",
+    "confirmEmail": "已发送确认邮件，请点击邮件中的链接完成注册（如未收到请检查垃圾邮件文件夹）。",
     "tagline": "记录看过的电影，收藏想看的电影。",
     "taglineSub": "告诉朋友哪些值得看。"
   },
