@@ -99,13 +99,32 @@
     "reviewCount": "Reviews"
   },
   "lists": {
+    "title": "Lists",
     "create": "Create list",
+    "newList": "+ New List",
     "myLists": "My Lists",
+    "popular": "Popular",
+    "recent": "Recent",
     "public": "Public",
     "private": "Private",
     "ranked": "Ranked",
     "addToList": "Add to list",
-    "share": "Share"
+    "share": "Share",
+    "newListTitle": "New List",
+    "titleLabel": "Title",
+    "titlePlaceholder": "e.g. Best Sci-Fi of All Time",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "What's this list about?",
+    "makePublic": "Make public",
+    "makePublicDesc": "Other users can view and share via URL",
+    "makeRanked": "Ranked list",
+    "makeRankedDesc": "Display items with rankings (1st, 2nd...)",
+    "creating": "Creating...",
+    "noListsYet": "No lists yet",
+    "noListsFound": "No lists found",
+    "noListsHint": "Create your first list to organize and share your favorites.",
+    "noFilmsAdded": "No films added yet",
+    "filmsCount": "{count} films"
   },
   "settings": {
     "language": "Language",

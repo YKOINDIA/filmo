@@ -99,13 +99,32 @@
     "reviewCount": "レビュー"
   },
   "lists": {
+    "title": "リスト",
     "create": "リスト作成",
+    "newList": "+ 新規リスト",
     "myLists": "マイリスト",
+    "popular": "人気",
+    "recent": "新着",
     "public": "公開",
     "private": "非公開",
     "ranked": "ランキング",
     "addToList": "リストに追加",
-    "share": "共有"
+    "share": "共有",
+    "newListTitle": "新しいリスト",
+    "titleLabel": "タイトル",
+    "titlePlaceholder": "例: 歴代最高のSF映画",
+    "descriptionLabel": "説明",
+    "descriptionPlaceholder": "このリストについて",
+    "makePublic": "公開する",
+    "makePublicDesc": "他のユーザーが閲覧・URLで共有可能",
+    "makeRanked": "ランキング形式",
+    "makeRankedDesc": "作品に順位をつけて表示（1位、2位...）",
+    "creating": "作成中...",
+    "noListsYet": "リストがまだありません",
+    "noListsFound": "リストが見つかりません",
+    "noListsHint": "お気に入りを整理・共有する最初のリストを作りましょう。",
+    "noFilmsAdded": "作品が追加されていません",
+    "filmsCount": "{count}作品"
   },
   "settings": {
     "language": "言語",
