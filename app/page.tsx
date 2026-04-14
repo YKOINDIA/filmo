@@ -251,11 +251,20 @@ export default function Page() {
 
             <button onClick={handleAuth} disabled={authLoading}
               style={{
-                width: '100%', padding: '14px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
-                background: 'var(--fm-accent)',
-                color: '#fff', fontWeight: 700, fontSize: 15, opacity: authLoading ? 0.7 : 1,
-                transition: 'opacity 0.2s',
+                width: '100%', padding: '14px 0', borderRadius: 10, border: 'none',
+                cursor: authLoading ? 'not-allowed' : 'pointer',
+                background: authLoading ? 'var(--fm-text-muted)' : 'var(--fm-accent)',
+                color: '#fff', fontWeight: 700, fontSize: 15,
+                transition: 'background 0.2s',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               }}>
+              {authLoading && (
+                <span style={{
+                  width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)',
+                  borderTopColor: '#fff', borderRadius: '50%',
+                  display: 'inline-block', animation: 'spin 0.6s linear infinite',
+                }} />
+              )}
               {authLoading ? t('auth.processing') : authMode === 'login' ? t('auth.login') : t('auth.createAccount')}
             </button>
           </div>
