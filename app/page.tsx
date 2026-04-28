@@ -60,6 +60,17 @@ export default function Page() {
   const [levelUpData, setLevelUpData] = useState<{ level: number; title: string; color: string; totalPoints: number } | null>(null)
 
   useEffect(() => {
+    // Capacitor 環境なら splash を明示的に隠す。
+    // capacitor.config.ts で launchAutoHide=false にしているため、
+    // ここで呼ばないと最大 5秒間 splash が表示され続ける。
+    // Web (Vercel 直接アクセス) では import が no-op になる。
+    ;(async () => {
+      try {
+        const { SplashScreen } = await import('@capacitor/splash-screen')
+        await SplashScreen.hide()
+      } catch { /* not in Capacitor */ }
+    })()
+
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       if (s?.user) {
         setSession(s)

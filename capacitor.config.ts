@@ -10,9 +10,15 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 2000,
-      launchAutoHide: true,
+      // launchAutoHide: false — 自前で SplashScreen.hide() を呼んで隠す。
+      // 自動 hide だと WebView 読み込み中に splash が消えて真っ暗な画面が見えるため。
+      launchAutoHide: false,
+      // 万が一プログラムから hide() が呼ばれない事故に備えて長めの最大値を設定。
+      // (5秒で見切りをつける)
+      launchShowDuration: 5000,
       backgroundColor: '#0a0b14',
+      // フェードアウトでガクッと消える違和感をなくす
+      launchFadeOutDuration: 300,
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
       showSpinner: false,

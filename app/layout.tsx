@@ -93,9 +93,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ja">
+    // suppressHydrationWarning: 下の inline script が hydration 前に data-theme 属性を
+    // セットするため React の hydration mismatch 警告を抑止する。
+    // この警告は iOS WKWebView では稀に致命的になるため (本番黒画面の原因報告あり)。
+    <html lang="ja" data-theme="dark" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('filmo_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();` }} />
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('filmo_theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();` }} />
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
         <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
@@ -107,8 +110,13 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <LocaleProviderWrapper>{children}</LocaleProviderWrapper>
+        {/*
+          Service Worker は Capacitor WebView の標準オリジン (capacitor://) では
+          動かず、エラーになる場合がある。明示的に http(s) スキームのときだけ登録。
+          try/catch で SW 登録失敗を握りつぶし、初回読み込みが SW で hang しないようにする。
+        */}
         <script dangerouslySetInnerHTML={{
-          __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(e){console.log('SW fail:',e)})})}`
+          __html: `try{if('serviceWorker' in navigator && (location.protocol==='https:'||location.protocol==='http:')){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(e){console.log('SW fail:',e)})})}}catch(e){console.log('SW skip:',e)}`
         }} />
       </body>
     </html>
