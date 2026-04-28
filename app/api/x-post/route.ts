@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '../../lib/supabase-admin'
+import { isAdminEmail } from '../../lib/adminAuth'
 
 export async function POST(request: NextRequest) {
   try {
     const { text, admin_email } = await request.json()
-    const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'ykoindia@gmail.com'
-    if (admin_email !== ADMIN_EMAIL) {
+    if (!isAdminEmail(admin_email)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
