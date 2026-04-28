@@ -5,15 +5,53 @@ import { supabase } from '../lib/supabase'
 
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'ykoindia@gmail.com'
 
-type Tab = 'kpi' | 'users' | 'reviews' | 'segments' | 'community' | 'security' | 'xpost' | 'coupons' | 'announce' | 'cron' | 'feedback' | 'work_requests' | 'edit_proposals'
+type Tab = 'kpi' | 'users' | 'reviews' | 'segments' | 'fraud' | 'community' | 'security' | 'xpost' | 'coupons' | 'announce' | 'cron' | 'feedback' | 'work_requests' | 'edit_proposals'
+
+interface KpiData {
+  totals: { users: number; reviews: number; watches: number; lists: number; comments: number }
+  today: { newUsers: number; newReviews: number; newWatches: number }
+  activeUsers: { dau: number; wau: number; mau: number }
+  funnel: { signup: number; firstWatched: number; firstReview: number }
+  retention: Record<string, { cohort: number; retained: number; rate: number }>
+  timeseries: {
+    signups: { date: string; count: number }[]
+    reviews: { date: string; count: number }[]
+    watches: { date: string; count: number }[]
+  }
+}
+
+interface SegmentBreakdown {
+  total: number
+  byCountry: { breakdown: { key: string; count: number; pct: number }[]; unknown: number; total: number }
+  byGender: { breakdown: { key: string; count: number; pct: number }[]; unknown: number; total: number }
+  byBirthDecade: { breakdown: { key: string; count: number; pct: number }[]; unknown: number; total: number }
+  byLevel: { breakdown: { key: string; count: number; pct: number }[]; unknown: number; total: number }
+  bySignupCohort: { breakdown: { key: string; count: number; pct: number }[]; unknown: number; total: number }
+}
+
+interface FraudData {
+  massLikers: { userId: string; name: string; email: string; counts: number[] }[]
+  massCommenters: { userId: string; name: string; email: string; counts: number[] }[]
+  massFollowers: { userId: string; name: string; email: string; counts: number[] }[]
+  suspiciousReviews: { userId: string; name: string; email: string; counts: number[] }[]
+  recentBans: { id: string; email: string; name: string; ban_reason: string; updated_at: string }[]
+  generatedAt: string
+}
 
 export default function AdminPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('kpi')
 
-  // KPI state
-  const [kpi, setKpi] = useState({ totalUsers: 0, newUsersToday: 0, totalReviews: 0, totalWatches: 0, avgLevel: 0 })
+  // KPI state (新 API ベース)
+  const [kpi, setKpi] = useState<KpiData | null>(null)
+  const [kpiLoading, setKpiLoading] = useState(false)
+  // segments
+  const [segments, setSegments] = useState<SegmentBreakdown | null>(null)
+  const [segmentsLoading, setSegmentsLoading] = useState(false)
+  // fraud
+  const [fraud, setFraud] = useState<FraudData | null>(null)
+  const [fraudLoading, setFraudLoading] = useState(false)
 
   // Users state
   const [users, setUsers] = useState<Record<string, unknown>[]>([])
@@ -83,6 +121,8 @@ export default function AdminPage() {
       case 'kpi': await loadKPI(); break
       case 'users': await loadUsers(); break
       case 'reviews': await loadReviews(); break
+      case 'segments': await loadSegments(); break
+      case 'fraud': await loadFraud(); break
       case 'security': await loadAlerts(); break
       case 'xpost': await loadDrafts(); break
       case 'coupons': await loadCoupons(); break
@@ -95,23 +135,45 @@ export default function AdminPage() {
   }
 
   const loadKPI = async () => {
+    setKpiLoading(true)
     try {
-      const { count: totalUsers } = await supabase.from('users').select('*', { count: 'exact', head: true })
-      const { count: totalReviews } = await supabase.from('reviews').select('*', { count: 'exact', head: true })
-      const { count: totalWatches } = await supabase.from('watchlists').select('*', { count: 'exact', head: true })
+      const res = await fetch(`/api/admin/kpi?email=${encodeURIComponent(ADMIN_EMAIL)}`)
+      if (!res.ok) throw new Error(`KPI ${res.status}`)
+      const data = await res.json() as KpiData
+      setKpi(data)
+    } catch (err) {
+      console.error('KPI load failed:', err)
+    } finally {
+      setKpiLoading(false)
+    }
+  }
 
-      const today = new Date().toISOString().split('T')[0]
-      const { count: newUsersToday } = await supabase.from('users').select('*', { count: 'exact', head: true })
-        .gt('created_at', `${today}T00:00:00.000Z`)
+  const loadSegments = async () => {
+    setSegmentsLoading(true)
+    try {
+      const res = await fetch(`/api/admin/segments?email=${encodeURIComponent(ADMIN_EMAIL)}`)
+      if (!res.ok) throw new Error(`segments ${res.status}`)
+      const data = await res.json() as SegmentBreakdown
+      setSegments(data)
+    } catch (err) {
+      console.error('Segments load failed:', err)
+    } finally {
+      setSegmentsLoading(false)
+    }
+  }
 
-      setKpi({
-        totalUsers: totalUsers ?? 0,
-        newUsersToday: newUsersToday ?? 0,
-        totalReviews: totalReviews ?? 0,
-        totalWatches: totalWatches ?? 0,
-        avgLevel: 1,
-      })
-    } catch { /* ignore */ }
+  const loadFraud = async () => {
+    setFraudLoading(true)
+    try {
+      const res = await fetch(`/api/admin/fraud?email=${encodeURIComponent(ADMIN_EMAIL)}`)
+      if (!res.ok) throw new Error(`fraud ${res.status}`)
+      const data = await res.json() as FraudData
+      setFraud(data)
+    } catch (err) {
+      console.error('Fraud load failed:', err)
+    } finally {
+      setFraudLoading(false)
+    }
   }
 
   const loadUsers = async () => {
@@ -308,20 +370,24 @@ export default function AdminPage() {
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--fm-text-sub)' }}>Loading...</div>
   if (!isAdmin) return <div style={{ padding: 40, textAlign: 'center' }}><h2>アクセス権限がありません</h2><p style={{ color: 'var(--fm-text-sub)' }}>管理者としてログインしてください</p></div>
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'kpi', label: 'KPI' },
-    { key: 'users', label: 'ユーザー' },
-    { key: 'reviews', label: 'レビュー' },
-    { key: 'segments', label: 'セグメント' },
-    { key: 'community', label: 'コミュニティ' },
-    { key: 'security', label: 'セキュリティ' },
-    { key: 'xpost', label: 'X投稿' },
-    { key: 'coupons', label: 'クーポン' },
-    { key: 'announce', label: 'お知らせ' },
-    { key: 'cron', label: 'Cron' },
-    { key: 'feedback', label: 'フィードバック' },
-    { key: 'work_requests', label: '作品リクエスト' },
-    { key: 'edit_proposals', label: '修正提案' },
+  const tabs: { key: Tab; label: string; group: '分析' | '管理' | '運用' }[] = [
+    // 分析
+    { key: 'kpi', label: '📊 KPI', group: '分析' },
+    { key: 'segments', label: '🧩 セグメント', group: '分析' },
+    // 管理 (ユーザー / コンテンツ / 不正)
+    { key: 'users', label: '👥 ユーザー', group: '管理' },
+    { key: 'reviews', label: '✍️ レビュー', group: '管理' },
+    { key: 'community', label: '💬 コミュニティ', group: '管理' },
+    { key: 'fraud', label: '🚨 不正監視', group: '管理' },
+    { key: 'security', label: '🔒 セキュリティ', group: '管理' },
+    // 運用
+    { key: 'announce', label: '📣 お知らせ', group: '運用' },
+    { key: 'xpost', label: '𝕏 投稿', group: '運用' },
+    { key: 'coupons', label: '🎟 クーポン', group: '運用' },
+    { key: 'cron', label: '⏱ Cron', group: '運用' },
+    { key: 'feedback', label: '📝 フィードバック', group: '運用' },
+    { key: 'work_requests', label: '🎬 作品リクエスト', group: '運用' },
+    { key: 'edit_proposals', label: '🛠 修正提案', group: '運用' },
   ]
 
   const S = {
@@ -353,20 +419,111 @@ export default function AdminPage() {
       {/* KPI */}
       {tab === 'kpi' && (
         <div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
-            {[
-              { label: '総ユーザー', value: kpi.totalUsers, icon: '👥' },
-              { label: '本日の新規', value: kpi.newUsersToday, icon: '🆕' },
-              { label: '総レビュー', value: kpi.totalReviews, icon: '✍️' },
-              { label: '総鑑賞記録', value: kpi.totalWatches, icon: '🎬' },
-            ].map((m, i) => (
-              <div key={i} style={S.card}>
-                <div style={{ fontSize: 24, marginBottom: 4 }}>{m.icon}</div>
-                <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--fm-accent)' }}>{m.value.toLocaleString()}</div>
-                <div style={{ fontSize: 12, color: 'var(--fm-text-sub)' }}>{m.label}</div>
+          {kpiLoading && <div style={{ padding: 20, color: 'var(--fm-text-sub)' }}>集計中…</div>}
+          {kpi && (
+            <>
+              {/* Top metrics */}
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fm-text-sub)', marginBottom: 8 }}>📈 アクティブユーザー</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
+                {[
+                  { label: 'DAU (24h)', value: kpi.activeUsers.dau, icon: '🟢' },
+                  { label: 'WAU (7d)', value: kpi.activeUsers.wau, icon: '🟡' },
+                  { label: 'MAU (30d)', value: kpi.activeUsers.mau, icon: '🔵' },
+                ].map((m, i) => (
+                  <div key={i} style={S.card}>
+                    <div style={{ fontSize: 18, marginBottom: 4 }}>{m.icon}</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--fm-accent)' }}>{m.value.toLocaleString()}</div>
+                    <div style={{ fontSize: 12, color: 'var(--fm-text-sub)' }}>{m.label}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+
+              {/* Totals */}
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fm-text-sub)', marginBottom: 8 }}>📦 累計</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
+                {[
+                  { label: '総ユーザー', value: kpi.totals.users },
+                  { label: 'レビュー', value: kpi.totals.reviews },
+                  { label: '鑑賞記録', value: kpi.totals.watches },
+                  { label: 'リスト', value: kpi.totals.lists },
+                  { label: 'コメント', value: kpi.totals.comments },
+                ].map((m, i) => (
+                  <div key={i} style={{ ...S.card, marginBottom: 0 }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--fm-text)' }}>{m.value.toLocaleString()}</div>
+                    <div style={{ fontSize: 11, color: 'var(--fm-text-sub)' }}>{m.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Today */}
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fm-text-sub)', marginBottom: 8 }}>📅 本日</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
+                {[
+                  { label: '新規ユーザー', value: kpi.today.newUsers, icon: '🆕' },
+                  { label: '新規レビュー', value: kpi.today.newReviews, icon: '✍️' },
+                  { label: '新規鑑賞', value: kpi.today.newWatches, icon: '🎬' },
+                ].map((m, i) => (
+                  <div key={i} style={{ ...S.card, marginBottom: 0 }}>
+                    <div style={{ fontSize: 16 }}>{m.icon}</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--fm-accent)' }}>+{m.value.toLocaleString()}</div>
+                    <div style={{ fontSize: 11, color: 'var(--fm-text-sub)' }}>{m.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 30-day timeseries (sparkline) */}
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fm-text-sub)', marginBottom: 8 }}>📈 30日トレンド</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginBottom: 20 }}>
+                <Sparkline title="新規登録" data={kpi.timeseries.signups} color="#a29bfe" />
+                <Sparkline title="レビュー" data={kpi.timeseries.reviews} color="#2ecc8a" />
+                <Sparkline title="鑑賞記録" data={kpi.timeseries.watches} color="#f39c12" />
+              </div>
+
+              {/* Funnel */}
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fm-text-sub)', marginBottom: 8 }}>🔥 コンバージョンファネル</div>
+              <div style={{ ...S.card, marginBottom: 20 }}>
+                {(() => {
+                  const total = kpi.funnel.signup || 1
+                  const steps = [
+                    { label: '登録', value: kpi.funnel.signup },
+                    { label: '初鑑賞', value: kpi.funnel.firstWatched },
+                    { label: '初レビュー', value: kpi.funnel.firstReview },
+                  ]
+                  return steps.map((s, i) => {
+                    const pct = (s.value / total) * 100
+                    return (
+                      <div key={s.label} style={{ marginBottom: i < steps.length - 1 ? 10 : 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 4 }}>
+                          <span>{s.label}</span>
+                          <span><strong style={{ color: 'var(--fm-text)' }}>{s.value.toLocaleString()}</strong> ({pct.toFixed(1)}%)</span>
+                        </div>
+                        <div style={{ height: 8, background: 'var(--fm-bg-secondary)', borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{ width: `${pct}%`, height: '100%', background: 'var(--fm-accent)' }} />
+                        </div>
+                      </div>
+                    )
+                  })
+                })()}
+              </div>
+
+              {/* Retention */}
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fm-text-sub)', marginBottom: 8 }}>🔁 リテンション (登録N日後にアクティブ)</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+                {(['d1', 'd7', 'd30'] as const).map(k => {
+                  const r = kpi.retention[k]
+                  if (!r) return null
+                  const ratePct = (r.rate * 100).toFixed(1)
+                  return (
+                    <div key={k} style={{ ...S.card, marginBottom: 0 }}>
+                      <div style={{ fontSize: 11, color: 'var(--fm-text-sub)' }}>{k.toUpperCase()}</div>
+                      <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--fm-accent)' }}>{ratePct}%</div>
+                      <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>{r.retained}/{r.cohort} 名</div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -420,16 +577,56 @@ export default function AdminPage() {
 
       {/* セグメント */}
       {tab === 'segments' && (
-        <div style={S.card}>
-          <h3 style={{ fontWeight: 700, marginBottom: 12 }}>ユーザーセグメント</h3>
-          <p style={{ color: 'var(--fm-text-sub)', fontSize: 13 }}>
-            セグメント分析はKPIデータから自動計算されます。ユーザー数が増えると詳細なセグメントが表示されます。
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
-            {['パワーユーザー (50+レビュー)', '新規ユーザー (7日以内)', '非アクティブ (30日未ログイン)', '高エンゲージメント (100+鑑賞)'].map((seg, i) => (
-              <div key={i} style={{ padding: 12, background: 'var(--fm-bg-secondary)', borderRadius: 8, fontSize: 13 }}>{seg}</div>
-            ))}
-          </div>
+        <div>
+          {segmentsLoading && <div style={{ padding: 20, color: 'var(--fm-text-sub)' }}>集計中…</div>}
+          {segments && (
+            <>
+              <div style={{ ...S.card, marginBottom: 16 }}>
+                <span style={{ fontSize: 13, color: 'var(--fm-text-sub)' }}>分析対象ユーザー</span>
+                <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--fm-accent)', marginLeft: 12 }}>{segments.total.toLocaleString()}名</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                <SegmentBreakdownCard title="🌍 国" data={segments.byCountry} />
+                <SegmentBreakdownCard title="👤 性別" data={segments.byGender} labelMap={{ male: '男性', female: '女性', other: 'その他', prefer_not_to_say: '無回答' }} />
+                <SegmentBreakdownCard title="🎂 生年代" data={segments.byBirthDecade} />
+                <SegmentBreakdownCard title="🏆 レベル" data={segments.byLevel} />
+                <SegmentBreakdownCard title="📅 登録月" data={segments.bySignupCohort} />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* 不正監視 */}
+      {tab === 'fraud' && (
+        <div>
+          {fraudLoading && <div style={{ padding: 20, color: 'var(--fm-text-sub)' }}>分析中…</div>}
+          {fraud && (
+            <>
+              <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginBottom: 12 }}>
+                過去24時間の活動から異常を検出 (生成: {new Date(fraud.generatedAt).toLocaleString('ja-JP')})
+              </div>
+              <FraudList title="❤️ 大量いいね (24h で50件以上)" rows={fraud.massLikers} unit="件" />
+              <FraudList title="💬 大量コメント (24h で30件以上)" rows={fraud.massCommenters} unit="件" />
+              <FraudList title="👥 大量フォロー (24h で50件以上)" rows={fraud.massFollowers} unit="件" />
+              <FraudList title="✍️ 短文レビュー連投 (10件以上 & 平均20字未満)" rows={fraud.suspiciousReviews} unit="件" suffix="(平均字数)" />
+              <div style={{ ...S.card, marginTop: 20 }}>
+                <h3 style={{ fontWeight: 700, marginBottom: 12, fontSize: 14 }}>🚫 直近のBAN</h3>
+                {fraud.recentBans.length === 0 ? (
+                  <div style={{ color: 'var(--fm-text-muted)', fontSize: 13 }}>BANしたユーザーはいません</div>
+                ) : (
+                  fraud.recentBans.map(u => (
+                    <div key={u.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--fm-border)', fontSize: 13 }}>
+                      <strong>{u.name || '?'}</strong> ({u.email}) — <span style={{ color: 'var(--fm-text-sub)' }}>{u.ban_reason}</span>
+                      <span style={{ float: 'right', color: 'var(--fm-text-muted)', fontSize: 11 }}>
+                        {new Date(u.updated_at).toLocaleDateString('ja-JP')}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -721,6 +918,139 @@ export default function AdminPage() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// セグメント breakdown カード
+function SegmentBreakdownCard({ title, data, labelMap }: {
+  title: string
+  data: { breakdown: { key: string; count: number; pct: number }[]; unknown: number; total: number }
+  labelMap?: Record<string, string>
+}) {
+  const items = data.breakdown.slice(0, 12)
+  return (
+    <div style={{
+      background: 'var(--fm-bg-card)', borderRadius: 12, padding: 16,
+      border: '1px solid var(--fm-border)',
+    }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fm-text)', marginBottom: 10 }}>
+        {title}
+        {data.unknown > 0 && (
+          <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--fm-text-muted)', marginLeft: 8 }}>
+            (未入力 {data.unknown})
+          </span>
+        )}
+      </div>
+      {items.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--fm-text-muted)' }}>データなし</div>
+      ) : items.map(it => {
+        const pct = (it.pct * 100).toFixed(1)
+        return (
+          <div key={it.key} style={{ marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 2 }}>
+              <span style={{ color: 'var(--fm-text)' }}>{labelMap?.[it.key] || it.key}</span>
+              <span style={{ color: 'var(--fm-text-sub)' }}>
+                {it.count.toLocaleString()} ({pct}%)
+              </span>
+            </div>
+            <div style={{ height: 4, background: 'var(--fm-bg-secondary)', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{ width: `${pct}%`, height: '100%', background: 'var(--fm-accent)' }} />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// 不正検知リスト
+function FraudList({ title, rows, unit, suffix }: {
+  title: string
+  rows: { userId: string; name: string; email: string; counts: number[] }[]
+  unit: string
+  suffix?: string
+}) {
+  return (
+    <div style={{
+      background: 'var(--fm-bg-card)', borderRadius: 12, padding: 16,
+      border: '1px solid var(--fm-border)', marginBottom: 12,
+    }}>
+      <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>{title}</h3>
+      {rows.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--fm-text-muted)' }}>該当ユーザーはいません</div>
+      ) : (
+        rows.map(r => (
+          <div key={r.userId} style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
+            borderBottom: '1px solid var(--fm-border)', fontSize: 13,
+          }}>
+            <a href={`/u/${r.userId}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fm-text)', textDecoration: 'none' }}>
+              <strong>{r.name || '?'}</strong>
+            </a>
+            <span style={{ color: 'var(--fm-text-sub)', fontSize: 12 }}>{r.email}</span>
+            <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: 'var(--fm-danger)' }}>
+              {r.counts[0]} {unit}
+              {r.counts.length > 1 && suffix && (
+                <span style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginLeft: 6 }}>
+                  {suffix.replace('(', '').replace(')', '')}: {r.counts[1]}
+                </span>
+              )}
+            </span>
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
+
+// 30日 sparkline (SVG, ライブラリなし)
+function Sparkline({ title, data, color }: {
+  title: string
+  data: { date: string; count: number }[]
+  color: string
+}) {
+  if (data.length === 0) return null
+  const W = 600, H = 60, P = 4
+  const max = Math.max(...data.map(d => d.count), 1)
+  const total = data.reduce((s, d) => s + d.count, 0)
+  const stepX = (W - 2 * P) / Math.max(data.length - 1, 1)
+
+  const points = data.map((d, i) => {
+    const x = P + i * stepX
+    const y = H - P - (d.count / max) * (H - 2 * P)
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+
+  // 棒グラフ風の塗り (面積)
+  const area = `M ${P},${H - P} L ${points} L ${P + (data.length - 1) * stepX},${H - P} Z`
+
+  return (
+    <div style={{
+      background: 'var(--fm-bg-card)', borderRadius: 12, padding: 12,
+      border: '1px solid var(--fm-border)',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text)' }}>{title}</span>
+        <span style={{ fontSize: 12, color: 'var(--fm-text-sub)' }}>
+          30日合計 <strong style={{ color: 'var(--fm-text)' }}>{total.toLocaleString()}</strong>
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: H, display: 'block' }}>
+        <path d={area} fill={color} fillOpacity={0.18} />
+        <polyline
+          points={points}
+          fill="none"
+          stroke={color}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--fm-text-muted)', marginTop: 4 }}>
+        <span>{data[0]?.date.slice(5)}</span>
+        <span>{data[data.length - 1]?.date.slice(5)}</span>
+      </div>
     </div>
   )
 }
