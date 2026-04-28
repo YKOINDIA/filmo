@@ -25,12 +25,25 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
   const [showFeedback, setShowFeedback] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
+  // ── プロフィール属性 (任意、レコメンドに使用) ──
+  const [gender, setGender] = useState<string>('')
+  const [birthYear, setBirthYear] = useState<string>('')
+  const [birthMonth, setBirthMonth] = useState<string>('')
+  const [birthDay, setBirthDay] = useState<string>('')
+  const [country, setCountry] = useState<string>('')
+  const [hometown, setHometown] = useState<string>('')
+  const [currentLocation, setCurrentLocation] = useState<string>('')
+  const [showProfile, setShowProfile] = useState(false)
+  const [savingProfile, setSavingProfile] = useState(false)
+
   useEffect(() => {
     loadSettings()
   }, [])
 
   const loadSettings = async () => {
-    const { data } = await supabase.from('users').select('email, notify_new_release, notify_streaming, notify_follow, notify_like, notify_community, notify_email').eq('id', userId).single()
+    const { data } = await supabase.from('users')
+      .select('email, notify_new_release, notify_streaming, notify_follow, notify_like, notify_community, notify_email, gender, birth_year, birth_month, birth_day, country, hometown, current_location')
+      .eq('id', userId).single()
     if (data) {
       setEmail(data.email)
       setNotifySettings({
@@ -41,6 +54,36 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
         notify_community: data.notify_community,
         notify_email: data.notify_email,
       })
+      setGender(data.gender || '')
+      setBirthYear(data.birth_year ? String(data.birth_year) : '')
+      setBirthMonth(data.birth_month ? String(data.birth_month) : '')
+      setBirthDay(data.birth_day ? String(data.birth_day) : '')
+      setCountry(data.country || '')
+      setHometown(data.hometown || '')
+      setCurrentLocation(data.current_location || '')
+    }
+  }
+
+  const saveProfileAttrs = async () => {
+    setSavingProfile(true)
+    try {
+      const updates: Record<string, unknown> = {
+        gender: gender || null,
+        birth_year: birthYear ? parseInt(birthYear, 10) : null,
+        birth_month: birthMonth ? parseInt(birthMonth, 10) : null,
+        birth_day: birthDay ? parseInt(birthDay, 10) : null,
+        country: country || null,
+        hometown: hometown.trim() || null,
+        current_location: currentLocation.trim() || null,
+      }
+      const { error } = await supabase.from('users').update(updates).eq('id', userId)
+      if (error) {
+        showToast('保存に失敗しました')
+      } else {
+        showToast('プロフィールを更新しました')
+      }
+    } finally {
+      setSavingProfile(false)
     }
   }
 
@@ -151,6 +194,153 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
         <div style={{ fontSize: 13, color: 'var(--fm-text-sub)' }}>メールアドレス</div>
         <div style={{ fontSize: 15, marginTop: 4 }}>{email}</div>
       </div>
+
+      {/* プロフィール属性 (任意・レコメンドに使用、公開はされない) */}
+      <button onClick={() => setShowProfile(v => !v)}
+        style={{
+          width: '100%', padding: '14px 16px', borderRadius: 12, border: '1px solid var(--fm-border)',
+          background: 'var(--fm-bg-card)', color: 'var(--fm-text)', cursor: 'pointer',
+          fontSize: 14, fontWeight: 600, textAlign: 'left', marginBottom: 16,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+        <span>👤 プロフィール属性 <span style={{ fontSize: 11, color: 'var(--fm-text-sub)', marginLeft: 6 }}>(任意・非公開)</span></span>
+        <span style={{ color: 'var(--fm-text-sub)' }}>{showProfile ? '▲' : '▼'}</span>
+      </button>
+
+      {showProfile && (
+        <div className="animate-fade-in" style={{ background: 'var(--fm-bg-card)', borderRadius: 12, padding: 16, border: '1px solid var(--fm-border)', marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 16, lineHeight: 1.5 }}>
+            ここで入力した情報は<strong>レコメンドのみに使用</strong>され、他のユーザーには表示されません。
+          </div>
+
+          {/* 性別 */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6, fontWeight: 600 }}>性別</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+              {[
+                { v: 'female', l: '女性' },
+                { v: 'male', l: '男性' },
+                { v: 'other', l: 'その他' },
+                { v: 'prefer_not_to_say', l: '無回答' },
+              ].map(opt => {
+                const sel = gender === opt.v
+                return (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => setGender(sel ? '' : opt.v)}
+                    style={{
+                      padding: '10px 4px', borderRadius: 8,
+                      border: `1px solid ${sel ? 'var(--fm-accent)' : 'var(--fm-border)'}`,
+                      background: sel ? 'rgba(108,92,231,0.18)' : 'var(--fm-bg-input)',
+                      color: sel ? 'var(--fm-accent)' : 'var(--fm-text-sub)',
+                      fontSize: 12, fontWeight: sel ? 700 : 500, cursor: 'pointer',
+                    }}
+                  >
+                    {opt.l}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* 生年月日 */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6, fontWeight: 600 }}>生年月日</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8 }}>
+              <select value={birthYear} onChange={e => setBirthYear(e.target.value)}
+                style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 14 }}>
+                <option value="">年</option>
+                {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                  <option key={y} value={y}>{y}年</option>
+                ))}
+              </select>
+              <select value={birthMonth} onChange={e => setBirthMonth(e.target.value)}
+                style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 14 }}>
+                <option value="">月</option>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                  <option key={m} value={m}>{m}月</option>
+                ))}
+              </select>
+              <select value={birthDay} onChange={e => setBirthDay(e.target.value)}
+                style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 14 }}>
+                <option value="">日</option>
+                {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                  <option key={d} value={d}>{d}日</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* 国 */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6, fontWeight: 600 }}>国</div>
+            <select value={country} onChange={e => setCountry(e.target.value)}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 14 }}>
+              <option value="">未選択</option>
+              <option value="JP">🇯🇵 日本</option>
+              <option value="US">🇺🇸 アメリカ</option>
+              <option value="KR">🇰🇷 韓国</option>
+              <option value="CN">🇨🇳 中国</option>
+              <option value="TW">🇹🇼 台湾</option>
+              <option value="HK">🇭🇰 香港</option>
+              <option value="GB">🇬🇧 イギリス</option>
+              <option value="FR">🇫🇷 フランス</option>
+              <option value="DE">🇩🇪 ドイツ</option>
+              <option value="IT">🇮🇹 イタリア</option>
+              <option value="ES">🇪🇸 スペイン</option>
+              <option value="CA">🇨🇦 カナダ</option>
+              <option value="AU">🇦🇺 オーストラリア</option>
+              <option value="BR">🇧🇷 ブラジル</option>
+              <option value="IN">🇮🇳 インド</option>
+              <option value="MX">🇲🇽 メキシコ</option>
+              <option value="TH">🇹🇭 タイ</option>
+              <option value="VN">🇻🇳 ベトナム</option>
+              <option value="ID">🇮🇩 インドネシア</option>
+              <option value="PH">🇵🇭 フィリピン</option>
+            </select>
+          </div>
+
+          {/* 出身地 */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6, fontWeight: 600 }}>出身地</div>
+            <input
+              type="text"
+              value={hometown}
+              onChange={e => setHometown(e.target.value)}
+              placeholder="例: 東京都 / 大阪府 / Seoul"
+              maxLength={50}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 14, boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {/* 住んでいる場所 */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6, fontWeight: 600 }}>住んでいる場所</div>
+            <input
+              type="text"
+              value={currentLocation}
+              onChange={e => setCurrentLocation(e.target.value)}
+              placeholder="例: 東京都 / 横浜市 / Tokyo"
+              maxLength={50}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 14, boxSizing: 'border-box' }}
+            />
+          </div>
+
+          <button
+            onClick={saveProfileAttrs}
+            disabled={savingProfile}
+            style={{
+              width: '100%', padding: '12px 0', borderRadius: 10, border: 'none',
+              background: 'var(--fm-accent)', color: '#fff', fontWeight: 600,
+              cursor: savingProfile ? 'not-allowed' : 'pointer',
+              opacity: savingProfile ? 0.6 : 1,
+            }}
+          >
+            {savingProfile ? '保存中…' : '保存'}
+          </button>
+        </div>
+      )}
 
       {/* フィードバック */}
       <button onClick={() => setShowFeedback(!showFeedback)}

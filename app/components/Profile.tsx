@@ -15,6 +15,138 @@ const ALL_GENRES = [
   'アドベンチャー', '歴史', '音楽', '戦争', 'ウエスタン', '犯罪',
 ]
 
+// 自分の公開プロフィール (/u/[id]) URL を友達にシェアするボタン
+function ShareMyProfileButton({ userId, userName }: { userId: string; userName: string }) {
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const url = typeof window !== 'undefined'
+    ? `${window.location.origin}/u/${userId}`
+    : `https://filmo.me/u/${userId}`
+  const text = `${userName}のFilmoプロフィール`
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* ignore */ }
+  }
+  const shareTwitter = () => {
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer')
+  }
+  const shareLine = () => {
+    window.open(`https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+  }
+  const systemShare = async () => {
+    if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') return
+    try { await navigator.share({ title: text, url }) } catch { /* canceled */ }
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        style={{
+          width: '100%', padding: '12px', borderRadius: 12, border: '1px solid var(--fm-accent)',
+          background: 'rgba(108,92,231,0.12)', color: 'var(--fm-accent)',
+          fontSize: 14, fontWeight: 600, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+        </svg>
+        プロフィールを友達に送る
+      </button>
+
+      {open && (
+        <div
+          onClick={() => setOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+            zIndex: 9000,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 480,
+              background: 'var(--fm-bg)', borderTopLeftRadius: 16, borderTopRightRadius: 16,
+              padding: '20px 16px 32px',
+            }}
+          >
+            <div style={{
+              width: 40, height: 4, background: 'var(--fm-border)',
+              borderRadius: 2, margin: '0 auto 16px',
+            }} />
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--fm-text)', marginBottom: 8, textAlign: 'center' }}>
+              プロフィールをシェア
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', textAlign: 'center', marginBottom: 20 }}>
+              友達にこのリンクを送ろう
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
+              <button onClick={shareTwitter}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '12px 8px', background: 'transparent', border: '1px solid var(--fm-border)', borderRadius: 10, cursor: 'pointer', color: 'var(--fm-text)' }}>
+                <span style={{ fontSize: 24, fontWeight: 900, lineHeight: 1 }}>𝕏</span>
+                <span style={{ fontSize: 11 }}>Xで投稿</span>
+              </button>
+              <button onClick={shareLine}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '12px 8px', background: 'transparent', border: '1px solid var(--fm-border)', borderRadius: 10, cursor: 'pointer', color: 'var(--fm-text)' }}>
+                <span style={{ fontSize: 22, lineHeight: 1, color: '#06C755', fontWeight: 700 }}>LINE</span>
+                <span style={{ fontSize: 11 }}>LINEで送る</span>
+              </button>
+              <button onClick={copyLink}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '12px 8px', background: 'transparent', border: '1px solid var(--fm-border)', borderRadius: 10, cursor: 'pointer', color: 'var(--fm-text)' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                </svg>
+                <span style={{ fontSize: 11 }}>{copied ? 'コピー済' : 'リンクコピー'}</span>
+              </button>
+              {typeof navigator !== 'undefined' && typeof navigator.share === 'function' ? (
+                <button onClick={systemShare}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '12px 8px', background: 'transparent', border: '1px solid var(--fm-border)', borderRadius: 10, cursor: 'pointer', color: 'var(--fm-text)' }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                    <polyline points="16 6 12 2 8 6"/>
+                    <line x1="12" y1="2" x2="12" y2="15"/>
+                  </svg>
+                  <span style={{ fontSize: 11 }}>その他</span>
+                </button>
+              ) : (
+                <div />
+              )}
+            </div>
+
+            <div style={{
+              padding: '10px 12px', background: 'var(--fm-bg-secondary)',
+              borderRadius: 8, fontSize: 12, color: 'var(--fm-text-sub)',
+              wordBreak: 'break-all', marginBottom: 16, fontFamily: 'monospace',
+            }}>
+              {url}
+            </div>
+
+            <button onClick={() => setOpen(false)}
+              style={{
+                width: '100%', padding: '12px', background: 'transparent',
+                border: '1px solid var(--fm-border)', borderRadius: 10,
+                color: 'var(--fm-text-sub)', fontSize: 14, fontWeight: 500, cursor: 'pointer',
+              }}
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 type WatchStatus = 'watched' | 'want' | 'watching'
 type SortKey = 'created_at' | 'score' | 'release_year' | 'watched_at'
 
@@ -491,10 +623,15 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props)
         }} style={{
           width: '100%', padding: '12px', borderRadius: 12, border: '1px solid var(--fm-border)',
           background: 'var(--fm-bg-card)', color: 'var(--fm-text)', fontSize: 14, fontWeight: 600,
-          cursor: 'pointer', marginBottom: 16,
+          cursor: 'pointer', marginBottom: 8,
         }}>
           プロフィールを編集
         </button>
+      )}
+      {!editing && (
+        <div style={{ marginBottom: 16 }}>
+          <ShareMyProfileButton userId={user.id} userName={user.name} />
+        </div>
       )}
 
       {/* Edit Mode */}
