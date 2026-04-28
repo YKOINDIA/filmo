@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import WorkRegisterModal from './WorkRegisterModal'
 import { useTmdbFetch, useLocale } from '../lib/i18n'
+import { supabase } from '../lib/supabase'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -35,6 +36,10 @@ interface BrowseState {
   loading: boolean
   page: number
   totalPages: number
+  // ブラウズ実行時に使った provider ID を保持(load-more / sort 切替時の再取得で使う)。
+  // selectedProviders とは独立(ユーザーが multi-select 中に単独 provider を browse しても
+  // 元の multi-select 状態を壊さないため)。
+  providerIds?: number[]
 }
 
 const MOVIE_GENRES = [
@@ -612,6 +617,55 @@ export default function Search({ userId, onOpenWork }: {
   const [showRegisterModal, setShowRegisterModal] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
 
+  // --- 視聴済み非表示トグル(localStorage永続、デフォルトON)---
+  const [hideWatched, setHideWatched] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    const v = window.localStorage.getItem('filmo_hide_watched')
+    return v === null ? true : v === '1'
+  })
+  useEffect(() => {
+    window.localStorage.setItem('filmo_hide_watched', hideWatched ? '1' : '0')
+  }, [hideWatched])
+
+  // --- 視聴済み TMDB ID キャッシュ(マウント時に1回取得)---
+  const [watchedIds, setWatchedIds] = useState<Set<number>>(new Set())
+  useEffect(() => {
+    if (!userId) return
+    let cancelled = false
+    supabase
+      .from('watchlists')
+      .select('movie_id')
+      .eq('user_id', userId)
+      .eq('status', 'watched')
+      .then(({ data }) => {
+        if (cancelled || !data) return
+        setWatchedIds(new Set(data.map((d: { movie_id: number }) => d.movie_id)))
+      })
+    return () => { cancelled = true }
+  }, [userId])
+
+  // --- 配信サービス複数選択 ---
+  const [selectedProviders, setSelectedProviders] = useState<number[]>([])
+  const toggleProvider = (id: number) => {
+    if (id <= 0) return // TMDB未対応サービスは複数選択不可
+    setSelectedProviders(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }
+
+  // --- ブラウズ画面の並び替え(人気順 / 評価順)---
+  const [sortMode, setSortMode] = useState<'popularity' | 'rating'>('popularity')
+  const sortParams = (mode: 'popularity' | 'rating'): string =>
+    mode === 'rating'
+      ? 'sort_by=vote_average.desc&vote_count.gte=200'
+      : 'sort_by=popularity.desc'
+
+  // --- 視聴済みフィルタ ---
+  const filterWatched = useCallback((items: TMDBItem[]): TMDBItem[] => {
+    if (!hideWatched || watchedIds.size === 0) return items
+    return items.filter(item => !watchedIds.has(item.id))
+  }, [hideWatched, watchedIds])
+
   // --- Helpers ---
   const getTitle = (r: TMDBItem): string => r.title || r.name || ''
   const getYear = (r: TMDBItem): string => (r.release_date || r.first_air_date || '').substring(0, 4)
@@ -741,7 +795,7 @@ export default function Search({ userId, onOpenWork }: {
     const extraGenre = activeTab === 'anime' ? `16,${genreId}` : String(genreId)
     setBrowse({ mode: 'genre', label: genreName, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
     try {
-      const res = await tmdbFetch(`/api/tmdb?action=discover&type=${mediaType}&with_genres=${extraGenre}&page=${page}&sort_by=popularity.desc`)
+      const res = await tmdbFetch(`/api/tmdb?action=discover&type=${mediaType}&with_genres=${extraGenre}&page=${page}&${sortParams(sortMode)}`)
       const data = await res.json()
       const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
         ...item,
@@ -767,7 +821,7 @@ export default function Search({ userId, onOpenWork }: {
     const dateKey = mediaType === 'movie' ? 'primary_release_date' : 'first_air_date'
     setBrowse({ mode: 'year', label, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
     try {
-      const res = await tmdbFetch(`/api/tmdb?action=discover&type=${mediaType}&${dateKey}.gte=${gte}&${dateKey}.lte=${lte}&page=${page}&sort_by=popularity.desc`)
+      const res = await tmdbFetch(`/api/tmdb?action=discover&type=${mediaType}&${dateKey}.gte=${gte}&${dateKey}.lte=${lte}&page=${page}&${sortParams(sortMode)}`)
       const data = await res.json()
       const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
         ...item,
@@ -785,11 +839,15 @@ export default function Search({ userId, onOpenWork }: {
     }
   }
 
-  const browseProvider = async (providerId: number, providerName: string, page: number = 1) => {
+  // 配信サービス: 複数IDを `|` (OR) で連結して TMDB に送る。
+  // 単一IDのときも同じ関数を使う。
+  const browseProviders = async (providerIds: number[], providerName: string, page: number = 1) => {
+    if (providerIds.length === 0) return
     const mediaType = activeTab === 'movie' ? 'movie' : 'tv'
-    setBrowse({ mode: 'provider', label: providerName, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
+    setBrowse({ mode: 'provider', label: providerName, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1, providerIds })
     try {
-      const res = await tmdbFetch(`/api/tmdb?action=discover&type=${mediaType}&with_watch_providers=${providerId}&with_watch_monetization_types=flatrate&page=${page}&sort_by=popularity.desc`)
+      const idsParam = providerIds.join('|')
+      const res = await tmdbFetch(`/api/tmdb?action=discover&type=${mediaType}&with_watch_providers=${encodeURIComponent(idsParam)}&watch_region=JP&with_watch_monetization_types=flatrate&page=${page}&${sortParams(sortMode)}`)
       const data = await res.json()
       const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
         ...item,
@@ -837,7 +895,7 @@ export default function Search({ userId, onOpenWork }: {
     const mediaType = activeTab === 'movie' ? 'movie' : 'tv'
     setBrowse({ mode: 'country', label: countryName, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
     try {
-      const res = await tmdbFetch(`/api/tmdb?action=discover&type=${mediaType}&with_origin_country=${countryCode}&page=${page}&sort_by=popularity.desc`)
+      const res = await tmdbFetch(`/api/tmdb?action=discover&type=${mediaType}&with_origin_country=${countryCode}&page=${page}&${sortParams(sortMode)}`)
       const data = await res.json()
       const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
         ...item,
@@ -870,7 +928,7 @@ export default function Search({ userId, onOpenWork }: {
         setBrowse(prev => ({ ...prev, loading: false, items: [] }))
         return
       }
-      const res = await tmdbFetch(`/api/tmdb?action=discover&type=movie&with_companies=${companyId}&page=${page}&sort_by=popularity.desc`)
+      const res = await tmdbFetch(`/api/tmdb?action=discover&type=movie&with_companies=${companyId}&page=${page}&${sortParams(sortMode)}`)
       const data = await res.json()
       const items: TMDBItem[] = (data.results || []).map((item: TMDBItem) => ({
         ...item,
@@ -967,14 +1025,17 @@ export default function Search({ userId, onOpenWork }: {
     const section = sections[key]
     if (!section) return null
 
+    const baseItems = activeTab === 'anime' && key === 'airing_anime'
+      ? filterAnimeItems(section.items)
+      : section.items
+    const items = filterWatched(baseItems).slice(0, 20)
+
     return (
       <div key={key}>
         <div style={S.sectionHeader}>{section.title}</div>
         {section.loading ? renderSkeletonRow() : (
           <div style={S.scrollRow}>
-            {(activeTab === 'anime' && key === 'airing_anime' ? filterAnimeItems(section.items) : section.items)
-              .slice(0, 20)
-              .map(item => renderPosterCard(item))}
+            {items.map(item => renderPosterCard(item))}
           </div>
         )}
       </div>
@@ -993,6 +1054,19 @@ export default function Search({ userId, onOpenWork }: {
   const linkArrow: React.CSSProperties = {
     marginLeft: 'auto', color: '#4a4b66', fontSize: 14,
   }
+
+  const sortPillStyle = (active: boolean): React.CSSProperties => ({
+    flex: 1,
+    padding: '8px 16px',
+    borderRadius: 20,
+    border: `1px solid ${active ? '#6c5ce7' : '#2a2b46'}`,
+    background: active ? 'rgba(108,92,231,0.18)' : '#12132a',
+    color: active ? '#a29bfe' : '#c0c0d8',
+    fontSize: 13,
+    fontWeight: active ? 700 : 500,
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  })
 
   const renderGenreChips = () => {
     const genres = activeTab === 'movie' ? MOVIE_GENRES
@@ -1050,56 +1124,112 @@ export default function Search({ userId, onOpenWork }: {
     </div>
   )
 
-  const renderProviderChips = () => (
-    <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
-      <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span>動画配信サービスで探す</span>
-        <span style={{ fontSize: 12, color: '#8888a8', fontWeight: 400 }}>{PROVIDERS.length}サービス</span>
+  const runProviderSearch = () => {
+    if (selectedProviders.length === 0) return
+    const labels = PROVIDERS.filter(p => selectedProviders.includes(p.id)).map(p => `${p.emoji} ${p.name}`)
+    const label = labels.length === 1 ? labels[0] : `${labels[0]} ほか${labels.length - 1}サービス`
+    browseProviders(selectedProviders, label)
+  }
+
+  const renderProviderChips = () => {
+    const selectableProviders = PROVIDERS.filter(p => p.id > 0)
+    return (
+      <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
+        <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>動画配信サービスで探す</span>
+          <span style={{ fontSize: 12, color: '#8888a8', fontWeight: 400 }}>
+            {selectedProviders.length > 0 ? `${selectedProviders.length}件選択中` : `${selectableProviders.length}サービス`}
+          </span>
+        </div>
+
+        {/* 複数選択時のアクションバー */}
+        {selectedProviders.length > 0 && (
+          <div style={{ padding: '10px 16px', background: 'rgba(108,92,231,0.08)', borderBottom: '1px solid #1e1f36', display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              onClick={runProviderSearch}
+              style={{
+                flex: 1, padding: '10px 16px', borderRadius: 8,
+                border: 'none', background: '#6c5ce7', color: '#fff',
+                fontSize: 14, fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              {selectedProviders.length}件のサービスで絞り込む
+            </button>
+            <button
+              onClick={() => setSelectedProviders([])}
+              style={{
+                padding: '10px 14px', borderRadius: 8,
+                border: '1px solid #2a2b46', background: '#0d0e1e', color: '#8888a8',
+                fontSize: 13, fontWeight: 500, cursor: 'pointer',
+              }}
+            >
+              クリア
+            </button>
+          </div>
+        )}
+
+        {/* カード横スクロール — タップでトグル選択 */}
+        <div style={{ display: 'flex', overflowX: 'auto', gap: 12, padding: '16px', scrollbarWidth: 'none' }}>
+          {PROVIDERS.map(p => {
+            const selected = p.id > 0 && selectedProviders.includes(p.id)
+            const disabled = p.id <= 0
+            return (
+              <button
+                key={p.name}
+                onClick={() => disabled ? null : toggleProvider(p.id)}
+                disabled={disabled}
+                title={disabled ? 'TMDB未対応のため複数選択不可' : ''}
+                style={{
+                  flexShrink: 0, width: 150, padding: '16px 12px',
+                  background: selected ? 'rgba(108,92,231,0.18)' : '#0d0e1e',
+                  borderRadius: 12,
+                  border: `1px solid ${selected ? '#6c5ce7' : '#2a2b46'}`,
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  opacity: disabled ? 0.5 : 1,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                  transition: 'border-color 0.2s, background 0.2s',
+                  position: 'relative',
+                }}
+              >
+                {selected && (
+                  <span style={{
+                    position: 'absolute', top: 6, right: 6,
+                    width: 22, height: 22, borderRadius: 11,
+                    background: '#6c5ce7', color: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 13, fontWeight: 700,
+                  }}>✓</span>
+                )}
+                <span style={{ fontSize: 28 }}>{p.emoji}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#e0e0f0', textAlign: 'center', lineHeight: 1.3 }}>{p.name}</span>
+                <span style={{ fontSize: 11, color: '#8888a8', textAlign: 'center', lineHeight: 1.3 }}>{p.desc}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* リスト形式 — タップで単独検索(従来動作)*/}
+        {PROVIDERS.map(p => {
+          const selected = p.id > 0 && selectedProviders.includes(p.id)
+          return (
+            <button
+              key={`list-${p.name}`}
+              style={{ ...linkItemStyle, background: selected ? 'rgba(108,92,231,0.08)' : 'none' }}
+              onClick={() => p.id > 0 ? browseProviders([p.id], `${p.emoji} ${p.name}`) : null}
+              disabled={p.id <= 0}
+              onMouseEnter={e => { if (p.id > 0) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.12)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = selected ? 'rgba(108,92,231,0.08)' : 'none' }}
+            >
+              <span>{p.emoji}</span>
+              <span style={{ flex: 1 }}>{p.name}</span>
+              <span style={{ fontSize: 11, color: '#8888a8' }}>{p.desc}</span>
+              <span style={linkArrow}>›</span>
+            </button>
+          )
+        })}
       </div>
-      <div style={{ display: 'flex', overflowX: 'auto', gap: 12, padding: '16px', scrollbarWidth: 'none' }}>
-        {PROVIDERS.map(p => (
-          <button
-            key={p.name}
-            onClick={() => p.id > 0 ? browseProvider(p.id, `${p.emoji} ${p.name}`) : browseProvider(0, `${p.emoji} ${p.name}`)}
-            style={{
-              flexShrink: 0, width: 150, padding: '16px 12px',
-              background: '#0d0e1e', borderRadius: 12,
-              border: '1px solid #2a2b46', cursor: 'pointer',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-              transition: 'border-color 0.2s, transform 0.2s',
-            }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = '#6c5ce7'
-              ;(e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)'
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = '#2a2b46'
-              ;(e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'
-            }}
-          >
-            <span style={{ fontSize: 28 }}>{p.emoji}</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#e0e0f0', textAlign: 'center', lineHeight: 1.3 }}>{p.name}</span>
-            <span style={{ fontSize: 11, color: '#8888a8', textAlign: 'center', lineHeight: 1.3 }}>{p.desc}</span>
-          </button>
-        ))}
-      </div>
-      {/* Also show as list below cards */}
-      {PROVIDERS.map(p => (
-        <button
-          key={`list-${p.name}`}
-          style={linkItemStyle}
-          onClick={() => p.id > 0 ? browseProvider(p.id, `${p.emoji} ${p.name}`) : browseProvider(0, `${p.emoji} ${p.name}`)}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.08)' }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
-        >
-          <span>{p.emoji}</span>
-          <span style={{ flex: 1 }}>{p.name}</span>
-          <span style={{ fontSize: 11, color: '#8888a8' }}>{p.desc}</span>
-          <span style={linkArrow}>›</span>
-        </button>
-      ))}
-    </div>
-  )
+    )
+  }
 
   const [awardExpanded, setAwardExpanded] = useState(false)
 
@@ -1313,7 +1443,7 @@ export default function Search({ userId, onOpenWork }: {
 
   // --- Search results view ---
   const renderSearchView = () => {
-    const filtered = searchResults.filter(r => {
+    const baseFiltered = searchResults.filter(r => {
       const isAnnict = !!(r as unknown as Record<string, unknown>)._annict
       if (!r.poster_path && !isAnnict) return false
       if (activeTab === 'movie') return r.media_type === 'movie'
@@ -1321,9 +1451,16 @@ export default function Search({ userId, onOpenWork }: {
       if (activeTab === 'anime') return isAnnict || r.media_type === 'tv' || r.genre_ids?.includes(16)
       return true
     })
+    const filtered = filterWatched(baseFiltered)
+    const hidden = baseFiltered.length - filtered.length
 
     return (
       <div>
+        {hideWatched && hidden > 0 && (
+          <div style={{ padding: '0 16px 8px', fontSize: 12, color: '#8888a8' }}>
+            視聴済み {hidden} 件を非表示中
+          </div>
+        )}
         {searchLoading && searchResults.length === 0 ? renderSkeletonGrid() : (
           <>
             <div style={S.grid}>
@@ -1365,58 +1502,108 @@ export default function Search({ userId, onOpenWork }: {
     )
   }
 
+  // 現在の browse を再取得する(sort 変更時 / load more 時に使う)
+  const continueBrowse = (page: number) => {
+    if (browse.mode === 'genre') {
+      const genres = activeTab === 'movie' ? MOVIE_GENRES
+        : activeTab === 'drama' ? TV_GENRES : ANIME_GENRES
+      const found = genres.find(g => browse.label.includes(g.name))
+      if (found) browseGenre(found.id, browse.label, page)
+    } else if (browse.mode === 'year') {
+      const yearMatch = browse.label.match(/^(\d{4})年$/)
+      if (yearMatch) browseYear(parseInt(yearMatch[1]), page)
+    } else if (browse.mode === 'provider') {
+      // ブラウズ時に保存した providerIds を再利用(selectedProviders は UI 状態なので独立)
+      if (browse.providerIds && browse.providerIds.length > 0) {
+        browseProviders(browse.providerIds, browse.label, page)
+      }
+    } else if (browse.mode === 'award') {
+      const found = AWARDS.find(a => browse.label.includes(a.name))
+      if (found) browseAward(found, page)
+    } else if (browse.mode === 'country') {
+      const found = COUNTRIES.find(c => browse.label.includes(c.name))
+      if (found) browseCountry(found.code, browse.label, page)
+    } else if (browse.mode === 'company') {
+      browseCompany(browse.label, page)
+    }
+  }
+
+  // sortMode が変わったら現在のブラウズを page=1 で再取得(award はソート固定なのでスキップ)
+  useEffect(() => {
+    if (browse.mode === 'home' || browse.mode === 'award') return
+    continueBrowse(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortMode])
+
   // --- Browse results (genre/year drill-down) ---
-  const renderBrowseView = () => (
-    <div>
-      <button style={S.backBtn} onClick={goBackToHome}>
-        ← 戻る
-      </button>
-      <div style={{ ...S.sectionHeader, fontSize: 18 }}>{browse.label}</div>
-      {browse.loading && browse.items.length === 0 ? renderSkeletonGrid() : (
-        <>
-          <div style={S.grid}>
-            {browse.items.map(item => renderPosterCard(item, true))}
-          </div>
-          {browse.page < browse.totalPages && browse.items.length > 0 && (
+  const renderBrowseView = () => {
+    const items = filterWatched(browse.items)
+    const hidden = browse.items.length - items.length
+    const showSortToggle = browse.mode !== 'award'
+
+    return (
+      <div>
+        <button style={S.backBtn} onClick={goBackToHome}>
+          ← 戻る
+        </button>
+        <div style={{ ...S.sectionHeader, fontSize: 18 }}>{browse.label}</div>
+
+        {showSortToggle && (
+          <div style={{ display: 'flex', gap: 8, padding: '0 16px 12px' }}>
             <button
-              style={S.loadMoreBtn}
-              onClick={() => {
-                if (browse.mode === 'genre') {
-                  const genres = activeTab === 'movie' ? MOVIE_GENRES
-                    : activeTab === 'drama' ? TV_GENRES : ANIME_GENRES
-                  const found = genres.find(g => browse.label.includes(g.name))
-                  if (found) browseGenre(found.id, browse.label, browse.page + 1)
-                } else if (browse.mode === 'year') {
-                  const yearMatch = browse.label.match(/^(\d{4})年$/)
-                  if (yearMatch) browseYear(parseInt(yearMatch[1]), browse.page + 1)
-                } else if (browse.mode === 'provider') {
-                  const found = PROVIDERS.find(p => browse.label.includes(p.name))
-                  if (found) browseProvider(found.id, browse.label, browse.page + 1)
-                } else if (browse.mode === 'award') {
-                  const found = AWARDS.find(a => browse.label.includes(a.name))
-                  if (found) browseAward(found, browse.page + 1)
-                } else if (browse.mode === 'country') {
-                  const found = COUNTRIES.find(c => browse.label.includes(c.name))
-                  if (found) browseCountry(found.code, browse.label, browse.page + 1)
-                } else if (browse.mode === 'company') {
-                  browseCompany(browse.label, browse.page + 1)
-                }
-              }}
-              disabled={browse.loading}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.2)'
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLButtonElement).style.background = 'transparent'
-              }}
-            >
-              {browse.loading ? '読み込み中...' : 'もっと見る'}
-            </button>
-          )}
-        </>
-      )}
-    </div>
-  )
+              onClick={() => setSortMode('popularity')}
+              style={sortPillStyle(sortMode === 'popularity')}
+            >🔥 人気順</button>
+            <button
+              onClick={() => setSortMode('rating')}
+              style={sortPillStyle(sortMode === 'rating')}
+            >⭐ 評価順</button>
+          </div>
+        )}
+
+        {hideWatched && hidden > 0 && (
+          <div style={{ padding: '0 16px 8px', fontSize: 12, color: '#8888a8' }}>
+            視聴済み {hidden} 件を非表示中
+          </div>
+        )}
+
+        {browse.loading && browse.items.length === 0 ? renderSkeletonGrid() : (
+          <>
+            <div style={S.grid}>
+              {items.map(item => renderPosterCard(item, true))}
+            </div>
+            {items.length === 0 && !browse.loading && (
+              <div style={S.emptyState}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+                <div style={{ fontSize: 15 }}>このカテゴリは全て視聴済みです</div>
+                <button
+                  onClick={() => setHideWatched(false)}
+                  style={{ marginTop: 16, padding: '10px 20px', borderRadius: 10, border: '1px solid #6c5ce7', background: 'transparent', color: '#a29bfe', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  視聴済も表示する
+                </button>
+              </div>
+            )}
+            {browse.page < browse.totalPages && browse.items.length > 0 && (
+              <button
+                style={S.loadMoreBtn}
+                onClick={() => continueBrowse(browse.page + 1)}
+                disabled={browse.loading}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(108,92,231,0.2)'
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'transparent'
+                }}
+              >
+                {browse.loading ? '読み込み中...' : 'もっと見る'}
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    )
+  }
 
   // --- Home browsing (sections) ---
   const renderHomeView = () => {
@@ -1517,6 +1704,36 @@ export default function Search({ userId, onOpenWork }: {
             </button>
           )}
         </div>
+
+        {/* 視聴済み非表示トグル */}
+        <button
+          onClick={() => setHideWatched(v => !v)}
+          style={{
+            marginTop: 10,
+            padding: '6px 12px',
+            borderRadius: 16,
+            border: `1px solid ${hideWatched ? '#6c5ce7' : '#2a2b46'}`,
+            background: hideWatched ? 'rgba(108,92,231,0.18)' : '#12132a',
+            color: hideWatched ? '#a29bfe' : '#8888a8',
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            transition: 'all 0.15s ease',
+          }}
+          aria-pressed={hideWatched}
+          title={hideWatched ? '視聴済み作品を非表示中' : '視聴済み作品も表示中'}
+        >
+          <span>{hideWatched ? '👁️‍🗨️' : '👁️'}</span>
+          <span>視聴済を{hideWatched ? '隠す' : '表示'}</span>
+          {watchedIds.size > 0 && (
+            <span style={{ fontSize: 11, color: hideWatched ? '#a29bfe' : '#6c6d8a', opacity: 0.8 }}>
+              ({watchedIds.size})
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Content */}
