@@ -1,0 +1,6 @@
+app_identifier("jp.filmo.app") # Bundle ID
+apple_id("ykoindia@gmail.com")  # Apple Developer アカウント
+team_id("3VWJQ5D3L9")           # Apple Developer Team ID
+
+# App Store Connect の itc_team_id は App Store Connect API Key 認証を使うため不要。
+# Fastlane が API Key からチーム情報を自動解決する。

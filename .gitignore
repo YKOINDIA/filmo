@@ -39,3 +39,27 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Android keystore（絶対にGitにコミットしない）
+*.jks
+*.keystore
+android/app/release/
+android/local.properties
+android/key.properties
+
+# iOS signing material（絶対にGitにコミットしない）
+*.p12
+*.p8
+*.mobileprovision
+*.cer
+*.certSigningRequest
+ios/App/Pods/
+ios/App/build/
+build/ios/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+fastlane/README.md

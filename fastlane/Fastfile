@@ -1,0 +1,191 @@
+# Filmo iOS Fastfile
+# GitHub Actions の macOS runner から呼び出される前提。
+# 証明書・Provisioning Profile・App Store Connect API Key は
+# すべて GitHub Secrets から環境変数経由で渡される。
+
+default_platform(:ios)
+
+XCODE_PROJECT    = "ios/App/App.xcodeproj"
+XCODE_WORKSPACE  = "ios/App/App.xcworkspace"
+SCHEME           = "App"
+TARGET           = "App"
+EXPORT_OPTIONS   = "ios/App/ExportOptions.plist"
+OUTPUT_DIR       = "build/ios"
+IPA_NAME         = "Filmo"
+
+TEAM_ID          = "3VWJQ5D3L9"
+BUNDLE_ID        = "jp.filmo.app"
+PROFILE_NAME     = "Filmo App Store"
+CODE_SIGN_IDENT  = "Apple Distribution"
+
+platform :ios do
+  desc "CI 用: 証明書をキーチェーンにインストール"
+  private_lane :setup_ci_keychain do
+    # GitHub Actions の macOS runner では毎回クリーンな環境なので
+    # 一時キーチェーンを作成して証明書をインポート
+    keychain_name     = "filmo_ci.keychain-db"
+    keychain_password = ENV.fetch("KEYCHAIN_PASSWORD")
+
+    create_keychain(
+      name: keychain_name,
+      password: keychain_password,
+      default_keychain: true,
+      unlock: true,
+      timeout: 3600,
+      lock_when_sleeps: false
+    )
+
+    # BUILD_CERTIFICATE_BASE64 (.p12 の base64) を一時ファイルに書き出してインポート
+    # binwrite で確実にバイナリとして書き込む
+    cert_path = "/tmp/build_cert.p12"
+    cert_bytes = Base64.decode64(ENV.fetch("BUILD_CERTIFICATE_BASE64"))
+    File.binwrite(cert_path, cert_bytes)
+    UI.message("Wrote cert to #{cert_path} (#{cert_bytes.bytesize} bytes)")
+    if cert_bytes.bytesize < 100
+      UI.user_error!("BUILD_CERTIFICATE_BASE64 decoded to only #{cert_bytes.bytesize} bytes; secret is empty or corrupt")
+    end
+
+    import_certificate(
+      certificate_path: cert_path,
+      certificate_password: ENV.fetch("P12_PASSWORD"),
+      keychain_name: keychain_name,
+      keychain_password: keychain_password,
+      log_output: true
+    )
+
+    # インポート後、証明書が実際に使える状態かを security find-identity で検証
+    identity_output = `security find-identity -v -p codesigning "#{File.expand_path("~/Library/Keychains/#{keychain_name}")}"`
+    UI.message("Codesigning identities after import:\n#{identity_output}")
+    unless identity_output.include?(CODE_SIGN_IDENT)
+      UI.user_error!("'#{CODE_SIGN_IDENT}' identity not found in keychain after import; P12_PASSWORD or BUILD_CERTIFICATE_BASE64 may be wrong")
+    end
+
+    File.delete(cert_path) if File.exist?(cert_path)
+
+    # Provisioning Profile を所定の場所に配置
+    profile_bytes = Base64.decode64(ENV.fetch("BUILD_PROVISION_PROFILE_BASE64"))
+    profile_path  = File.expand_path("~/Library/MobileDevice/Provisioning Profiles/filmo_appstore.mobileprovision")
+    FileUtils.mkdir_p(File.dirname(profile_path))
+    File.binwrite(profile_path, profile_bytes)
+    UI.message("Wrote profile to #{profile_path} (#{profile_bytes.bytesize} bytes)")
+    if profile_bytes.bytesize < 100
+      UI.user_error!("BUILD_PROVISION_PROFILE_BASE64 decoded to only #{profile_bytes.bytesize} bytes; secret is empty or corrupt")
+    end
+
+    # Profile の妥当性を security cms -D で検証（UUID を抽出できれば OK）
+    profile_plist = `security cms -D -i "#{profile_path}" 2>/dev/null`
+    if profile_plist.empty?
+      UI.user_error!("Provisioning profile failed to decode via 'security cms -D'; file is corrupt")
+    end
+
+    UI.success("CI keychain + provisioning profile setup complete")
+  end
+
+  desc "依存解決 + cap sync (Next.js ビルドは不要)"
+  lane :prepare_web do
+    # リポジトリルートで実行
+    Dir.chdir("..") do
+      # @capacitor/cli 等を入れるために npm ci は必要
+      sh("npm ci")
+
+      # capacitor.config.ts で server.url: https://filmo.me を指定しているため
+      # WebView は本番サーバーから直接 HTML/JS を読み込む。
+      # webDir (out/) は実体の存在チェックだけされるので空で OK。
+      # よって `npm run build` は不要（ビルドしても WebView は使わない & CI に Supabase 等の env が無くて落ちる）。
+      sh("mkdir -p out")
+      sh("npx cap sync ios")
+    end
+  end
+
+  desc "Xcode プロジェクトの署名設定を手動方式に書き換える (CI 実行時のみ)"
+  private_lane :configure_manual_signing do
+    # update_code_signing_settings は .pbxproj を書き換えるが、CI 上の一時的な変更なので
+    # git に commit はされない (dirty working tree のまま終わる)。
+    update_code_signing_settings(
+      path: XCODE_PROJECT,
+      use_automatic_signing: false,
+      team_id: TEAM_ID,
+      bundle_identifier: BUNDLE_ID,
+      profile_name: PROFILE_NAME,
+      code_sign_identity: CODE_SIGN_IDENT,
+      targets: [TARGET]
+    )
+  end
+
+  desc "TestFlight へアップロード (ベータ配信)"
+  lane :beta do
+    setup_ci_keychain if is_ci
+    prepare_web
+    configure_manual_signing
+
+    # ビルド番号を自動採番 (GitHub run number)
+    build_number = ENV["GITHUB_RUN_NUMBER"] || Time.now.strftime("%Y%m%d%H%M")
+    increment_build_number(
+      xcodeproj: XCODE_PROJECT,
+      build_number: build_number
+    )
+
+    build_app(
+      project: XCODE_PROJECT,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      export_options: EXPORT_OPTIONS,
+      output_directory: OUTPUT_DIR,
+      output_name: "#{IPA_NAME}.ipa",
+      clean: true,
+      silent: false,
+      include_symbols: true,
+      include_bitcode: false
+      # xcargs で署名を強制しない:
+      # PROVISIONING_PROFILE_SPECIFIER を xcodebuild 引数として渡すと
+      # SPM のライブラリターゲット (IONCameraLib 等) にも適用され
+      # 「ライブラリは Provisioning Profile を必要としない」エラーになる。
+      # App ターゲットの署名は configure_manual_signing で pbxproj に書き込み済み。
+      # Export 時の署名は ExportOptions.plist で制御。
+    )
+
+    upload_to_testflight(
+      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"],
+      ipa: "#{OUTPUT_DIR}/#{IPA_NAME}.ipa",
+      skip_waiting_for_build_processing: true,
+      skip_submission: true
+    )
+  end
+
+  desc "App Store 本番提出 (審査キュー投入)"
+  lane :release do
+    setup_ci_keychain if is_ci
+    prepare_web
+    configure_manual_signing
+
+    build_number = ENV["GITHUB_RUN_NUMBER"] || Time.now.strftime("%Y%m%d%H%M")
+    increment_build_number(
+      xcodeproj: XCODE_PROJECT,
+      build_number: build_number
+    )
+
+    build_app(
+      project: XCODE_PROJECT,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      export_options: EXPORT_OPTIONS,
+      output_directory: OUTPUT_DIR,
+      output_name: "#{IPA_NAME}.ipa",
+      clean: true,
+      include_symbols: true,
+      include_bitcode: false
+      # xcargs は beta lane と同じ理由で削除 (SPM ライブラリ側が provisioning profile を拒否する)。
+    )
+
+    upload_to_app_store(
+      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"],
+      ipa: "#{OUTPUT_DIR}/#{IPA_NAME}.ipa",
+      skip_metadata: true,
+      skip_screenshots: true,
+      submit_for_review: false, # 手動でレビュー提出する
+      force: true
+    )
+  end
+end
