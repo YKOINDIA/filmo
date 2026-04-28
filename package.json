@@ -9,12 +9,16 @@
     "lint": "eslint",
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",
-    "cap:ios": "npx cap open ios"
+    "cap:ios": "npx cap open ios",
+    "cap:build:android": "npx cap sync android",
+    "cap:build:ios": "npx cap sync ios"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.0",
     "@capacitor/camera": "^8.0.2",
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^8.3.0",
+    "@capacitor/ios": "^8.3.0",
     "@capacitor/push-notifications": "^8.0.3",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",

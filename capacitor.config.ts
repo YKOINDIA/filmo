@@ -30,6 +30,9 @@ const config: CapacitorConfig = {
     webContentsDebuggingEnabled: false,
   },
   ios: {
+    // WebView がセーフエリア分インセットされるため、背景にアプリのダークカラーを指定。
+    // 指定が無いとノッチ下やホームインジケーター付近が iOS のデフォルト白で表示されてしまう。
+    backgroundColor: '#0a0b14',
     contentInset: 'automatic',
     scrollEnabled: true,
     allowsLinkPreview: false,
