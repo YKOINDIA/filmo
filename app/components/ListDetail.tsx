@@ -256,24 +256,42 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
     }
   }
 
-  const handleShare = async () => {
+  const buildShareUrl = useCallback(() => {
     const slug = list?.slug
-    const url = `${window.location.origin}/lists/${slug || listId}`
+    return `${window.location.origin}/lists/${slug || listId}`
+  }, [list?.slug, listId])
+
+  const buildShareText = useCallback(() => {
+    const title = list?.title || 'リスト'
+    const count = list?.items_count ?? 0
+    return `「${title}」(${count}本) / Filmo`
+  }, [list?.title, list?.items_count])
+
+  const handleCopyLink = async () => {
     try {
-      if (navigator.share) {
-        await navigator.share({ title: list?.title, url })
-      } else {
-        await navigator.clipboard.writeText(url)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      }
-    } catch {
-      try {
-        await navigator.clipboard.writeText(url)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      } catch { /* ignore */ }
-    }
+      await navigator.clipboard.writeText(buildShareUrl())
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* ignore */ }
+  }
+
+  const handleShareTwitter = () => {
+    const url = encodeURIComponent(buildShareUrl())
+    const text = encodeURIComponent(buildShareText())
+    window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank', 'noopener,noreferrer')
+  }
+
+  const handleShareLine = () => {
+    const url = encodeURIComponent(buildShareUrl())
+    const text = encodeURIComponent(buildShareText())
+    window.open(`https://social-plugins.line.me/lineit/share?url=${url}&text=${text}`, '_blank', 'noopener,noreferrer')
+  }
+
+  const handleSystemShare = async () => {
+    if (!navigator.share) return
+    try {
+      await navigator.share({ title: list?.title, text: buildShareText(), url: buildShareUrl() })
+    } catch { /* user canceled */ }
   }
 
   if (loading) {
@@ -338,14 +356,14 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
 
             {/* Share */}
             {list.is_public && (
-              <button onClick={handleShare} style={{
+              <button onClick={() => setShowShare(true)} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px',
                 borderRadius: 6, border: '1px solid var(--fm-border)',
                 background: 'transparent', color: 'var(--fm-text-sub)',
                 fontSize: 13, cursor: 'pointer', fontWeight: 500,
               }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-                {copied ? 'Copied!' : 'Share'}
+                シェア
               </button>
             )}
 
@@ -645,6 +663,129 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Share modal */}
+      {showShare && list && (
+        <div
+          onClick={() => setShowShare(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+            zIndex: 100, padding: 0,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 480,
+              background: 'var(--fm-bg)', borderTopLeftRadius: 16, borderTopRightRadius: 16,
+              padding: '20px 16px 32px',
+              animation: 'slideUp 0.2s ease-out',
+            }}
+          >
+            <style>{`@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
+            <div style={{
+              width: 40, height: 4, background: 'var(--fm-border)',
+              borderRadius: 2, margin: '0 auto 16px',
+            }} />
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--fm-text)', marginBottom: 16, textAlign: 'center' }}>
+              リストをシェア
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', textAlign: 'center', marginBottom: 20, lineHeight: 1.5 }}>
+              「{list.title}」を友達に教えよう
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
+              {/* X (Twitter) */}
+              <button
+                onClick={handleShareTwitter}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                  padding: '12px 8px', background: 'transparent',
+                  border: '1px solid var(--fm-border)', borderRadius: 10,
+                  cursor: 'pointer', color: 'var(--fm-text)',
+                }}
+              >
+                <span style={{ fontSize: 24, fontWeight: 900, lineHeight: 1 }}>𝕏</span>
+                <span style={{ fontSize: 11 }}>Xで投稿</span>
+              </button>
+
+              {/* LINE */}
+              <button
+                onClick={handleShareLine}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                  padding: '12px 8px', background: 'transparent',
+                  border: '1px solid var(--fm-border)', borderRadius: 10,
+                  cursor: 'pointer', color: 'var(--fm-text)',
+                }}
+              >
+                <span style={{ fontSize: 22, lineHeight: 1, color: '#06C755', fontWeight: 700 }}>LINE</span>
+                <span style={{ fontSize: 11 }}>LINEで送る</span>
+              </button>
+
+              {/* Copy link */}
+              <button
+                onClick={handleCopyLink}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                  padding: '12px 8px', background: 'transparent',
+                  border: '1px solid var(--fm-border)', borderRadius: 10,
+                  cursor: 'pointer', color: 'var(--fm-text)',
+                }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                </svg>
+                <span style={{ fontSize: 11 }}>{copied ? 'コピー済' : 'リンクコピー'}</span>
+              </button>
+
+              {/* System share (mobile only) */}
+              {typeof navigator !== 'undefined' && typeof navigator.share === 'function' ? (
+                <button
+                  onClick={handleSystemShare}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                    padding: '12px 8px', background: 'transparent',
+                    border: '1px solid var(--fm-border)', borderRadius: 10,
+                    cursor: 'pointer', color: 'var(--fm-text)',
+                  }}
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                    <polyline points="16 6 12 2 8 6"/>
+                    <line x1="12" y1="2" x2="12" y2="15"/>
+                  </svg>
+                  <span style={{ fontSize: 11 }}>その他</span>
+                </button>
+              ) : (
+                <div /> /* spacer */
+              )}
+            </div>
+
+            {/* URL preview */}
+            <div style={{
+              padding: '10px 12px', background: 'var(--fm-bg-secondary)',
+              borderRadius: 8, fontSize: 12, color: 'var(--fm-text-sub)',
+              wordBreak: 'break-all', marginBottom: 16, fontFamily: 'monospace',
+            }}>
+              {buildShareUrl()}
+            </div>
+
+            <button
+              onClick={() => setShowShare(false)}
+              style={{
+                width: '100%', padding: '12px', background: 'transparent',
+                border: '1px solid var(--fm-border)', borderRadius: 10,
+                color: 'var(--fm-text-sub)', fontSize: 14, fontWeight: 500, cursor: 'pointer',
+              }}
+            >
+              閉じる
+            </button>
+          </div>
         </div>
       )}
     </div>
