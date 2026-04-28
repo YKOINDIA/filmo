@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import ListDetail from './ListDetail'
 import { useLocale } from '../lib/i18n'
+import { showToast } from '../lib/toast'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -149,7 +150,11 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
   }, [fetchLists])
 
   const handleCreate = async () => {
-    if (!newTitle.trim()) return
+    if (creating) return
+    if (!newTitle.trim()) {
+      showToast('タイトルを入力してください')
+      return
+    }
     setCreating(true)
     try {
       const slug = newTitle.trim().toLowerCase().replace(/[^a-z0-9\u3040-\u9fff]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now().toString(36)
@@ -174,12 +179,15 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
       setNewPublic(true)
       setNewRanked(false)
       setNewCollaborative(false)
+      showToast('リストを作成しました')
       if (data) {
+        // 作成したリストの詳細画面に遷移してすぐに作品追加できるようにする
         setSelectedList((data as unknown as ListItem).id)
       }
       fetchLists()
     } catch (err) {
       console.error('Failed to create list:', err)
+      showToast('リストの作成に失敗しました')
     }
     setCreating(false)
   }

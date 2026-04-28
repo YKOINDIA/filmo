@@ -35,6 +35,7 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
   const [currentLocation, setCurrentLocation] = useState<string>('')
   const [showProfile, setShowProfile] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
 
   useEffect(() => {
     loadSettings()
@@ -406,12 +407,28 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
                 キャンセル
               </button>
               <button onClick={async () => {
-                await supabase.from('users').delete().eq('id', userId)
-                await supabase.auth.signOut()
-                window.location.reload()
+                if (deletingAccount) return
+                setDeletingAccount(true)
+                try {
+                  const { error: delErr } = await supabase.from('users').delete().eq('id', userId)
+                  if (delErr) throw delErr
+                  await supabase.auth.signOut()
+                  showToast('アカウントを削除しました')
+                  window.location.reload()
+                } catch (err) {
+                  console.error('Account delete failed:', err)
+                  showToast('アカウント削除に失敗しました')
+                  setDeletingAccount(false)
+                }
               }}
-                style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', background: 'var(--fm-danger)', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>
-                削除する
+                disabled={deletingAccount}
+                style={{
+                  flex: 1, padding: '12px 0', borderRadius: 10, border: 'none',
+                  background: 'var(--fm-danger)', color: '#fff',
+                  cursor: deletingAccount ? 'wait' : 'pointer', fontWeight: 600,
+                  opacity: deletingAccount ? 0.6 : 1,
+                }}>
+                {deletingAccount ? '削除中…' : '削除する'}
               </button>
             </div>
           </div>

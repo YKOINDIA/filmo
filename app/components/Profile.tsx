@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { showToast } from '../lib/toast'
 
 const TMDB_IMG_POSTER = 'https://image.tmdb.org/t/p/w342'
 import { getLevelFromPoints, LEVEL_TITLES } from '../lib/points'
@@ -478,17 +479,29 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props)
 
   // Save profile
   const handleSave = async () => {
-    setSaving(true)
-    const updates: Partial<ProfileUser> = {
-      name: editName,
-      bio: editBio,
-      favorite_genres: editGenres,
-      best_movie_title: editBestTitle || null,
-      best_movie_poster: editBestPoster || null,
+    if (saving) return
+    if (!editName.trim()) {
+      showToast('名前を入力してください')
+      return
     }
-    await supabase.from('users').update(updates).eq('id', user.id)
-    onUpdate(updates)
-    setEditing(false)
+    setSaving(true)
+    try {
+      const updates: Partial<ProfileUser> = {
+        name: editName.trim(),
+        bio: editBio,
+        favorite_genres: editGenres,
+        best_movie_title: editBestTitle || null,
+        best_movie_poster: editBestPoster || null,
+      }
+      const { error } = await supabase.from('users').update(updates).eq('id', user.id)
+      if (error) throw error
+      onUpdate(updates)
+      setEditing(false)
+      showToast('プロフィールを更新しました')
+    } catch (err) {
+      console.error('Failed to save profile:', err)
+      showToast('プロフィールの更新に失敗しました')
+    }
     setSaving(false)
   }
 

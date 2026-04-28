@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { showToast } from '../lib/toast'
 import { MIN_RATINGS_FOR_MATCH } from '../lib/matchScore'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p/w342'
@@ -244,6 +245,7 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
   }
 
   const handleSaveProfile = async (skip: boolean = false) => {
+    if (savingProfile) return
     setSavingProfile(true)
     try {
       if (!skip) {
@@ -258,7 +260,12 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
 
         if (Object.keys(updates).length > 0) {
           const { error } = await supabase.from('users').update(updates).eq('id', userId)
-          if (error) console.error('Profile save failed:', error)
+          if (error) {
+            console.error('Profile save failed:', error)
+            showToast('プロフィールの保存に失敗しました')
+            return
+          }
+          showToast('プロフィールを保存しました')
         }
 
         // 生年が入っていれば、世代+地域でレコメンドを再取得
@@ -276,7 +283,10 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
   }
 
   const handleComplete = async () => {
+    if (saving) return
     setSaving(true)
+    let savedRatings = 0
+    let savedFans = 0
     try {
       // Save movie ratings
       for (const [movieIdStr, score] of Object.entries(ratings)) {
@@ -307,6 +317,7 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
           score,
         })
         if (wlError) console.error(`Watchlist save failed for movie ${movieId}:`, wlError)
+        else savedRatings++
       }
 
       // Save FAN! selections (batch insert)
@@ -330,11 +341,19 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
       if (fanRows.length > 0) {
         const { error: fanError } = await supabase.from('fans').insert(fanRows)
         if (fanError) console.error('Fan save failed:', fanError)
+        else savedFans = fanRows.length
       }
 
+      const parts: string[] = []
+      if (savedRatings > 0) parts.push(`${savedRatings}本の評価`)
+      if (savedFans > 0) parts.push(`${savedFans}名のFAN!`)
+      showToast(parts.length > 0
+        ? `${parts.join(' & ')}を保存しました 🎉`
+        : 'セットアップ完了!')
       onComplete()
     } catch (err) {
       console.error('Onboarding save error:', err)
+      showToast('保存に失敗しました。再度お試しください。')
     } finally {
       setSaving(false)
     }
