@@ -94,6 +94,12 @@ platform :ios do
       # よって `npm run build` は不要（ビルドしても WebView は使わない & CI に Supabase 等の env が無くて落ちる）。
       sh("mkdir -p out")
       sh("npx cap sync ios")
+
+      # `npx cap sync ios` が SPM artifacts cache (Cordova.xcframework.zip 等) を
+      # 中途半端な状態で残すことがあり、後続の build_app の
+      # xcodebuild -resolvePackageDependencies が "already exists in file system" で落ちる。
+      # 明示的に artifacts ディレクトリを消して回避する (DerivedData は build_app の clean: true で扱われる)。
+      sh("rm -rf ~/Library/Caches/org.swift.swiftpm/artifacts")
     end
   end
 
