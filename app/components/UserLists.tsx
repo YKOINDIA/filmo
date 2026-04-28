@@ -52,6 +52,7 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
   const [newDesc, setNewDesc] = useState('')
   const [newPublic, setNewPublic] = useState(true)
   const [newRanked, setNewRanked] = useState(false)
+  const [newCollaborative, setNewCollaborative] = useState(false)
   const [creating, setCreating] = useState(false)
 
   const fetchLists = useCallback(async () => {
@@ -160,6 +161,7 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
           description: newDesc.trim(),
           is_public: newPublic,
           is_ranked: newRanked,
+          is_collaborative: newCollaborative && newPublic,
           slug,
         })
         .select()
@@ -171,6 +173,7 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
       setNewDesc('')
       setNewPublic(true)
       setNewRanked(false)
+      setNewCollaborative(false)
       if (data) {
         setSelectedList((data as unknown as ListItem).id)
       }
@@ -284,6 +287,22 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
                 <div>
                   <div style={{ fontWeight: 600, color: 'var(--fm-text)' }}>{t('lists.makeRanked')}</div>
                   <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 1 }}>{t('lists.makeRankedDesc')}</div>
+                </div>
+              </label>
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: 10, cursor: newPublic ? 'pointer' : 'not-allowed',
+                fontSize: 13, color: 'var(--fm-text-sub)',
+                opacity: newPublic ? 1 : 0.5,
+              }}>
+                <input type="checkbox" checked={newCollaborative && newPublic}
+                  disabled={!newPublic}
+                  onChange={e => setNewCollaborative(e.target.checked)}
+                  style={{ width: 18, height: 18, accentColor: 'var(--fm-accent)' }} />
+                <div>
+                  <div style={{ fontWeight: 600, color: 'var(--fm-text)' }}>👥 みんなで作るリスト</div>
+                  <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 1 }}>
+                    他のユーザーがこのリストに作品を追加できます (公開リスト限定)
+                  </div>
                 </div>
               </label>
             </div>
