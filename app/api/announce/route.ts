@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '../../lib/supabase-admin'
-
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'ykoindia@gmail.com'
+import { isAdminEmail } from '../../lib/adminAuth'
 
 interface SegmentFilter {
   country?: string         // ISO 2-letter
@@ -20,7 +19,7 @@ export async function POST(request: NextRequest) {
       admin_email?: string; segment?: SegmentFilter
     }
 
-    if (admin_email !== ADMIN_EMAIL) {
+    if (!isAdminEmail(admin_email)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
     if (!title || !announcementBody) {

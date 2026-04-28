@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '../../../lib/supabase-admin'
-
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'ykoindia@gmail.com'
+import { isAdminEmail } from '../../../lib/adminAuth'
 
 /**
  * 管理画面 不正検知エンドポイント。
@@ -19,7 +18,7 @@ const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'ykoindia@gmail.com'
  */
 export async function GET(req: NextRequest) {
   const email = req.nextUrl.searchParams.get('email')
-  if (!email || email !== ADMIN_EMAIL) {
+  if (!isAdminEmail(email)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from 'react'
 import "./globals.css";
 import { LocaleProviderWrapper } from "./components/LocaleProviderWrapper";
+import GoogleAnalytics from "./components/GoogleAnalytics";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -109,6 +111,10 @@ export default function RootLayout({
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        {/* GA4: useSearchParams() を含むので Suspense 境界で囲む (Next.js App Router 要件) */}
+        <Suspense fallback={null}>
+          <GoogleAnalytics />
+        </Suspense>
         <LocaleProviderWrapper>{children}</LocaleProviderWrapper>
         {/*
           Service Worker は Capacitor WebView の標準オリジン (capacitor://) では

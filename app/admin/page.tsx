@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'ykoindia@gmail.com'
+import { isAdminEmail } from '../lib/adminAuth'
 
 type Tab = 'kpi' | 'users' | 'reviews' | 'segments' | 'fraud' | 'community' | 'security' | 'xpost' | 'coupons' | 'announce' | 'cron' | 'feedback' | 'work_requests' | 'edit_proposals'
 
@@ -106,11 +106,16 @@ export default function AdminPage() {
     if (isAdmin) loadTabData()
   }, [tab, isAdmin])
 
+  // ログイン中ユーザーのメール (API 呼び出し時に送る認可クレーム)
+  const [myEmail, setMyEmail] = useState<string>('')
+
   const checkAdmin = async () => {
     try {
       const { data } = await supabase.auth.getSession()
-      if (data.session?.user?.email === ADMIN_EMAIL) {
+      const email = data.session?.user?.email || ''
+      if (isAdminEmail(email)) {
         setIsAdmin(true)
+        setMyEmail(email)
       }
     } catch { /* not logged in */ }
     setLoading(false)
@@ -137,7 +142,7 @@ export default function AdminPage() {
   const loadKPI = async () => {
     setKpiLoading(true)
     try {
-      const res = await fetch(`/api/admin/kpi?email=${encodeURIComponent(ADMIN_EMAIL)}`)
+      const res = await fetch(`/api/admin/kpi?email=${encodeURIComponent(myEmail)}`)
       if (!res.ok) throw new Error(`KPI ${res.status}`)
       const data = await res.json() as KpiData
       setKpi(data)
@@ -151,7 +156,7 @@ export default function AdminPage() {
   const loadSegments = async () => {
     setSegmentsLoading(true)
     try {
-      const res = await fetch(`/api/admin/segments?email=${encodeURIComponent(ADMIN_EMAIL)}`)
+      const res = await fetch(`/api/admin/segments?email=${encodeURIComponent(myEmail)}`)
       if (!res.ok) throw new Error(`segments ${res.status}`)
       const data = await res.json() as SegmentBreakdown
       setSegments(data)
@@ -165,7 +170,7 @@ export default function AdminPage() {
   const loadFraud = async () => {
     setFraudLoading(true)
     try {
-      const res = await fetch(`/api/admin/fraud?email=${encodeURIComponent(ADMIN_EMAIL)}`)
+      const res = await fetch(`/api/admin/fraud?email=${encodeURIComponent(myEmail)}`)
       if (!res.ok) throw new Error(`fraud ${res.status}`)
       const data = await res.json() as FraudData
       setFraud(data)
