@@ -63,31 +63,82 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
   const ratedCount = Object.keys(ratings).length
   const canProceed = ratedCount >= MIN_RATINGS_FOR_MATCH
 
-  // ── Fetch popular movies ──
-  const fetchPopularMovies = useCallback(async () => {
-    try {
-      const [trendingRes, topRatedRes] = await Promise.all([
-        fetch('/api/tmdb?action=trending'),
-        fetch('/api/tmdb?action=discover&type=movie&sort_by=vote_count.desc'),
-      ])
+  // プロフィール属性ベースのレコメンドが効いているか
+  const [recommendByProfile, setRecommendByProfile] = useState(false)
 
-      const trending = trendingRes.ok ? await trendingRes.json() : { results: [] }
-      const topRated = topRatedRes.ok ? await topRatedRes.json() : { results: [] }
+  // ── Fetch popular movies (プロフィール属性があれば世代+地域で絞る) ──
+  const fetchPopularMovies = useCallback(async (opts?: { birthYear?: number; country?: string }) => {
+    setLoadingMovies(true)
+    try {
+      // プロフィールから「観た可能性が高い世代」を計算
+      // 8-25歳の間に公開された映画を主軸 (社会的記憶の中心)
+      let urls: string[]
+      let basedOnProfile = false
+
+      if (opts?.birthYear && opts.birthYear > 1900) {
+        const startYear = opts.birthYear + 8
+        const endYear = Math.min(opts.birthYear + 25, new Date().getFullYear())
+        const startDate = `${startYear}-01-01`
+        const endDate = `${endYear}-12-31`
+        const country = opts.country && opts.country.length === 2 ? opts.country : null
+
+        const localRegion = country
+          ? `&with_origin_country=${country}&primary_release_date.gte=${startDate}&primary_release_date.lte=${endDate}&sort_by=popularity.desc&vote_count.gte=50`
+          : null
+        const globalEra = `&primary_release_date.gte=${startDate}&primary_release_date.lte=${endDate}&sort_by=vote_count.desc&vote_count.gte=300`
+
+        urls = [
+          // 1) 世代×地域(あれば)
+          localRegion ? `/api/tmdb?action=discover&type=movie${localRegion}` : null,
+          // 2) 世代×グローバル人気
+          `/api/tmdb?action=discover&type=movie${globalEra}`,
+          // 3) 直近トレンドも少し混ぜる(完全に古いだけにならないように)
+          '/api/tmdb?action=trending',
+        ].filter((u): u is string => !!u)
+        basedOnProfile = true
+      } else {
+        urls = [
+          '/api/tmdb?action=trending',
+          '/api/tmdb?action=discover&type=movie&sort_by=vote_count.desc',
+        ]
+      }
+
+      const responses = await Promise.all(urls.map(u =>
+        fetch(u).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] }))
+      ))
 
       const seen = new Set<number>()
       const all: MovieItem[] = []
-      for (const item of [...(trending.results || []), ...(topRated.results || [])]) {
-        if (seen.has(item.id) || item.media_type === 'person') continue
-        seen.add(item.id)
-        all.push(item)
+      for (const data of responses) {
+        for (const item of (data.results || [])) {
+          if (seen.has(item.id) || item.media_type === 'person') continue
+          seen.add(item.id)
+          all.push(item)
+        }
       }
-      setMovies(all.slice(0, 30))
+
+      // 既に「視聴済」マークが付いているものは除外(2回目以降のオンボーディングや再表示時)
+      let filtered = all
+      try {
+        const { data: watched } = await supabase
+          .from('watchlists')
+          .select('movie_id')
+          .eq('user_id', userId)
+          .eq('status', 'watched')
+        if (watched) {
+          const watchedSet = new Set((watched as { movie_id: number }[]).map(w => w.movie_id))
+          filtered = all.filter(m => !watchedSet.has(m.id))
+        }
+      } catch { /* keep as-is */ }
+
+      setMovies(filtered.slice(0, 36))
+      setRecommendByProfile(basedOnProfile)
     } catch (err) {
       console.error('Onboarding movie fetch error:', err)
     } finally {
       setLoadingMovies(false)
     }
-  }, [])
+  }, [userId])
 
   // ── Fetch popular people (directors & actors) ──
   const fetchPopularPeople = useCallback(async () => {
@@ -208,6 +259,14 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
         if (Object.keys(updates).length > 0) {
           const { error } = await supabase.from('users').update(updates).eq('id', userId)
           if (error) console.error('Profile save failed:', error)
+        }
+
+        // 生年が入っていれば、世代+地域でレコメンドを再取得
+        if (birthYear) {
+          await fetchPopularMovies({
+            birthYear: parseInt(birthYear, 10),
+            country: country || undefined,
+          })
         }
       }
       setPage(2)
@@ -583,12 +642,22 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <h2 style={{ fontSize: 18, fontWeight: 700, color: '#fff', margin: 0 }}>
-              観た映画を評価しよう
+              {recommendByProfile ? 'あなたの世代の名作' : '観た映画を評価しよう'}
             </h2>
             <div style={{ fontSize: 14, fontWeight: 700, color: canProceed ? '#2ecc8a' : '#a29bfe' }}>
               {ratedCount} / {RECOMMENDED_RATINGS}
             </div>
           </div>
+          {recommendByProfile && (
+            <div style={{
+              fontSize: 12, color: '#a29bfe', marginBottom: 8,
+              padding: '6px 10px', background: 'rgba(108,92,231,0.12)',
+              borderRadius: 8, border: '1px solid rgba(108,92,231,0.25)',
+              display: 'inline-block',
+            }}>
+              ✨ プロフィールから「観たことがありそう」な作品を表示しています
+            </div>
+          )}
           <ProgressBar value={ratedCount} max={RECOMMENDED_RATINGS} />
           {ratedCount >= MIN_RATINGS_FOR_MATCH && ratedCount < RECOMMENDED_RATINGS && (
             <div style={{ fontSize: 12, color: '#a29bfe', marginTop: 6 }}>

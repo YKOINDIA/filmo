@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { buildTasteProfile, calculateGenreMatchScore, type TasteProfile } from '../lib/matchScore'
 import { useTmdbFetch } from '../lib/i18n'
+import { supabase } from '../lib/supabase'
 
 const TMDB_IMG_POSTER = 'https://image.tmdb.org/t/p/w342'
 const TMDB_IMG_BACKDROP = 'https://image.tmdb.org/t/p/w1280'
@@ -64,6 +65,11 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
     tvDramas: true,
     anime: true,
   })
+
+  // プロフィール属性ベースのレコメンド (世代+地域で観た可能性が高い作品)
+  const [forYou, setForYou] = useState<MediaItem[]>([])
+  const [forYouLoading, setForYouLoading] = useState(true)
+  const [forYouLabel, setForYouLabel] = useState<string>('')
 
   const fetchTrending = useCallback(async () => {
     try {
@@ -143,6 +149,76 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
   useEffect(() => {
     buildTasteProfile(userId).then(setTasteProfile)
   }, [userId])
+
+  // プロフィール属性 → 世代+地域ベースのレコメンドを取得
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data: u } = await supabase
+          .from('users')
+          .select('birth_year, country')
+          .eq('id', userId)
+          .maybeSingle()
+        if (cancelled) return
+        if (!u || !u.birth_year) {
+          // プロフィール未入力 → セクション非表示
+          setForYouLoading(false)
+          return
+        }
+
+        const birthYear = u.birth_year as number
+        const country = u.country as string | null
+        const startYear = birthYear + 8
+        const endYear = Math.min(birthYear + 25, new Date().getFullYear())
+        const decadeLabel = `${Math.floor(startYear / 10) * 10}s〜${Math.floor(endYear / 10) * 10}s`
+
+        const params = new URLSearchParams({
+          action: 'discover',
+          type: 'movie',
+          'primary_release_date.gte': `${startYear}-01-01`,
+          'primary_release_date.lte': `${endYear}-12-31`,
+          sort_by: 'popularity.desc',
+          'vote_count.gte': '200',
+        })
+        if (country && country.length === 2) {
+          params.set('with_origin_country', country)
+        }
+        const res = await tmdbFetch(`/api/tmdb?${params.toString()}`)
+        if (!res.ok) {
+          setForYouLoading(false)
+          return
+        }
+        const data = await res.json()
+
+        // 既に観たマークが付いているものを除外
+        const { data: watched } = await supabase
+          .from('watchlists')
+          .select('movie_id')
+          .eq('user_id', userId)
+          .eq('status', 'watched')
+        const watchedSet = new Set(
+          ((watched || []) as { movie_id: number }[]).map(w => w.movie_id)
+        )
+
+        const filtered: MediaItem[] = (data.results || [])
+          .filter((m: MediaItem) => !watchedSet.has(m.id) && m.poster_path)
+          .slice(0, 20)
+
+        if (!cancelled) {
+          setForYou(filtered)
+          setForYouLabel(country === 'JP' || !country
+            ? `あなたの世代の名作 (${decadeLabel})`
+            : `あなたの世代×地域の名作 (${decadeLabel})`
+          )
+          setForYouLoading(false)
+        }
+      } catch {
+        if (!cancelled) setForYouLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [userId, tmdbFetch])
 
   const getTitle = (item: MediaItem): string => item.title || item.name || ''
   const getYear = (item: MediaItem): string => {
@@ -319,6 +395,29 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
           </div>
         </div>
       ) : null}
+
+      {/* あなたへのおすすめ (プロフィール属性ベース) */}
+      {!forYouLoading && forYou.length > 0 && (
+        <Section
+          title={forYouLabel}
+          emoji="✨"
+          loading={false}
+        >
+          <ScrollRow>
+            {forYou.map(item => (
+              <PosterCard
+                key={`foryou-${item.id}`}
+                posterPath={item.poster_path}
+                title={getTitle(item)}
+                year={getYear(item)}
+                voteAverage={item.vote_average}
+                matchScore={getMatchScore(item)}
+                onClick={() => onOpenWork(item.id, getMediaType(item))}
+              />
+            ))}
+          </ScrollRow>
+        </Section>
+      )}
 
       {/* 今注目の作品 */}
       <Section
