@@ -37,7 +37,7 @@ interface TMDBResult {
   media_type?: string
 }
 
-type ViewMode = 'my' | 'popular' | 'recent'
+type ViewMode = 'curated' | 'my' | 'popular' | 'recent'
 
 export default function UserLists({ userId, onOpenWork }: UserListsProps) {
   const { t } = useLocale()
@@ -61,10 +61,13 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
 
       if (viewMode === 'my') {
         query = query.eq('user_id', userId).order('updated_at', { ascending: false })
+      } else if (viewMode === 'curated') {
+        // Filmo編集部のキュレーションリスト
+        query = query.eq('is_curated', true).eq('is_public', true).gt('items_count', 0).order('likes_count', { ascending: false }).limit(60)
       } else if (viewMode === 'popular') {
-        query = query.eq('is_public', true).order('likes_count', { ascending: false }).limit(30)
+        query = query.eq('is_public', true).eq('is_curated', false).gt('items_count', 0).order('likes_count', { ascending: false }).limit(30)
       } else {
-        query = query.eq('is_public', true).order('created_at', { ascending: false }).limit(30)
+        query = query.eq('is_public', true).eq('is_curated', false).gt('items_count', 0).order('created_at', { ascending: false }).limit(30)
       }
 
       const { data } = await query
@@ -209,19 +212,20 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
       </div>
 
       {/* View Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'var(--fm-bg-card)', borderRadius: 8, padding: 3 }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'var(--fm-bg-card)', borderRadius: 8, padding: 3, overflowX: 'auto' }}>
         {([
+          { key: 'curated' as ViewMode, label: '🎬 編集部' },
           { key: 'my' as ViewMode, label: t('lists.myLists') },
           { key: 'popular' as ViewMode, label: t('lists.popular') },
           { key: 'recent' as ViewMode, label: t('lists.recent') },
         ]).map(t => (
           <button key={t.key} onClick={() => setViewMode(t.key)}
             style={{
-              flex: 1, padding: '8px 0', borderRadius: 6, border: 'none', cursor: 'pointer',
+              flex: 1, padding: '8px 4px', borderRadius: 6, border: 'none', cursor: 'pointer',
               background: viewMode === t.key ? 'var(--fm-accent)' : 'transparent',
               color: viewMode === t.key ? '#fff' : 'var(--fm-text-sub)',
               fontSize: 13, fontWeight: viewMode === t.key ? 600 : 400,
-              transition: 'all 0.15s',
+              transition: 'all 0.15s', whiteSpace: 'nowrap',
             }}>
             {t.label}
           </button>
