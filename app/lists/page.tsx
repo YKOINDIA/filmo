@@ -38,31 +38,41 @@ interface ListSummary {
   posters: string[]
 }
 
-async function fetchListsSummary(): Promise<{ popular: ListSummary[]; recent: ListSummary[] }> {
+async function fetchListsSummary(): Promise<{ curated: ListSummary[]; popular: ListSummary[]; recent: ListSummary[] }> {
   try {
     const { createClient } = await import('@supabase/supabase-js')
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-    const [popularRes, recentRes] = await Promise.all([
+    const [curatedRes, popularRes, recentRes] = await Promise.all([
+      admin.from('user_lists')
+        .select('id, slug, title, description, items_count, likes_count, user_id')
+        .eq('is_curated', true)
+        .eq('is_public', true)
+        .gt('items_count', 0)
+        .order('likes_count', { ascending: false })
+        .limit(60),
       admin.from('user_lists')
         .select('id, slug, title, description, items_count, likes_count, user_id')
         .eq('is_public', true)
+        .eq('is_curated', false)
         .gt('items_count', 0)
         .order('likes_count', { ascending: false })
         .limit(30),
       admin.from('user_lists')
         .select('id, slug, title, description, items_count, likes_count, user_id')
         .eq('is_public', true)
+        .eq('is_curated', false)
         .gt('items_count', 0)
         .order('created_at', { ascending: false })
         .limit(30),
     ])
 
+    const curated = (curatedRes.data || []) as Omit<ListSummary, 'user_name' | 'user_avatar' | 'posters'>[]
     const popular = (popularRes.data || []) as Omit<ListSummary, 'user_name' | 'user_avatar' | 'posters'>[]
     const recent = (recentRes.data || []) as Omit<ListSummary, 'user_name' | 'user_avatar' | 'posters'>[]
 
-    const allLists = [...popular, ...recent]
-    if (allLists.length === 0) return { popular: [], recent: [] }
+    const allLists = [...curated, ...popular, ...recent]
+    if (allLists.length === 0) return { curated: [], popular: [], recent: [] }
 
     const userIds = [...new Set(allLists.map(l => l.user_id))]
     const listIds = allLists.map(l => l.id)
@@ -106,11 +116,12 @@ async function fetchListsSummary(): Promise<{ popular: ListSummary[]; recent: Li
     }
 
     return {
+      curated: curated.map(enrich),
       popular: popular.map(enrich),
       recent: recent.map(enrich).filter(l => !popular.find(p => p.id === l.id)).slice(0, 20),
     }
   } catch {
-    return { popular: [], recent: [] }
+    return { curated: [], popular: [], recent: [] }
   }
 }
 
@@ -172,7 +183,7 @@ function ListCard({ list }: { list: ListSummary }) {
 }
 
 export default async function ListsIndexPage() {
-  const { popular, recent } = await fetchListsSummary()
+  const { curated, popular, recent } = await fetchListsSummary()
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--fm-bg)', color: 'var(--fm-text)' }}>
@@ -206,7 +217,7 @@ export default async function ListsIndexPage() {
           映画ファンが作ったテーマ別のリスト。共感できるリストから新しい1本を見つけよう。
         </p>
 
-        {popular.length === 0 && recent.length === 0 ? (
+        {curated.length === 0 && popular.length === 0 && recent.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--fm-text-muted)' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
             <div style={{ fontSize: 15, marginBottom: 8 }}>まだ公開リストがありません</div>
@@ -216,6 +227,24 @@ export default async function ListsIndexPage() {
           </div>
         ) : (
           <>
+            {curated.length > 0 && (
+              <section style={{ marginBottom: 40 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '0 0 16px' }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--fm-text)', margin: 0 }}>
+                    🎬 Filmo編集部おすすめ
+                  </h2>
+                  <span style={{ fontSize: 12, color: 'var(--fm-text-muted)' }}>{curated.length} リスト</span>
+                </div>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                  gap: 12,
+                }}>
+                  {curated.map(list => <ListCard key={list.id} list={list} />)}
+                </div>
+              </section>
+            )}
+
             {popular.length > 0 && (
               <section style={{ marginBottom: 40 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--fm-text)', margin: '0 0 16px' }}>

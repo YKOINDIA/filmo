@@ -11,7 +11,8 @@
     "cap:android": "npx cap open android",
     "cap:ios": "npx cap open ios",
     "cap:build:android": "npx cap sync android",
-    "cap:build:ios": "npx cap sync ios"
+    "cap:build:ios": "npx cap sync ios",
+    "seed:curated": "node scripts/seed-curated-lists.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.0",
