@@ -33,8 +33,8 @@ interface PersonItem {
   known_for?: { title?: string; name?: string }[]
 }
 
-// page: 0=intro, 1=rate movies, 2=fan selection
-type OnboardingPage = 0 | 1 | 2
+// page: 0=intro, 1=profile (任意), 2=rate movies, 3=fan selection
+type OnboardingPage = 0 | 1 | 2 | 3
 
 export default function Onboarding({ userId, onComplete }: OnboardingProps) {
   const [movies, setMovies] = useState<MovieItem[]>([])
@@ -49,6 +49,16 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
   const [searchResults, setSearchResults] = useState<PersonItem[]>([])
   const [selectedPeople, setSelectedPeople] = useState<Map<number, PersonItem>>(new Map())
   const [searching, setSearching] = useState(false)
+
+  // ── Profile attributes (任意) ──
+  const [gender, setGender] = useState<string>('')
+  const [birthYear, setBirthYear] = useState<string>('')
+  const [birthMonth, setBirthMonth] = useState<string>('')
+  const [birthDay, setBirthDay] = useState<string>('')
+  const [country, setCountry] = useState<string>('JP')
+  const [hometown, setHometown] = useState<string>('')
+  const [currentLocation, setCurrentLocation] = useState<string>('')
+  const [savingProfile, setSavingProfile] = useState(false)
 
   const ratedCount = Object.keys(ratings).length
   const canProceed = ratedCount >= MIN_RATINGS_FOR_MATCH
@@ -180,6 +190,30 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
       }
       return next
     })
+  }
+
+  const handleSaveProfile = async (skip: boolean = false) => {
+    setSavingProfile(true)
+    try {
+      if (!skip) {
+        const updates: Record<string, unknown> = {}
+        if (gender) updates.gender = gender
+        if (birthYear) updates.birth_year = parseInt(birthYear, 10)
+        if (birthMonth) updates.birth_month = parseInt(birthMonth, 10)
+        if (birthDay) updates.birth_day = parseInt(birthDay, 10)
+        if (country) updates.country = country
+        if (hometown.trim()) updates.hometown = hometown.trim()
+        if (currentLocation.trim()) updates.current_location = currentLocation.trim()
+
+        if (Object.keys(updates).length > 0) {
+          const { error } = await supabase.from('users').update(updates).eq('id', userId)
+          if (error) console.error('Profile save failed:', error)
+        }
+      }
+      setPage(2)
+    } finally {
+      setSavingProfile(false)
+    }
   }
 
   const handleComplete = async () => {
@@ -327,8 +361,208 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
     )
   }
 
-  // ── Page 1: Rate Movies ──
+  // ── Page 1: Profile attributes (任意) ──
   if (page === 1) {
+    const currentYear = new Date().getFullYear()
+    const inputStyle: React.CSSProperties = {
+      width: '100%', padding: '12px 14px', borderRadius: 10,
+      border: '1px solid rgba(108,92,231,0.3)', background: 'rgba(255,255,255,0.04)',
+      color: '#fff', fontSize: 15, outline: 'none',
+      boxSizing: 'border-box',
+    }
+    const labelStyle: React.CSSProperties = {
+      display: 'block', fontSize: 13, color: '#aaa', marginBottom: 6, fontWeight: 600,
+    }
+    return (
+      <div style={{
+        minHeight: '100dvh',
+        background: 'linear-gradient(180deg, #0a0b14 0%, #12132a 100%)',
+        padding: '24px 20px max(120px, env(safe-area-inset-bottom))',
+      }}>
+        <style>{`
+          @keyframes fadeInUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+          .pf-input:focus { border-color: #6c5ce7 !important; box-shadow: 0 0 0 3px rgba(108,92,231,0.15); }
+        `}</style>
+
+        <div style={{ maxWidth: 480, margin: '0 auto', animation: 'fadeInUp 0.4s ease-out' }}>
+          <div style={{ marginBottom: 24 }}>
+            <h2 style={{ fontSize: 22, fontWeight: 700, color: '#fff', margin: '0 0 8px' }}>
+              あなたについて教えてください
+            </h2>
+            <p style={{ fontSize: 14, color: '#aaa', margin: 0, lineHeight: 1.6 }}>
+              全て<strong style={{ color: '#a29bfe' }}>任意</strong>です。あとからでも変更できます。<br />
+              世代や地域から、あなたが見たかもしれない映画をおすすめします。
+            </p>
+          </div>
+
+          {/* Gender */}
+          <div style={{ marginBottom: 18 }}>
+            <label style={labelStyle}>性別</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+              {[
+                { v: 'female', l: '女性' },
+                { v: 'male', l: '男性' },
+                { v: 'other', l: 'その他' },
+                { v: 'prefer_not_to_say', l: '無回答' },
+              ].map(opt => {
+                const sel = gender === opt.v
+                return (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => setGender(sel ? '' : opt.v)}
+                    style={{
+                      padding: '10px 4px', borderRadius: 10,
+                      border: `1px solid ${sel ? '#6c5ce7' : 'rgba(108,92,231,0.3)'}`,
+                      background: sel ? 'rgba(108,92,231,0.2)' : 'rgba(255,255,255,0.04)',
+                      color: sel ? '#a29bfe' : '#ccc',
+                      fontSize: 13, fontWeight: sel ? 700 : 500, cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {opt.l}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Birth date */}
+          <div style={{ marginBottom: 18 }}>
+            <label style={labelStyle}>生年月日</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8 }}>
+              <select
+                value={birthYear}
+                onChange={e => setBirthYear(e.target.value)}
+                className="pf-input"
+                style={inputStyle}
+              >
+                <option value="">年</option>
+                {Array.from({ length: 100 }, (_, i) => currentYear - i).map(y => (
+                  <option key={y} value={y}>{y}年</option>
+                ))}
+              </select>
+              <select
+                value={birthMonth}
+                onChange={e => setBirthMonth(e.target.value)}
+                className="pf-input"
+                style={inputStyle}
+              >
+                <option value="">月</option>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                  <option key={m} value={m}>{m}月</option>
+                ))}
+              </select>
+              <select
+                value={birthDay}
+                onChange={e => setBirthDay(e.target.value)}
+                className="pf-input"
+                style={inputStyle}
+              >
+                <option value="">日</option>
+                {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                  <option key={d} value={d}>{d}日</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Country */}
+          <div style={{ marginBottom: 18 }}>
+            <label style={labelStyle}>国</label>
+            <select
+              value={country}
+              onChange={e => setCountry(e.target.value)}
+              className="pf-input"
+              style={inputStyle}
+            >
+              <option value="JP">🇯🇵 日本</option>
+              <option value="US">🇺🇸 アメリカ</option>
+              <option value="KR">🇰🇷 韓国</option>
+              <option value="CN">🇨🇳 中国</option>
+              <option value="TW">🇹🇼 台湾</option>
+              <option value="HK">🇭🇰 香港</option>
+              <option value="GB">🇬🇧 イギリス</option>
+              <option value="FR">🇫🇷 フランス</option>
+              <option value="DE">🇩🇪 ドイツ</option>
+              <option value="IT">🇮🇹 イタリア</option>
+              <option value="ES">🇪🇸 スペイン</option>
+              <option value="CA">🇨🇦 カナダ</option>
+              <option value="AU">🇦🇺 オーストラリア</option>
+              <option value="BR">🇧🇷 ブラジル</option>
+              <option value="IN">🇮🇳 インド</option>
+              <option value="MX">🇲🇽 メキシコ</option>
+              <option value="TH">🇹🇭 タイ</option>
+              <option value="VN">🇻🇳 ベトナム</option>
+              <option value="ID">🇮🇩 インドネシア</option>
+              <option value="PH">🇵🇭 フィリピン</option>
+              <option value="">その他 / 未選択</option>
+            </select>
+          </div>
+
+          {/* Hometown */}
+          <div style={{ marginBottom: 18 }}>
+            <label style={labelStyle}>出身地</label>
+            <input
+              type="text"
+              value={hometown}
+              onChange={e => setHometown(e.target.value)}
+              placeholder="例: 東京都 / 大阪府 / Seoul"
+              className="pf-input"
+              style={inputStyle}
+              maxLength={50}
+            />
+          </div>
+
+          {/* Current location */}
+          <div style={{ marginBottom: 28 }}>
+            <label style={labelStyle}>住んでいる場所</label>
+            <input
+              type="text"
+              value={currentLocation}
+              onChange={e => setCurrentLocation(e.target.value)}
+              placeholder="例: 東京都 / 横浜市 / Tokyo"
+              className="pf-input"
+              style={inputStyle}
+              maxLength={50}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => handleSaveProfile(true)}
+              disabled={savingProfile}
+              style={{
+                flex: 1, padding: '14px 0', borderRadius: 12, border: '1px solid rgba(108,92,231,0.3)',
+                background: 'transparent', color: '#a29bfe', fontWeight: 600, fontSize: 15,
+                cursor: savingProfile ? 'not-allowed' : 'pointer',
+              }}
+            >
+              スキップ
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSaveProfile(false)}
+              disabled={savingProfile}
+              style={{
+                flex: 2, padding: '14px 0', borderRadius: 12, border: 'none',
+                background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)',
+                color: '#fff', fontWeight: 700, fontSize: 16,
+                cursor: savingProfile ? 'not-allowed' : 'pointer',
+                opacity: savingProfile ? 0.6 : 1,
+              }}
+            >
+              {savingProfile ? '保存中…' : '次へ進む'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Page 2: Rate Movies ──
+  if (page === 2) {
     return (
       <div style={{ minHeight: '100dvh', background: '#0a0b14', paddingBottom: 120 }}>
         <style>{`
@@ -344,8 +578,8 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
           borderBottom: '1px solid rgba(108,92,231,0.2)', padding: '16px 20px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <StepDots current={1} total={2} />
-            <span style={{ fontSize: 12, color: '#888' }}>STEP 1/2</span>
+            <StepDots current={2} total={3} />
+            <span style={{ fontSize: 12, color: '#888' }}>STEP 2/3</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <h2 style={{ fontSize: 18, fontWeight: 700, color: '#fff', margin: 0 }}>
@@ -395,7 +629,7 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
           padding: '16px 20px max(16px, env(safe-area-inset-bottom))',
         }}>
           <button
-            onClick={() => setPage(2)}
+            onClick={() => setPage(3)}
             disabled={!canProceed}
             style={{
               width: '100%', padding: '14px 0', borderRadius: 12, border: 'none',
@@ -433,7 +667,7 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <button
-            onClick={() => setPage(1)}
+            onClick={() => setPage(2)}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: '#a29bfe', fontSize: 14, padding: 0, fontWeight: 600,
@@ -442,8 +676,8 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
             ← 戻る
           </button>
           <div style={{ flex: 1 }} />
-          <StepDots current={2} total={2} />
-          <span style={{ fontSize: 12, color: '#888' }}>STEP 2/2</span>
+          <StepDots current={3} total={3} />
+          <span style={{ fontSize: 12, color: '#888' }}>STEP 3/3</span>
         </div>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: '#fff', margin: '0 0 12px' }}>
           好きな監督・俳優をFAN!登録
