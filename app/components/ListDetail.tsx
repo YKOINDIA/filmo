@@ -18,12 +18,19 @@ interface ListData {
   description: string
   is_public: boolean
   is_ranked: boolean
+  is_collaborative: boolean
+  forked_from_list_id: string | null
   items_count: number
   likes_count: number
   user_id: string
   slug: string | null
   created_at: string
   updated_at: string
+  // joined
+  owner_name?: string
+  owner_avatar?: string | null
+  forked_from_title?: string
+  forked_from_slug?: string | null
 }
 
 interface ListItemData {
@@ -31,9 +38,27 @@ interface ListItemData {
   movie_id: number
   position: number
   note: string | null
+  added_by_user_id: string | null
   movie_title?: string
   movie_poster?: string | null
   movie_release_date?: string | null
+  added_by_name?: string
+  added_by_avatar?: string | null
+}
+
+interface LikerRow {
+  user_id: string
+  user_name: string
+  user_avatar: string | null
+}
+
+interface CommentRow {
+  id: string
+  user_id: string
+  body: string
+  created_at: string
+  user_name: string
+  user_avatar: string | null
 }
 
 interface TMDBResult {
@@ -75,6 +100,22 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
   // Delete
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  // Edit collaborative toggle
+  const [editCollaborative, setEditCollaborative] = useState(false)
+
+  // Likers
+  const [likers, setLikers] = useState<LikerRow[]>([])
+  const [showAllLikers, setShowAllLikers] = useState(false)
+  const [followingSet, setFollowingSet] = useState<Set<string>>(new Set())
+
+  // Comments
+  const [comments, setComments] = useState<CommentRow[]>([])
+  const [newComment, setNewComment] = useState('')
+  const [postingComment, setPostingComment] = useState(false)
+
+  // Fork
+  const [forking, setForking] = useState(false)
+
   const fetchList = useCallback(async () => {
     setLoading(true)
     try {
@@ -86,18 +127,42 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
 
       if (listData) {
         const ld = listData as unknown as ListData
-        setList(ld)
+        // owner プロフィール取得
+        const { data: ownerData } = await supabase
+          .from('users').select('name, avatar_url').eq('id', ld.user_id).maybeSingle()
+
+        // forked-from のタイトル取得 (あれば)
+        let forkedFromTitle: string | undefined
+        let forkedFromSlug: string | null | undefined
+        if (ld.forked_from_list_id) {
+          const { data: forkSrc } = await supabase
+            .from('user_lists').select('title, slug').eq('id', ld.forked_from_list_id).maybeSingle()
+          if (forkSrc) {
+            forkedFromTitle = (forkSrc as { title: string }).title
+            forkedFromSlug = (forkSrc as { slug: string | null }).slug
+          }
+        }
+
+        const enriched: ListData = {
+          ...ld,
+          owner_name: (ownerData as { name?: string } | null)?.name,
+          owner_avatar: (ownerData as { avatar_url?: string | null } | null)?.avatar_url ?? null,
+          forked_from_title: forkedFromTitle,
+          forked_from_slug: forkedFromSlug,
+        }
+        setList(enriched)
         setIsOwner(ld.user_id === userId)
         setLikeCount(ld.likes_count)
         setEditTitle(ld.title)
         setEditDesc(ld.description)
         setEditPublic(ld.is_public)
+        setEditCollaborative(ld.is_collaborative ?? false)
       }
 
       // Fetch items
       const { data: itemsData } = await supabase
         .from('list_items')
-        .select('id, movie_id, position, note')
+        .select('id, movie_id, position, note, added_by_user_id')
         .eq('list_id', listId)
         .order('position', { ascending: true })
 
@@ -117,11 +182,25 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
             movieMap.set(m.tmdb_id, m)
           }
         }
+
+        // added_by_user_id でユーザー名/アバター取得
+        const contributorIds = [...new Set(listItems.map(i => i.added_by_user_id).filter((x): x is string => !!x))]
+        const contributorMap = new Map<string, { name: string; avatar_url: string | null }>()
+        if (contributorIds.length > 0) {
+          const { data: contribs } = await supabase
+            .from('users').select('id, name, avatar_url').in('id', contributorIds)
+          for (const u of (contribs || []) as { id: string; name: string; avatar_url: string | null }[]) {
+            contributorMap.set(u.id, { name: u.name, avatar_url: u.avatar_url })
+          }
+        }
+
         listItems = listItems.map(item => ({
           ...item,
           movie_title: movieMap.get(item.movie_id)?.title,
           movie_poster: movieMap.get(item.movie_id)?.poster_path,
           movie_release_date: movieMap.get(item.movie_id)?.release_date,
+          added_by_name: item.added_by_user_id ? contributorMap.get(item.added_by_user_id)?.name : undefined,
+          added_by_avatar: item.added_by_user_id ? contributorMap.get(item.added_by_user_id)?.avatar_url ?? null : null,
         }))
       }
 
@@ -141,9 +220,68 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
     setLoading(false)
   }, [listId, userId])
 
+  // Likers + Comments + Following を並列で取得
+  const fetchSocial = useCallback(async () => {
+    try {
+      const [likersRes, commentsRes, myFollowsRes] = await Promise.all([
+        supabase.from('list_likes')
+          .select('user_id, created_at')
+          .eq('list_id', listId)
+          .order('created_at', { ascending: false })
+          .limit(50),
+        supabase.from('list_comments')
+          .select('id, user_id, body, created_at')
+          .eq('list_id', listId)
+          .order('created_at', { ascending: false })
+          .limit(100),
+        supabase.from('follows')
+          .select('following_id')
+          .eq('follower_id', userId),
+      ])
+
+      const likeRows = (likersRes.data || []) as { user_id: string }[]
+      const commentRows = (commentsRes.data || []) as { id: string; user_id: string; body: string; created_at: string }[]
+      const followRows = (myFollowsRes.data || []) as { following_id: string }[]
+
+      setFollowingSet(new Set(followRows.map(f => f.following_id)))
+
+      const userIds = [...new Set([
+        ...likeRows.map(l => l.user_id),
+        ...commentRows.map(c => c.user_id),
+      ])]
+
+      const userMap = new Map<string, { name: string; avatar_url: string | null }>()
+      if (userIds.length > 0) {
+        const { data: usersData } = await supabase
+          .from('users').select('id, name, avatar_url').in('id', userIds)
+        for (const u of (usersData || []) as { id: string; name: string; avatar_url: string | null }[]) {
+          userMap.set(u.id, { name: u.name, avatar_url: u.avatar_url })
+        }
+      }
+
+      setLikers(likeRows.map(l => ({
+        user_id: l.user_id,
+        user_name: userMap.get(l.user_id)?.name || 'Unknown',
+        user_avatar: userMap.get(l.user_id)?.avatar_url ?? null,
+      })))
+
+      setComments(commentRows.map(c => ({
+        id: c.id,
+        user_id: c.user_id,
+        body: c.body,
+        created_at: c.created_at,
+        user_name: userMap.get(c.user_id)?.name || 'Unknown',
+        user_avatar: userMap.get(c.user_id)?.avatar_url ?? null,
+      })))
+    } catch (err) {
+      console.error('Failed to fetch social data:', err)
+    }
+  }, [listId, userId])
+
   useEffect(() => {
     fetchList()
-  }, [fetchList])
+    fetchSocial()
+  }, [fetchList, fetchSocial])
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
@@ -178,6 +316,7 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
         list_id: listId,
         movie_id: movie.id,
         position: newPosition,
+        added_by_user_id: userId,
       })
       if (error) {
         if (error.code === '23505') {
@@ -192,6 +331,7 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
           movie_id: movie.id,
           position: newPosition,
           note: null,
+          added_by_user_id: userId,
           movie_title: title,
           movie_poster: movie.poster_path,
           movie_release_date: movie.release_date || movie.first_air_date || null,
@@ -237,14 +377,120 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
         title: editTitle.trim(),
         description: editDesc.trim(),
         is_public: editPublic,
+        is_collaborative: editCollaborative,
       }).eq('id', listId)
 
-      setList(prev => prev ? { ...prev, title: editTitle.trim(), description: editDesc.trim(), is_public: editPublic } : prev)
+      setList(prev => prev ? { ...prev, title: editTitle.trim(), description: editDesc.trim(), is_public: editPublic, is_collaborative: editCollaborative } : prev)
       setEditing(false)
     } catch (err) {
       console.error('Failed to save:', err)
     }
     setSaving(false)
+  }
+
+  // === Social actions ===
+  const handleFollow = async (targetUserId: string) => {
+    if (targetUserId === userId) return
+    const isFollowing = followingSet.has(targetUserId)
+    try {
+      if (isFollowing) {
+        await supabase.from('follows').delete()
+          .eq('follower_id', userId).eq('following_id', targetUserId)
+        setFollowingSet(prev => {
+          const next = new Set(prev); next.delete(targetUserId); return next
+        })
+      } else {
+        await supabase.from('follows').insert({ follower_id: userId, following_id: targetUserId })
+        setFollowingSet(prev => new Set(prev).add(targetUserId))
+      }
+    } catch (err) {
+      console.error('Follow toggle failed:', err)
+    }
+  }
+
+  const handleAddComment = async () => {
+    const body = newComment.trim()
+    if (!body) return
+    setPostingComment(true)
+    try {
+      const { data, error } = await supabase
+        .from('list_comments')
+        .insert({ list_id: listId, user_id: userId, body })
+        .select('id, user_id, body, created_at')
+        .single()
+      if (error) throw error
+
+      // 自分のユーザー情報も取得して即座に表示
+      const { data: me } = await supabase.from('users').select('name, avatar_url').eq('id', userId).maybeSingle()
+      const meRow = me as { name?: string; avatar_url?: string | null } | null
+      const newRow: CommentRow = {
+        id: data!.id,
+        user_id: userId,
+        body,
+        created_at: data!.created_at,
+        user_name: meRow?.name || 'You',
+        user_avatar: meRow?.avatar_url ?? null,
+      }
+      setComments(prev => [newRow, ...prev])
+      setNewComment('')
+    } catch (err) {
+      console.error('Failed to post comment:', err)
+    }
+    setPostingComment(false)
+  }
+
+  const handleDeleteComment = async (commentId: string) => {
+    try {
+      const { error } = await supabase.from('list_comments').delete().eq('id', commentId)
+      if (error) throw error
+      setComments(prev => prev.filter(c => c.id !== commentId))
+    } catch (err) {
+      console.error('Failed to delete comment:', err)
+    }
+  }
+
+  // === Fork: 元リストの items を自分のリストとしてコピー ===
+  const handleFork = async () => {
+    if (!list || forking) return
+    setForking(true)
+    try {
+      // 1) 新しい list を作成
+      const { data: newList, error: listErr } = await supabase
+        .from('user_lists')
+        .insert({
+          user_id: userId,
+          title: `${list.title} (コピー)`,
+          description: list.description,
+          is_public: false, // 初期は非公開
+          is_ranked: list.is_ranked,
+          is_collaborative: false,
+          forked_from_list_id: list.id,
+        })
+        .select('id')
+        .single()
+      if (listErr) throw listErr
+
+      // 2) items を全コピー (added_by_user_id = 自分)
+      if (items.length > 0) {
+        const rows = items.map((it, idx) => ({
+          list_id: newList!.id,
+          movie_id: it.movie_id,
+          position: idx,
+          note: it.note,
+          added_by_user_id: userId,
+        }))
+        const { error: itemErr } = await supabase.from('list_items').insert(rows)
+        if (itemErr) throw itemErr
+      }
+
+      window.dispatchEvent(new CustomEvent('filmo-toast', { detail: `「${list.title}」を自分のリストにコピーしました` }))
+      // 元リストに留まる(自分のリストへ遷移するなら onBack 経由でリスト一覧に戻る)
+      onBack()
+    } catch (err) {
+      console.error('Fork failed:', err)
+      window.dispatchEvent(new CustomEvent('filmo-toast', { detail: 'コピーに失敗しました' }))
+    }
+    setForking(false)
   }
 
   const handleDelete = async () => {
@@ -328,10 +574,43 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
       {!editing ? (
         <div style={{ marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-            <div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--fm-text)', margin: '0 0 6px', lineHeight: 1.3 }}>
                 {list.title}
               </h1>
+
+              {/* Owner display + forked-from */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                {!isOwner && (
+                  <a href={`/u/${list.user_id}`} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    fontSize: 12, color: 'var(--fm-text-sub)', textDecoration: 'none',
+                  }}>
+                    {list.owner_avatar ? (
+                      <img src={list.owner_avatar} alt="" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--fm-bg-secondary)' }} />
+                    )}
+                    <span>by <strong style={{ color: 'var(--fm-text)' }}>{list.owner_name || 'Unknown'}</strong></span>
+                  </a>
+                )}
+                {list.is_collaborative && (
+                  <span style={{
+                    fontSize: 11, padding: '2px 8px', borderRadius: 10,
+                    background: 'rgba(46,204,138,0.15)', color: '#2ecc8a', fontWeight: 600,
+                  }}>
+                    👥 みんなで作るリスト
+                  </span>
+                )}
+                {list.forked_from_list_id && list.forked_from_title && (
+                  <span style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
+                    ↪ <a href={`/lists/${list.forked_from_slug || list.forked_from_list_id}`} style={{ color: 'var(--fm-text-muted)' }}>
+                      「{list.forked_from_title}」からコピー
+                    </a>
+                  </span>
+                )}
+              </div>
+
               {list.description && (
                 <p style={{ fontSize: 14, color: 'var(--fm-text-sub)', margin: 0, lineHeight: 1.5 }}>
                   {list.description}
@@ -367,6 +646,23 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
               </button>
             )}
 
+            {/* Fork (non-owner only) */}
+            {!isOwner && (
+              <button onClick={handleFork} disabled={forking} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px',
+                borderRadius: 6, border: '1px solid var(--fm-accent)',
+                background: 'rgba(108,92,231,0.12)', color: 'var(--fm-accent)',
+                fontSize: 13, cursor: forking ? 'not-allowed' : 'pointer', fontWeight: 600,
+                opacity: forking ? 0.6 : 1,
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/>
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                </svg>
+                {forking ? 'コピー中…' : 'コピーして自分のリストにする'}
+              </button>
+            )}
+
             {/* Edit (owner only) */}
             {isOwner && (
               <>
@@ -396,6 +692,68 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
               {!list.is_public && ' · Private'}
             </span>
           </div>
+
+          {/* Likers row */}
+          {likers.length > 0 && (
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--fm-border)' }}>
+              <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 8, fontWeight: 500 }}>
+                ❤ {likeCount} 人がいいねしました
+              </div>
+              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
+                {(showAllLikers ? likers : likers.slice(0, 10)).map(liker => {
+                  const isMe = liker.user_id === userId
+                  const isFollowing = followingSet.has(liker.user_id)
+                  return (
+                    <div key={liker.user_id} style={{
+                      flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                      width: 80,
+                    }}>
+                      <a href={`/u/${liker.user_id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                        {liker.user_avatar ? (
+                          <img src={liker.user_avatar} alt={liker.user_name}
+                            style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
+                        ) : (
+                          <div style={{
+                            width: 48, height: 48, borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#fff', fontSize: 18, fontWeight: 700,
+                          }}>
+                            {liker.user_name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div style={{
+                          fontSize: 11, color: 'var(--fm-text)', textAlign: 'center', marginTop: 4,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 70,
+                        }}>
+                          {liker.user_name}
+                        </div>
+                      </a>
+                      {!isMe && (
+                        <button onClick={() => handleFollow(liker.user_id)} style={{
+                          padding: '3px 10px', borderRadius: 12,
+                          border: `1px solid ${isFollowing ? 'var(--fm-border)' : 'var(--fm-accent)'}`,
+                          background: isFollowing ? 'transparent' : 'var(--fm-accent)',
+                          color: isFollowing ? 'var(--fm-text-sub)' : '#fff',
+                          fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        }}>
+                          {isFollowing ? '解除' : 'フォロー'}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              {!showAllLikers && likers.length > 10 && (
+                <button onClick={() => setShowAllLikers(true)} style={{
+                  marginTop: 8, fontSize: 12, color: 'var(--fm-accent)',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                }}>
+                  すべて表示 ({likers.length}人) ›
+                </button>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         /* Edit mode */
@@ -420,10 +778,20 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
                 boxSizing: 'border-box', fontFamily: 'inherit',
               }} />
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 16 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 10 }}>
             <input type="checkbox" checked={editPublic} onChange={e => setEditPublic(e.target.checked)}
               style={{ width: 18, height: 18, accentColor: 'var(--fm-accent)' }} />
-            Public
+            公開する
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 16 }}>
+            <input type="checkbox" checked={editCollaborative} onChange={e => setEditCollaborative(e.target.checked)}
+              style={{ width: 18, height: 18, accentColor: 'var(--fm-accent)' }} />
+            <span>
+              他のユーザーが作品を追加できる
+              <span style={{ fontSize: 11, color: 'var(--fm-text-muted)', display: 'block', marginTop: 2 }}>
+                公開リストの場合のみ有効。みんなで作るリストにする時にON。
+              </span>
+            </span>
           </label>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setEditing(false)}
@@ -464,8 +832,8 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
         </div>
       )}
 
-      {/* Add film button (owner) */}
-      {isOwner && (
+      {/* Add film button (owner OR collaborative public list) */}
+      {(isOwner || (list.is_collaborative && list.is_public)) && (
         <button onClick={() => setShowAdd(true)} style={{
           width: '100%', padding: '12px', borderRadius: 8, border: '2px dashed var(--fm-border)',
           background: 'transparent', color: 'var(--fm-accent)', fontSize: 14,
@@ -609,7 +977,7 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
                   )}
                 </div>
               </button>
-              {isOwner && (
+              {(isOwner || item.added_by_user_id === userId) && (
                 <button onClick={() => handleRemoveItem(item.id, item.movie_title)}
                   style={{ background: 'none', border: 'none', color: 'var(--fm-text-muted)', cursor: 'pointer', fontSize: 16, padding: '4px 8px', flexShrink: 0 }}>
                   ×
@@ -648,8 +1016,14 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
                 }}>
                   {item.movie_title}
                 </div>
+                {/* Contributor name (non-owner contributors on collaborative lists) */}
+                {list.is_collaborative && item.added_by_user_id && item.added_by_user_id !== list.user_id && (
+                  <div style={{ fontSize: 10, color: 'var(--fm-text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    +{item.added_by_name || 'someone'}
+                  </div>
+                )}
               </button>
-              {isOwner && (
+              {(isOwner || item.added_by_user_id === userId) && (
                 <button onClick={() => handleRemoveItem(item.id, item.movie_title)}
                   style={{
                     position: 'absolute', top: 4, right: 4, width: 22, height: 22,
@@ -665,6 +1039,96 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
           ))}
         </div>
       )}
+
+      {/* Comments section */}
+      <section style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--fm-border)' }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--fm-text)', margin: '0 0 16px' }}>
+          💬 コメント ({comments.length})
+        </h2>
+
+        {/* Comment input */}
+        <div style={{ marginBottom: 20 }}>
+          <textarea
+            value={newComment}
+            onChange={e => setNewComment(e.target.value)}
+            placeholder="このリストにコメント…"
+            rows={2}
+            maxLength={500}
+            style={{
+              width: '100%', padding: '10px 12px', borderRadius: 8,
+              border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)',
+              color: 'var(--fm-text)', fontSize: 14, resize: 'vertical',
+              boxSizing: 'border-box', fontFamily: 'inherit',
+            }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+            <span style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>{newComment.length} / 500</span>
+            <button
+              onClick={handleAddComment}
+              disabled={!newComment.trim() || postingComment}
+              style={{
+                padding: '8px 20px', borderRadius: 8, border: 'none',
+                background: newComment.trim() ? 'var(--fm-accent)' : 'var(--fm-border)',
+                color: '#fff', fontSize: 13, fontWeight: 600,
+                cursor: newComment.trim() && !postingComment ? 'pointer' : 'not-allowed',
+                opacity: postingComment ? 0.6 : 1,
+              }}
+            >
+              {postingComment ? '投稿中…' : 'コメント'}
+            </button>
+          </div>
+        </div>
+
+        {/* Comments list */}
+        {comments.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '30px 16px', color: 'var(--fm-text-muted)', fontSize: 13 }}>
+            まだコメントがありません。最初のコメントを投稿しよう。
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {comments.map(c => (
+              <div key={c.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <a href={`/u/${c.user_id}`} style={{ flexShrink: 0, textDecoration: 'none' }}>
+                  {c.user_avatar ? (
+                    <img src={c.user_avatar} alt={c.user_name}
+                      style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{
+                      width: 36, height: 36, borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontSize: 14, fontWeight: 700,
+                    }}>
+                      {c.user_name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </a>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                    <a href={`/u/${c.user_id}`} style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text)', textDecoration: 'none' }}>
+                      {c.user_name}
+                    </a>
+                    <span style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
+                      {new Date(c.created_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
+                    </span>
+                    {c.user_id === userId && (
+                      <button onClick={() => handleDeleteComment(c.id)} style={{
+                        marginLeft: 'auto', background: 'none', border: 'none',
+                        color: 'var(--fm-text-muted)', fontSize: 11, cursor: 'pointer',
+                      }}>
+                        削除
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 14, color: 'var(--fm-text)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {c.body}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Share modal */}
       {showShare && list && (
