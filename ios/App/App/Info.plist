@@ -47,5 +47,15 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- 輸出コンプライアンス: 標準 HTTPS 以外の暗号化を使っていない -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<!-- @capacitor/camera 同梱に伴い、カメラ・写真ライブラリ用の usage description は必須 -->
+	<key>NSCameraUsageDescription</key>
+	<string>プロフィール画像やレビューに添付する写真を撮影するためにカメラを使用します。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>プロフィール画像やレビューに添付する写真を選ぶために写真ライブラリにアクセスします。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>シェア用の画像を写真ライブラリに保存する際に使用します。</string>
 </dict>
 </plist>
