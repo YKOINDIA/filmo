@@ -15,6 +15,7 @@ import Gamification from './components/Gamification'
 import UserLists from './components/UserLists'
 import NotificationBell from './components/NotificationBell'
 import Toast from './components/Toast'
+import { showToast } from './lib/toast'
 import Onboarding from './components/Onboarding'
 import ShareCard from './components/ShareCard'
 import PersonDetail from './components/PersonDetail'
@@ -49,6 +50,7 @@ export default function Page() {
   const [authError, setAuthError] = useState('')
   const [authSuccess, setAuthSuccess] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const [selectedWorkId, setSelectedWorkId] = useState<number | null>(null)
   const [selectedWorkType, setSelectedWorkType] = useState<'movie' | 'tv'>('movie')
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null)
@@ -175,10 +177,21 @@ export default function Page() {
   }
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    setUser(null)
-    setSession(null)
-    setTab('home')
+    if (loggingOut) return
+    setLoggingOut(true)
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      setUser(null)
+      setSession(null)
+      setTab('home')
+      showToast('ログアウトしました')
+    } catch (err) {
+      console.error('Logout failed:', err)
+      showToast('ログアウトに失敗しました')
+    } finally {
+      setLoggingOut(false)
+    }
   }
 
   const openWork = useCallback((id: number, type: 'movie' | 'tv' = 'movie') => {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { showToast } from '../lib/toast'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -102,6 +103,13 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
 
   // Edit collaborative toggle
   const [editCollaborative, setEditCollaborative] = useState(false)
+
+  // 二重実行防止用 (各操作の in-flight 状態)
+  const [liking, setLiking] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [removingItemIds, setRemovingItemIds] = useState<Set<string>>(new Set())
+  const [deletingCommentIds, setDeletingCommentIds] = useState<Set<string>>(new Set())
+  const [togglingFollowIds, setTogglingFollowIds] = useState<Set<string>>(new Set())
 
   // Likers
   const [likers, setLikers] = useState<LikerRow[]>([])
@@ -297,6 +305,7 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
   }
 
   const handleAddFilm = async (movie: TMDBResult) => {
+    if (adding === movie.id) return
     setAdding(movie.id)
     try {
       // Ensure movie is in movies table (cache)
@@ -321,7 +330,7 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
       if (error) {
         if (error.code === '23505') {
           // Duplicate — already in list
-          window.dispatchEvent(new CustomEvent('filmo-toast', { detail: 'Already in this list' }))
+          showToast('既にリストに追加済みです')
         } else {
           throw error
         }
@@ -336,54 +345,81 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
           movie_poster: movie.poster_path,
           movie_release_date: movie.release_date || movie.first_air_date || null,
         }])
-        window.dispatchEvent(new CustomEvent('filmo-toast', { detail: `Added "${title}"` }))
+        showToast(`「${title}」を追加しました`)
       }
     } catch (err) {
       console.error('Failed to add film:', err)
+      showToast('追加に失敗しました')
     }
     setAdding(null)
   }
 
   const handleRemoveItem = async (itemId: string, movieTitle?: string) => {
+    if (removingItemIds.has(itemId)) return
+    setRemovingItemIds(prev => new Set(prev).add(itemId))
     try {
-      await supabase.from('list_items').delete().eq('id', itemId)
+      const { error } = await supabase.from('list_items').delete().eq('id', itemId)
+      if (error) throw error
       setItems(prev => prev.filter(i => i.id !== itemId))
-      window.dispatchEvent(new CustomEvent('filmo-toast', { detail: `Removed "${movieTitle || 'film'}"` }))
+      showToast(`「${movieTitle || '作品'}」を削除しました`)
     } catch (err) {
       console.error('Failed to remove item:', err)
+      showToast('削除に失敗しました')
+    } finally {
+      setRemovingItemIds(prev => {
+        const next = new Set(prev); next.delete(itemId); return next
+      })
     }
   }
 
   const handleLike = async () => {
+    if (liking) return
+    setLiking(true)
+    // 楽観的UI更新 (体感速度を上げる)
+    const wasLiked = liked
+    setLiked(!wasLiked)
+    setLikeCount(prev => wasLiked ? Math.max(0, prev - 1) : prev + 1)
     try {
-      if (liked) {
-        await supabase.from('list_likes').delete().eq('user_id', userId).eq('list_id', listId)
-        setLiked(false)
-        setLikeCount(prev => Math.max(0, prev - 1))
+      if (wasLiked) {
+        const { error } = await supabase.from('list_likes').delete().eq('user_id', userId).eq('list_id', listId)
+        if (error) throw error
       } else {
-        await supabase.from('list_likes').insert({ user_id: userId, list_id: listId })
-        setLiked(true)
-        setLikeCount(prev => prev + 1)
+        const { error } = await supabase.from('list_likes').insert({ user_id: userId, list_id: listId })
+        if (error) throw error
       }
     } catch (err) {
+      // ロールバック
       console.error('Failed to toggle like:', err)
+      setLiked(wasLiked)
+      setLikeCount(prev => wasLiked ? prev + 1 : Math.max(0, prev - 1))
+      showToast('いいねの更新に失敗しました')
+    } finally {
+      setLiking(false)
     }
   }
 
   const handleSave = async () => {
+    if (saving) return
+    if (!editTitle.trim()) {
+      showToast('タイトルを入力してください')
+      return
+    }
     setSaving(true)
     try {
-      await supabase.from('user_lists').update({
+      const { error } = await supabase.from('user_lists').update({
         title: editTitle.trim(),
         description: editDesc.trim(),
         is_public: editPublic,
         is_collaborative: editCollaborative,
       }).eq('id', listId)
+      if (error) throw error
 
       setList(prev => prev ? { ...prev, title: editTitle.trim(), description: editDesc.trim(), is_public: editPublic, is_collaborative: editCollaborative } : prev)
       setEditing(false)
+      showToast('リストを更新しました')
     } catch (err) {
       console.error('Failed to save:', err)
+      showToast('保存に失敗しました')
     }
     setSaving(false)
   }
@@ -391,26 +427,49 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
   // === Social actions ===
   const handleFollow = async (targetUserId: string) => {
     if (targetUserId === userId) return
-    const isFollowing = followingSet.has(targetUserId)
+    if (togglingFollowIds.has(targetUserId)) return
+    setTogglingFollowIds(prev => new Set(prev).add(targetUserId))
+    const wasFollowing = followingSet.has(targetUserId)
+    // 楽観的更新
+    setFollowingSet(prev => {
+      const next = new Set(prev)
+      if (wasFollowing) next.delete(targetUserId); else next.add(targetUserId)
+      return next
+    })
     try {
-      if (isFollowing) {
-        await supabase.from('follows').delete()
+      if (wasFollowing) {
+        const { error } = await supabase.from('follows').delete()
           .eq('follower_id', userId).eq('following_id', targetUserId)
-        setFollowingSet(prev => {
-          const next = new Set(prev); next.delete(targetUserId); return next
-        })
+        if (error) throw error
+        showToast('フォローを解除しました')
       } else {
-        await supabase.from('follows').insert({ follower_id: userId, following_id: targetUserId })
-        setFollowingSet(prev => new Set(prev).add(targetUserId))
+        const { error } = await supabase.from('follows').insert({ follower_id: userId, following_id: targetUserId })
+        if (error) throw error
+        showToast('フォローしました')
       }
     } catch (err) {
+      // ロールバック
       console.error('Follow toggle failed:', err)
+      setFollowingSet(prev => {
+        const next = new Set(prev)
+        if (wasFollowing) next.add(targetUserId); else next.delete(targetUserId)
+        return next
+      })
+      showToast('フォロー操作に失敗しました')
+    } finally {
+      setTogglingFollowIds(prev => {
+        const next = new Set(prev); next.delete(targetUserId); return next
+      })
     }
   }
 
   const handleAddComment = async () => {
+    if (postingComment) return
     const body = newComment.trim()
-    if (!body) return
+    if (!body) {
+      showToast('コメントを入力してください')
+      return
+    }
     setPostingComment(true)
     try {
       const { data, error } = await supabase
@@ -433,19 +492,30 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
       }
       setComments(prev => [newRow, ...prev])
       setNewComment('')
+      showToast('コメントを投稿しました')
     } catch (err) {
       console.error('Failed to post comment:', err)
+      showToast('コメントの投稿に失敗しました')
     }
     setPostingComment(false)
   }
 
   const handleDeleteComment = async (commentId: string) => {
+    if (deletingCommentIds.has(commentId)) return
+    if (!confirm('このコメントを削除しますか?')) return
+    setDeletingCommentIds(prev => new Set(prev).add(commentId))
     try {
       const { error } = await supabase.from('list_comments').delete().eq('id', commentId)
       if (error) throw error
       setComments(prev => prev.filter(c => c.id !== commentId))
+      showToast('コメントを削除しました')
     } catch (err) {
       console.error('Failed to delete comment:', err)
+      showToast('削除に失敗しました')
+    } finally {
+      setDeletingCommentIds(prev => {
+        const next = new Set(prev); next.delete(commentId); return next
+      })
     }
   }
 
@@ -483,22 +553,28 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
         if (itemErr) throw itemErr
       }
 
-      window.dispatchEvent(new CustomEvent('filmo-toast', { detail: `「${list.title}」を自分のリストにコピーしました` }))
+      showToast(`「${list.title}」を自分のリストにコピーしました`)
       // 元リストに留まる(自分のリストへ遷移するなら onBack 経由でリスト一覧に戻る)
       onBack()
     } catch (err) {
       console.error('Fork failed:', err)
-      window.dispatchEvent(new CustomEvent('filmo-toast', { detail: 'コピーに失敗しました' }))
+      showToast('コピーに失敗しました')
     }
     setForking(false)
   }
 
   const handleDelete = async () => {
+    if (deleting) return
+    setDeleting(true)
     try {
-      await supabase.from('user_lists').delete().eq('id', listId)
+      const { error } = await supabase.from('user_lists').delete().eq('id', listId)
+      if (error) throw error
+      showToast('リストを削除しました')
       onBack()
     } catch (err) {
       console.error('Failed to delete:', err)
+      showToast('削除に失敗しました')
+      setDeleting(false)
     }
   }
 
@@ -621,13 +697,13 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
             {/* Like */}
-            <button onClick={handleLike} style={{
+            <button onClick={handleLike} disabled={liking} style={{
               display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px',
               borderRadius: 6, border: '1px solid var(--fm-border)',
               background: liked ? 'rgba(239,68,68,0.1)' : 'transparent',
               color: liked ? '#ef4444' : 'var(--fm-text-sub)',
-              fontSize: 13, cursor: 'pointer', fontWeight: 500,
-              transition: 'all 0.15s',
+              fontSize: 13, cursor: liking ? 'wait' : 'pointer', fontWeight: 500,
+              transition: 'all 0.15s', opacity: liking ? 0.6 : 1,
             }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
               {likeCount}
@@ -729,17 +805,21 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
                           {liker.user_name}
                         </div>
                       </a>
-                      {!isMe && (
-                        <button onClick={() => handleFollow(liker.user_id)} style={{
-                          padding: '3px 10px', borderRadius: 12,
-                          border: `1px solid ${isFollowing ? 'var(--fm-border)' : 'var(--fm-accent)'}`,
-                          background: isFollowing ? 'transparent' : 'var(--fm-accent)',
-                          color: isFollowing ? 'var(--fm-text-sub)' : '#fff',
-                          fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                        }}>
-                          {isFollowing ? '解除' : 'フォロー'}
-                        </button>
-                      )}
+                      {!isMe && (() => {
+                        const busy = togglingFollowIds.has(liker.user_id)
+                        return (
+                          <button onClick={() => handleFollow(liker.user_id)} disabled={busy} style={{
+                            padding: '3px 10px', borderRadius: 12,
+                            border: `1px solid ${isFollowing ? 'var(--fm-border)' : 'var(--fm-accent)'}`,
+                            background: isFollowing ? 'transparent' : 'var(--fm-accent)',
+                            color: isFollowing ? 'var(--fm-text-sub)' : '#fff',
+                            fontSize: 11, fontWeight: 600,
+                            cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.6 : 1,
+                          }}>
+                            {isFollowing ? '解除' : 'フォロー'}
+                          </button>
+                        )
+                      })()}
                     </div>
                   )
                 })}
@@ -823,9 +903,9 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
                 style={{ flex: 1, padding: 10, borderRadius: 8, border: '1px solid var(--fm-border)', background: 'transparent', color: 'var(--fm-text-sub)', fontSize: 14, cursor: 'pointer' }}>
                 Cancel
               </button>
-              <button onClick={handleDelete}
-                style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: '#ef4444', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                Delete
+              <button onClick={handleDelete} disabled={deleting}
+                style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: '#ef4444', color: '#fff', fontSize: 14, fontWeight: 600, cursor: deleting ? 'wait' : 'pointer', opacity: deleting ? 0.6 : 1 }}>
+                {deleting ? '削除中…' : 'Delete'}
               </button>
             </div>
           </div>
@@ -979,6 +1059,7 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
               </button>
               {(isOwner || item.added_by_user_id === userId) && (
                 <button onClick={() => handleRemoveItem(item.id, item.movie_title)}
+                  disabled={removingItemIds.has(item.id)}
                   style={{ background: 'none', border: 'none', color: 'var(--fm-text-muted)', cursor: 'pointer', fontSize: 16, padding: '4px 8px', flexShrink: 0 }}>
                   ×
                 </button>
@@ -1025,6 +1106,7 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
               </button>
               {(isOwner || item.added_by_user_id === userId) && (
                 <button onClick={() => handleRemoveItem(item.id, item.movie_title)}
+                  disabled={removingItemIds.has(item.id)}
                   style={{
                     position: 'absolute', top: 4, right: 4, width: 22, height: 22,
                     borderRadius: '50%', background: 'rgba(0,0,0,0.7)', border: 'none',
@@ -1111,14 +1193,18 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
                     <span style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
                       {new Date(c.created_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
                     </span>
-                    {c.user_id === userId && (
-                      <button onClick={() => handleDeleteComment(c.id)} style={{
-                        marginLeft: 'auto', background: 'none', border: 'none',
-                        color: 'var(--fm-text-muted)', fontSize: 11, cursor: 'pointer',
-                      }}>
-                        削除
-                      </button>
-                    )}
+                    {c.user_id === userId && (() => {
+                      const busy = deletingCommentIds.has(c.id)
+                      return (
+                        <button onClick={() => handleDeleteComment(c.id)} disabled={busy} style={{
+                          marginLeft: 'auto', background: 'none', border: 'none',
+                          color: 'var(--fm-text-muted)', fontSize: 11,
+                          cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1,
+                        }}>
+                          {busy ? '削除中…' : '削除'}
+                        </button>
+                      )
+                    })()}
                   </div>
                   <div style={{ fontSize: 14, color: 'var(--fm-text)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                     {c.body}
