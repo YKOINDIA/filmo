@@ -177,6 +177,7 @@ interface Props {
   onUpdate: (u: Partial<ProfileUser>) => void
   onLogout: () => void
   onOpenWork: (id: number, type?: 'movie' | 'tv') => void
+  onOpenPerson?: (id: number) => void
 }
 
 interface WatchlistItem {
@@ -226,7 +227,7 @@ interface TMDBResult {
   poster_path: string | null
 }
 
-export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props) {
+export default function Profile({ user, onUpdate, onLogout, onOpenWork, onOpenPerson }: Props) {
   const [showSettings, setShowSettings] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(user.name)
@@ -972,9 +973,15 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props)
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
             {fans.map(fan => (
-              <div key={fan.id} style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 70,
-              }}>
+              <button
+                key={fan.id}
+                onClick={() => onOpenPerson?.(fan.person_id)}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 70,
+                  background: 'none', border: 'none', padding: 0,
+                  cursor: onOpenPerson ? 'pointer' : 'default',
+                }}
+              >
                 <div style={{
                   width: 56, height: 56, borderRadius: '50%', overflow: 'hidden',
                   background: 'var(--fm-bg-secondary)', border: '2px solid var(--fm-border)',
@@ -997,7 +1004,7 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork }: Props)
                 }}>
                   {fan.person_name}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         )}

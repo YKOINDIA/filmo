@@ -443,6 +443,7 @@ export default function Page() {
               onUpdate={(u: Partial<User>) => setUser(prev => prev ? { ...prev, ...u } : prev)}
               onLogout={handleLogout}
               onOpenWork={openWork}
+              onOpenPerson={openPerson}
             />
             <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px' }}>
               <Statistics userId={user.id} onOpenWork={openWork} />

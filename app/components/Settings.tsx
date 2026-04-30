@@ -36,6 +36,7 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
   const [showProfile, setShowProfile] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(false)
+  const [isProfilePublic, setIsProfilePublic] = useState(true)
 
   useEffect(() => {
     loadSettings()
@@ -43,7 +44,7 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
 
   const loadSettings = async () => {
     const { data } = await supabase.from('users')
-      .select('email, notify_new_release, notify_streaming, notify_follow, notify_like, notify_community, notify_email, gender, birth_year, birth_month, birth_day, country, hometown, current_location')
+      .select('email, notify_new_release, notify_streaming, notify_follow, notify_like, notify_community, notify_email, gender, birth_year, birth_month, birth_day, country, hometown, current_location, is_profile_public')
       .eq('id', userId).single()
     if (data) {
       setEmail(data.email)
@@ -62,6 +63,18 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
       setCountry(data.country || '')
       setHometown(data.hometown || '')
       setCurrentLocation(data.current_location || '')
+      setIsProfilePublic(data.is_profile_public ?? true)
+    }
+  }
+
+  const updateProfileVisibility = async (value: boolean) => {
+    setIsProfilePublic(value)
+    const { error } = await supabase.from('users').update({ is_profile_public: value }).eq('id', userId)
+    if (error) {
+      showToast('保存に失敗しました')
+      setIsProfilePublic(!value)
+    } else {
+      showToast(value ? 'プロフィールを公開にしました' : 'プロフィールを非公開にしました')
     }
   }
 
@@ -186,6 +199,14 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
         </SettingRow>
         <SettingRow label="メール通知">
           <ToggleSwitch checked={notifySettings.notify_email} onChange={v => updateNotify('notify_email', v)} />
+        </SettingRow>
+      </div>
+
+      {/* プライバシー */}
+      <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', fontWeight: 600, marginBottom: 8, marginLeft: 4 }}>プライバシー</div>
+      <div style={{ background: 'var(--fm-bg-card)', borderRadius: 12, padding: '4px 16px', border: '1px solid var(--fm-border)', marginBottom: 16 }}>
+        <SettingRow label="プロフィールを公開" desc={isProfilePublic ? '他のユーザーがあなたのプロフィールを閲覧できます' : '/u/[id] からは「非公開」と表示されます'}>
+          <ToggleSwitch checked={isProfilePublic} onChange={updateProfileVisibility} />
         </SettingRow>
       </div>
 
