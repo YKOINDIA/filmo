@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import { buildTasteProfile, calculateGenreMatchScore, type TasteProfile } from '../lib/matchScore'
 import { useTmdbFetch } from '../lib/i18n'
 import { supabase } from '../lib/supabase'
@@ -26,19 +27,19 @@ interface MediaItem {
   genre_ids?: number[]
 }
 
-const GENRE_CHIPS: { label: string; emoji: string }[] = [
-  { label: 'アクション', emoji: '💥' },
-  { label: 'コメディ', emoji: '😂' },
-  { label: 'ドラマ', emoji: '🎭' },
-  { label: 'ホラー', emoji: '👻' },
-  { label: 'SF', emoji: '🚀' },
-  { label: 'ロマンス', emoji: '💕' },
-  { label: 'アニメ', emoji: '🎨' },
-  { label: 'ミステリー', emoji: '🔍' },
-  { label: 'ファンタジー', emoji: '🧙' },
-  { label: 'ドキュメンタリー', emoji: '📹' },
-  { label: 'スリラー', emoji: '😱' },
-  { label: '音楽', emoji: '🎵' },
+const GENRE_CHIPS: { label: string; emoji: string; genreId: number }[] = [
+  { label: 'アクション', emoji: '💥', genreId: 28 },
+  { label: 'コメディ', emoji: '😂', genreId: 35 },
+  { label: 'ドラマ', emoji: '🎭', genreId: 18 },
+  { label: 'ホラー', emoji: '👻', genreId: 27 },
+  { label: 'SF', emoji: '🚀', genreId: 878 },
+  { label: 'ロマンス', emoji: '💕', genreId: 10749 },
+  { label: 'アニメ', emoji: '🎨', genreId: 16 },
+  { label: 'ミステリー', emoji: '🔍', genreId: 9648 },
+  { label: 'ファンタジー', emoji: '🧙', genreId: 14 },
+  { label: 'ドキュメンタリー', emoji: '📹', genreId: 99 },
+  { label: 'スリラー', emoji: '😱', genreId: 53 },
+  { label: '音楽', emoji: '🎵', genreId: 10402 },
 ]
 
 interface SectionLoadingState {
@@ -524,6 +525,40 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
         </ScrollRow>
       </Section>
 
+      {/* 人物で探す */}
+      <section style={{ padding: '0 24px', marginTop: 12, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <span style={{ fontSize: 22 }}>👤</span>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#fff', margin: 0 }}>
+            人物で探す
+          </h2>
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <Link href="/directors" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            background: 'rgba(108,92,231,0.15)',
+            border: '1px solid rgba(108,92,231,0.35)',
+            borderRadius: 24, padding: '10px 22px',
+            fontSize: 14, fontWeight: 700, color: '#a29bfe',
+            textDecoration: 'none', cursor: 'pointer',
+          }}>
+            <span style={{ fontSize: 18 }}>🎬</span>
+            監督一覧
+          </Link>
+          <Link href="/screenwriters" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            background: 'rgba(46,204,138,0.15)',
+            border: '1px solid rgba(46,204,138,0.35)',
+            borderRadius: 24, padding: '10px 22px',
+            fontSize: 14, fontWeight: 700, color: '#2ecc8a',
+            textDecoration: 'none', cursor: 'pointer',
+          }}>
+            <span style={{ fontSize: 18 }}>✍️</span>
+            脚本家一覧
+          </Link>
+        </div>
+      </section>
+
       {/* ジャンルで探す */}
       <section style={{ padding: '0 24px', marginTop: 12, marginBottom: 32 }}>
         <div style={{
@@ -548,8 +583,9 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
           gap: 10,
         }}>
           {GENRE_CHIPS.map(genre => (
-            <button
+            <Link
               key={genre.label}
+              href={`/?tab=search&genre=${genre.genreId}&label=${encodeURIComponent(genre.label)}`}
               className="filmo-genre-chip"
               style={{
                 display: 'inline-flex',
@@ -565,11 +601,12 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 whiteSpace: 'nowrap',
+                textDecoration: 'none',
               }}
             >
               <span style={{ fontSize: 16 }}>{genre.emoji}</span>
               {genre.label}
-            </button>
+            </Link>
           ))}
         </div>
       </section>

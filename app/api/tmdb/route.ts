@@ -100,6 +100,13 @@ export async function GET(request: NextRequest) {
         const data = await tmdbFetch('/person/popular', { page })
         return NextResponse.json(data)
       }
+      case 'search_person': {
+        const query = searchParams.get('query') || ''
+        const page = searchParams.get('page') || '1'
+        if (!query.trim()) return NextResponse.json({ results: [] })
+        const data = await tmdbFetch('/search/person', { query, page, ...(lang && { language: lang }) })
+        return NextResponse.json(data)
+      }
       // Annict連携
       case 'annict_search': {
         const query = searchParams.get('query') || ''

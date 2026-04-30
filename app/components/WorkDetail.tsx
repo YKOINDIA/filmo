@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import { addPoints, POINT_CONFIG } from '../lib/points'
 import { showToast } from '../lib/toast'
@@ -1682,22 +1683,25 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
             ) : sortedReviews.map(review => (
                 <div key={review.id} style={s.reviewCard}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                    {review.users?.avatar_url ? (
-                      <img src={review.users.avatar_url} alt="" style={s.avatar} />
-                    ) : (
-                      <div style={{
-                        ...s.avatar, display: 'flex', alignItems: 'center',
-                        justifyContent: 'center', fontSize: 16, color: 'var(--fm-text-muted)',
-                      }}>👤</div>
-                    )}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>
-                        {review.users?.display_name || '匿名ユーザー'}
+                    <Link href={`/u/${review.user_id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'contents' }}>
+                      {review.users?.avatar_url ? (
+                        <img src={review.users.avatar_url} alt="" style={{ ...s.avatar, cursor: 'pointer' }} />
+                      ) : (
+                        <div style={{
+                          ...s.avatar, display: 'flex', alignItems: 'center',
+                          justifyContent: 'center', fontSize: 16, color: 'var(--fm-text-muted)',
+                          cursor: 'pointer',
+                        }}>👤</div>
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)', cursor: 'pointer' }}>
+                          {review.users?.display_name || '匿名ユーザー'}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
+                          {new Date(review.created_at).toLocaleDateString('ja-JP')}
+                        </div>
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
-                        {new Date(review.created_at).toLocaleDateString('ja-JP')}
-                      </div>
-                    </div>
+                    </Link>
                     {review.score && <StarRating value={review.score} size={16} readonly />}
                   </div>
                   {review.has_spoiler && !revealedSpoilers.has(review.id) ? (
@@ -1811,18 +1815,20 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                 ...s.card, marginBottom: 8, padding: '10px 14px',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  {cm.users?.avatar_url ? (
-                    <img src={cm.users.avatar_url} alt="" style={{ ...s.avatar, width: 24, height: 24 }} />
-                  ) : (
-                    <div style={{
-                      ...s.avatar, width: 24, height: 24,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 12, color: 'var(--fm-text-muted)',
-                    }}>👤</div>
-                  )}
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text)', flex: 1 }}>
-                    {cm.users?.display_name || '匿名ユーザー'}
-                  </span>
+                  <Link href={`/u/${cm.user_id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'contents' }}>
+                    {cm.users?.avatar_url ? (
+                      <img src={cm.users.avatar_url} alt="" style={{ ...s.avatar, width: 24, height: 24, cursor: 'pointer' }} />
+                    ) : (
+                      <div style={{
+                        ...s.avatar, width: 24, height: 24,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 12, color: 'var(--fm-text-muted)', cursor: 'pointer',
+                      }}>👤</div>
+                    )}
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text)', flex: 1, cursor: 'pointer' }}>
+                      {cm.users?.display_name || '匿名ユーザー'}
+                    </span>
+                  </Link>
                   {cm.score && cm.score > 0 && <StarRating value={cm.score} size={14} readonly />}
                 </div>
                 {cm.memo && (

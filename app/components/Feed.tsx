@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import { addPoints, POINT_CONFIG, checkDailyLikeLimit, incrementDailyLikeCount } from '../lib/points'
 import { showToast } from '../lib/toast'
@@ -232,17 +233,17 @@ export default function Feed({ userId, onOpenWork }: {
             }}>
               {/* ユーザー情報 */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <div style={{
+                <Link href={`/u/${item.user_id}`} style={{
                   width: 36, height: 36, borderRadius: '50%', background: 'var(--fm-bg-secondary)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
-                  overflow: 'hidden',
+                  overflow: 'hidden', flexShrink: 0,
                 }}>
                   {item.user_avatar ? (
                     <img src={item.user_avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : '👤'}
-                </div>
+                </Link>
                 <div style={{ flex: 1 }}>
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>{item.user_name}</span>
+                  <Link href={`/u/${item.user_id}`} style={{ fontWeight: 600, fontSize: 14, color: 'inherit', textDecoration: 'none' }}>{item.user_name}</Link>
                   <span style={{ color: 'var(--fm-text-sub)', fontSize: 13 }}>{actionText(item)}</span>
                 </div>
                 <span style={{ fontSize: 12, color: 'var(--fm-text-muted)' }}>{timeAgo(item.created_at)}</span>

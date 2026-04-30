@@ -55,6 +55,7 @@ export default function Page() {
   const [selectedWorkId, setSelectedWorkId] = useState<number | null>(null)
   const [selectedWorkType, setSelectedWorkType] = useState<'movie' | 'tv'>('movie')
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null)
+  const [pendingBrowseGenre, setPendingBrowseGenre] = useState<{ id: number; label: string } | null>(null)
   const [toastMsg, setToastMsg] = useState('')
   const [streakBonus, setStreakBonus] = useState(0)
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
@@ -86,6 +87,37 @@ export default function Page() {
       if (!s) { setUser(null) }
     })
     return () => subscription.unsubscribe()
+  }, [])
+
+  // 別ページから渡される URL パラメータ:
+  //  ?person=<tmdb_person_id>     PersonDetail を自動オープン
+  //  ?tab=search&genre=<id>&label=<name>  Search タブを開いてジャンルブラウズ
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const personParam = params.get('person')
+    if (personParam) {
+      const pid = Number(personParam)
+      if (Number.isFinite(pid) && pid > 0) setSelectedPersonId(pid)
+      const workParam = params.get('work')
+      if (workParam) {
+        const wid = Number(workParam)
+        if (Number.isFinite(wid)) setSelectedWorkId(wid)
+      }
+    }
+    const tabParam = params.get('tab') as Tab | null
+    if (tabParam && ['home', 'search', 'feed', 'lists', 'profile'].includes(tabParam)) {
+      setTab(tabParam)
+    }
+    const genreParam = params.get('genre')
+    const labelParam = params.get('label')
+    if (genreParam && labelParam) {
+      const gid = Number(genreParam)
+      if (Number.isFinite(gid)) setPendingBrowseGenre({ id: gid, label: labelParam })
+    }
+    if (params.toString()) {
+      window.history.replaceState({}, '', window.location.pathname)
+    }
   }, [])
 
   useEffect(() => {
@@ -394,7 +426,14 @@ export default function Page() {
 
       <main style={{ padding: '0 0 80px 0' }}>
         {tab === 'home' && <Dashboard userId={user.id} onOpenWork={openWork} />}
-        {tab === 'search' && <Search userId={user.id} onOpenWork={openWork} />}
+        {tab === 'search' && (
+          <Search
+            userId={user.id}
+            onOpenWork={openWork}
+            initialGenreBrowse={pendingBrowseGenre}
+            onGenreBrowseConsumed={() => setPendingBrowseGenre(null)}
+          />
+        )}
         {tab === 'feed' && <Feed userId={user.id} onOpenWork={openWork} />}
         {tab === 'lists' && <UserLists userId={user.id} onOpenWork={openWork} />}
         {tab === 'profile' && (
