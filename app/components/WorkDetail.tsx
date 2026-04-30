@@ -1401,9 +1401,21 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         )}
       </div>
 
-      {/* ── 4a. Mark Panel: Voice Review + Star + Review + Watch Details ── */}
-      {(currentStatus === 'watched' || currentStatus === 'watching') && (
+      {/* ── 4a. Mark Panel: Voice Review + Star + Review + Watch Details ──
+        Watched/Watching を選んでなくても表示する (Letterboxd方式)。
+        「★とレビューだけ書く」ユースケースもあるため、未選択でも入力可能。
+        実保存時に handleSaveReview 内で必要なら status を自動で 'watched' に上げる。 */}
+      {(currentStatus === 'watched' || currentStatus === 'watching' || currentStatus === null) && (
         <div style={{ ...s.section }}>
+          {currentStatus === null && (
+            <div style={{
+              padding: '10px 14px', borderRadius: 10, marginBottom: 12,
+              background: 'rgba(108,92,231,0.10)', border: '1px solid rgba(108,92,231,0.3)',
+              fontSize: 13, color: 'var(--fm-accent)',
+            }}>
+              💡 上の「✓ Watched」を押してから書くと正確な記録になります(レビューだけでも投稿可)
+            </div>
+          )}
           {/* Voice Review Recorder */}
           {detail && (
             <div style={{ marginBottom: 12 }}>
