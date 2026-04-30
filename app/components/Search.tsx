@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import WorkRegisterModal from './WorkRegisterModal'
 import { useTmdbFetch, useLocale } from '../lib/i18n'
 import { supabase } from '../lib/supabase'
+import { trackSearchPerformed, trackWorkOpened } from '../lib/analytics'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -592,10 +593,15 @@ const S = {
   } as React.CSSProperties,
 } as const
 
-export default function Search({ userId, onOpenWork }: {
+export default function Search({ userId, onOpenWork: onOpenWorkRaw }: {
   userId: string
   onOpenWork: (id: number, type?: 'movie' | 'tv') => void
 }) {
+  // GA4: 作品オープンを Search 経由として記録 (source='search')
+  const onOpenWork = useCallback((id: number, type?: 'movie' | 'tv') => {
+    trackWorkOpened(id, type ?? 'movie', 'search')
+    onOpenWorkRaw(id, type)
+  }, [onOpenWorkRaw])
   const tmdbFetch = useTmdbFetch()
   const { t } = useLocale()
   const [activeTab, setActiveTab] = useState<TabKey>('movie')
@@ -771,6 +777,8 @@ export default function Search({ userId, onOpenWork }: {
         searchCacheRef.current.set(debouncedQuery, { results, total_pages })
         setSearchResults(results)
         setSearchTotalPages(total_pages)
+        // GA4: 検索実行 (タブ別の検索ニーズ分析に使う)
+        trackSearchPerformed(debouncedQuery, activeTab, results.length)
       })
       .catch(() => {})
       .finally(() => setSearchLoading(false))

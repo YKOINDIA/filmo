@@ -100,11 +100,19 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   }
 
   const setLocale = useCallback((newLocale: Locale) => {
-    setLocaleState(newLocale)
+    setLocaleState(prev => {
+      if (prev !== newLocale) {
+        // Analytics: 言語切替を記録 (動的 import で循環参照回避)
+        import('../analytics').then(a => a.trackLanguageChanged(prev, newLocale)).catch(() => {})
+      }
+      return newLocale
+    })
     setCookie(LOCALE_COOKIE, newLocale)
     localStorage.setItem(LOCALE_COOKIE, newLocale)
     document.documentElement.lang = newLocale === 'zh' ? 'zh-CN' : newLocale
     loadDictionary(newLocale)
+    // Analytics: locale を user property にも反映
+    import('../analytics').then(a => a.setUserContext({ locale: newLocale })).catch(() => {})
   }, [])
 
   const t = useCallback((key: string, params?: Record<string, string | number>): string => {

@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import ListDetail from './ListDetail'
 import { useLocale } from '../lib/i18n'
 import { showToast } from '../lib/toast'
+import { trackListCreated } from '../lib/analytics'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -181,8 +182,11 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
       setNewCollaborative(false)
       showToast('リストを作成しました')
       if (data) {
+        const created = data as unknown as ListItem
+        // GA4: リスト作成 (key event 候補)
+        trackListCreated(created.id, newPublic, newCollaborative && newPublic)
         // 作成したリストの詳細画面に遷移してすぐに作品追加できるようにする
-        setSelectedList((data as unknown as ListItem).id)
+        setSelectedList(created.id)
       }
       fetchLists()
     } catch (err) {
