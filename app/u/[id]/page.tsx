@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import AuthGate from '../../components/AuthGate'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://filmo.me'
@@ -35,27 +36,33 @@ interface PublicReviewSummary {
   poster_path: string | null
 }
 
-async function fetchProfileData(userId: string): Promise<{
-  user: PublicUser
-  lists: PublicList[]
-  watchedCount: number
-  reviewsCount: number
-  followersCount: number
-  followingCount: number
-  recentWatched: PublicReviewSummary[]
-} | null> {
+type ProfileFetchResult =
+  | { isPrivate: true }
+  | {
+      isPrivate?: false
+      user: PublicUser
+      lists: PublicList[]
+      watchedCount: number
+      reviewsCount: number
+      followersCount: number
+      followingCount: number
+      recentWatched: PublicReviewSummary[]
+    }
+
+async function fetchProfileData(userId: string): Promise<ProfileFetchResult | null> {
   try {
     const { createClient } = await import('@supabase/supabase-js')
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-    // ユーザー本体(BAN は出さない)
+    // ユーザー本体(BAN は出さない / 非公開は専用画面)
     const { data: userRow } = await admin
       .from('users')
-      .select('id, name, avatar_url, bio, best_movie_title, best_movie_poster, is_banned')
+      .select('id, name, avatar_url, bio, best_movie_title, best_movie_poster, is_banned, is_profile_public')
       .eq('id', userId)
       .maybeSingle()
 
     if (!userRow || userRow.is_banned) return null
+    if (userRow.is_profile_public === false) return { isPrivate: true as const }
 
     const user: PublicUser = {
       id: userRow.id,
@@ -160,6 +167,9 @@ export async function generateMetadata({
   if (!data) {
     return { title: 'プロフィールが見つかりません — Filmo' }
   }
+  if (data.isPrivate) {
+    return { title: '非公開プロフィール — Filmo', robots: { index: false } }
+  }
   const { user, watchedCount, reviewsCount } = data
   const desc = user.bio
     || `${user.name}さんは ${watchedCount}本の映画を観て、${reviewsCount}件のレビューを書いています。`
@@ -221,6 +231,28 @@ export default async function PublicProfilePage({
     )
   }
 
+  if (data.isPrivate) {
+    return (
+      <div style={{
+        minHeight: '100dvh', background: 'var(--fm-bg)', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', padding: 20,
+      }}>
+        <div style={{ textAlign: 'center', maxWidth: 360 }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--fm-text)', marginBottom: 8 }}>
+            非公開プロフィール
+          </h1>
+          <p style={{ color: 'var(--fm-text-sub)', fontSize: 14, lineHeight: 1.6 }}>
+            このユーザーはプロフィールを非公開に設定しています。
+          </p>
+          <Link href="/" style={{ color: 'var(--fm-accent)', fontSize: 14, marginTop: 16, display: 'inline-block' }}>
+            Filmoのトップへ
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   const { user, lists, watchedCount, reviewsCount, followersCount, followingCount, recentWatched } = data
 
   return (
@@ -238,13 +270,15 @@ export default async function PublicProfilePage({
             Filmo
           </span>
         </Link>
-        <Link href="/" style={{
-          padding: '6px 16px', borderRadius: 6, border: 'none',
-          background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
-          textDecoration: 'none',
-        }}>
-          無料で始める
-        </Link>
+        <AuthGate hideWhenAuthed>
+          <Link href="/" style={{
+            padding: '6px 16px', borderRadius: 6, border: 'none',
+            background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
+            textDecoration: 'none',
+          }}>
+            無料で始める
+          </Link>
+        </AuthGate>
       </header>
 
       <main style={{ maxWidth: 720, margin: '0 auto', padding: '24px 16px 60px' }}>
@@ -394,26 +428,28 @@ export default async function PublicProfilePage({
           </section>
         )}
 
-        {/* CTA */}
-        <div style={{
-          padding: 24, borderRadius: 10,
-          background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
-          textAlign: 'center',
-        }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--fm-text)', margin: '0 0 8px' }}>
-            あなたも Filmo を始めよう
-          </h3>
-          <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', margin: '0 0 16px' }}>
-            観た映画を記録して、リストを作って、世界中の映画ファンとつながろう。
-          </p>
-          <Link href="/" style={{
-            display: 'inline-block', padding: '10px 28px', borderRadius: 8,
-            background: 'var(--fm-accent)', color: '#fff', fontSize: 14, fontWeight: 600,
-            textDecoration: 'none',
+        {/* CTA — ログイン済みには表示しない */}
+        <AuthGate hideWhenAuthed>
+          <div style={{
+            padding: 24, borderRadius: 10,
+            background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
+            textAlign: 'center',
           }}>
-            無料で始める
-          </Link>
-        </div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--fm-text)', margin: '0 0 8px' }}>
+              あなたも Filmo を始めよう
+            </h3>
+            <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', margin: '0 0 16px' }}>
+              観た映画を記録して、リストを作って、世界中の映画ファンとつながろう。
+            </p>
+            <Link href="/" style={{
+              display: 'inline-block', padding: '10px 28px', borderRadius: 8,
+              background: 'var(--fm-accent)', color: '#fff', fontSize: 14, fontWeight: 600,
+              textDecoration: 'none',
+            }}>
+              無料で始める
+            </Link>
+          </div>
+        </AuthGate>
       </main>
     </div>
   )
