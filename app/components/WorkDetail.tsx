@@ -1501,7 +1501,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                     onClick={() => handleSaveReview(true)}
                     disabled={savingReview || !reviewBody.trim()}
                   >
-                    下書き保存
+                    レビューを下書き
                   </button>
                   <button
                     style={{
@@ -1511,7 +1511,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                     onClick={() => handleSaveReview(false)}
                     disabled={savingReview || !reviewBody.trim()}
                   >
-                    {savingReview ? '投稿中...' : myReview && !myReview.is_draft ? '更新' : '投稿'}
+                    {savingReview ? '投稿中...' : myReview && !myReview.is_draft ? 'レビューを更新' : 'レビューを投稿'}
                   </button>
                 </div>
               </div>
@@ -1633,7 +1633,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                 onClick={handleSaveWatchDetails}
                 disabled={savingWatchlist}
               >
-                {savingWatchlist ? '保存中...' : '保存'}
+                {savingWatchlist ? '保存中...' : '鑑賞情報を保存'}
               </button>
             </div>
           </div>
@@ -1792,7 +1792,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                 onClick={handleSaveWatchDetails}
                 disabled={savingWatchlist}
               >
-                {savingWatchlist ? '保存中...' : '保存'}
+                {savingWatchlist ? '保存中...' : '鑑賞情報を保存'}
               </button>
             </div>
           </div>
