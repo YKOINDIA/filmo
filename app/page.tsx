@@ -16,6 +16,7 @@ import UserLists from './components/UserLists'
 import NotificationBell from './components/NotificationBell'
 import Toast from './components/Toast'
 import { showToast } from './lib/toast'
+import { setUserContext, trackSignUp } from './lib/analytics'
 import Onboarding from './components/Onboarding'
 import ShareCard from './components/ShareCard'
 import PersonDetail from './components/PersonDetail'
@@ -113,7 +114,14 @@ export default function Page() {
         .eq('id', uid)
         .single()
       if (doc) {
-        setUser(doc as unknown as User)
+        const u = doc as unknown as User & { country?: string | null }
+        setUser(u as User)
+        // GA4: ユーザーコンテキストを反映 (locale / country / authenticated / level)
+        setUserContext({
+          country: u.country ?? null,
+          authenticated: true,
+          level: u.level,
+        })
         const { bonus } = await checkLoginStreak(uid)
         if (bonus > 0) setStreakBonus(bonus)
 
@@ -168,6 +176,8 @@ export default function Page() {
             bio: '',
           })
           if (upsertError) console.error('User upsert failed:', upsertError)
+          // GA4: 新規登録イベント (sign_up は GA4 の標準推奨イベント)
+          trackSignUp('email')
           setSession(data.session)
           setNeedsOnboarding(true)
           await loadUserProfile(data.user.id)
@@ -196,6 +206,8 @@ export default function Page() {
       setUser(null)
       setSession(null)
       setTab('home')
+      // GA4: ログアウト後は user_authenticated=false に
+      setUserContext({ authenticated: false })
       showToast('ログアウトしました')
     } catch (err) {
       console.error('Logout failed:', err)

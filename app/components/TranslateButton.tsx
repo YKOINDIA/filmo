@@ -1,6 +1,7 @@
 'use client'
 
 import { useLocale, useReviewTranslation } from '@/app/lib/i18n'
+import { trackTranslateClicked } from '@/app/lib/analytics'
 
 interface Props {
   reviewId: string
@@ -61,7 +62,10 @@ export default function TranslateButton({ reviewId, text, sourceLocale }: Props)
 
   return (
     <button
-      onClick={() => translate(reviewId, text)}
+      onClick={() => {
+        trackTranslateClicked(sourceLocale || 'unknown', locale)
+        translate(reviewId, text)
+      }}
       style={{
         background: 'none', border: 'none', cursor: 'pointer',
         fontSize: 12, color: 'var(--fm-accent)', padding: 0,

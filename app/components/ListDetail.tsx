@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { showToast } from '../lib/toast'
+import { trackListLiked, trackListForked, trackListShared, trackFollow } from '../lib/analytics'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -386,6 +387,8 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
       } else {
         const { error } = await supabase.from('list_likes').insert({ user_id: userId, list_id: listId })
         if (error) throw error
+        // GA4: いいね (バイラル指標)
+        trackListLiked(listId)
       }
     } catch (err) {
       // ロールバック
@@ -441,10 +444,12 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
         const { error } = await supabase.from('follows').delete()
           .eq('follower_id', userId).eq('following_id', targetUserId)
         if (error) throw error
+        trackFollow(targetUserId, 'unfollow')
         showToast('フォローを解除しました')
       } else {
         const { error } = await supabase.from('follows').insert({ follower_id: userId, following_id: targetUserId })
         if (error) throw error
+        trackFollow(targetUserId, 'follow')
         showToast('フォローしました')
       }
     } catch (err) {
@@ -553,6 +558,8 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
         if (itemErr) throw itemErr
       }
 
+      // GA4: Fork (バイラル指標)
+      trackListForked(list.id, newList!.id)
       showToast(`「${list.title}」を自分のリストにコピーしました`)
       // 元リストに留まる(自分のリストへ遷移するなら onBack 経由でリスト一覧に戻る)
       onBack()
@@ -594,6 +601,7 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
       await navigator.clipboard.writeText(buildShareUrl())
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+      trackListShared(listId, 'copy_link')
     } catch { /* ignore */ }
   }
 
@@ -601,18 +609,21 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
     const url = encodeURIComponent(buildShareUrl())
     const text = encodeURIComponent(buildShareText())
     window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank', 'noopener,noreferrer')
+    trackListShared(listId, 'twitter')
   }
 
   const handleShareLine = () => {
     const url = encodeURIComponent(buildShareUrl())
     const text = encodeURIComponent(buildShareText())
     window.open(`https://social-plugins.line.me/lineit/share?url=${url}&text=${text}`, '_blank', 'noopener,noreferrer')
+    trackListShared(listId, 'line')
   }
 
   const handleSystemShare = async () => {
     if (!navigator.share) return
     try {
       await navigator.share({ title: list?.title, text: buildShareText(), url: buildShareUrl() })
+      trackListShared(listId, 'system')
     } catch { /* user canceled */ }
   }
 

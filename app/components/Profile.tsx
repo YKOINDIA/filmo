@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { showToast } from '../lib/toast'
+import { trackProfileShared } from '../lib/analytics'
 
 const TMDB_IMG_POSTER = 'https://image.tmdb.org/t/p/w342'
 import { getLevelFromPoints, LEVEL_TITLES } from '../lib/points'
@@ -31,17 +32,23 @@ function ShareMyProfileButton({ userId, userName }: { userId: string; userName: 
       await navigator.clipboard.writeText(url)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+      trackProfileShared('copy_link')
     } catch { /* ignore */ }
   }
   const shareTwitter = () => {
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer')
+    trackProfileShared('twitter')
   }
   const shareLine = () => {
     window.open(`https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+    trackProfileShared('line')
   }
   const systemShare = async () => {
     if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') return
-    try { await navigator.share({ title: text, url }) } catch { /* canceled */ }
+    try {
+      await navigator.share({ title: text, url })
+      trackProfileShared('system')
+    } catch { /* canceled */ }
   }
 
   return (

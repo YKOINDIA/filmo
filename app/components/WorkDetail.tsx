@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { addPoints, POINT_CONFIG } from '../lib/points'
 import { showToast } from '../lib/toast'
+import { trackReviewPosted } from '../lib/analytics'
 import { buildTasteProfile, calculateMatchScore, type TasteProfile } from '../lib/matchScore'
 import VoiceReviewRecorder from './VoiceReviewRecorder'
 import VoiceReviewPlayer from './VoiceReviewPlayer'
@@ -657,9 +658,12 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           ? POINT_CONFIG.REVIEW_LONG
           : POINT_CONFIG.REVIEW_SHORT
         await addPoints(userId, pts, 'レビュー投稿')
+        // GA4: レビュー投稿 (key event 候補)
+        trackReviewPosted(workId, score || 0, false)
         showToast(`✍️ レビューを投稿しました！ +${pts}pt`)
         setShareCardType('mark')
       } else {
+        trackReviewPosted(workId, score || 0, true)
         showToast('下書きを保存しました')
       }
     } catch {
