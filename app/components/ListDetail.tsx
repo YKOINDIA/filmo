@@ -7,6 +7,14 @@ import { trackListLiked, trackListForked, trackListShared, trackFollow } from '.
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
+const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
+function validateSlug(s: string): string | null {
+  if (!s) return null
+  if (s.length < 3 || s.length > 60) return 'URLは3〜60文字で入力してください'
+  if (!SLUG_PATTERN.test(s)) return '半角英数字とハイフンのみ使用できます'
+  return null
+}
+
 interface ListDetailProps {
   listId: string
   userId: string
@@ -93,6 +101,8 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
   const [editTitle, setEditTitle] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [editPublic, setEditPublic] = useState(true)
+  const [editSlug, setEditSlug] = useState('')
+  const [slugError, setSlugError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Share
@@ -166,6 +176,7 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
         setEditDesc(ld.description)
         setEditPublic(ld.is_public)
         setEditCollaborative(ld.is_collaborative ?? false)
+        setEditSlug(ld.slug || '')
       }
 
       // Fetch items
@@ -407,18 +418,51 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
       showToast('タイトルを入力してください')
       return
     }
+
+    const trimmedSlug = editSlug.trim().toLowerCase()
+    const currentSlug = list?.slug || ''
+    const slugChanged = trimmedSlug !== currentSlug
+
+    if (slugChanged && trimmedSlug) {
+      const err = validateSlug(trimmedSlug)
+      if (err) {
+        setSlugError(err)
+        showToast(err)
+        return
+      }
+    }
+
     setSaving(true)
     try {
+      let finalSlug: string | null = currentSlug || null
+      if (slugChanged && trimmedSlug) {
+        const { data: existing } = await supabase
+          .from('user_lists')
+          .select('id')
+          .eq('slug', trimmedSlug)
+          .neq('id', listId)
+          .maybeSingle()
+        if (existing) {
+          setSlugError('このURLは既に使われています')
+          showToast('このURLは既に使われています')
+          setSaving(false)
+          return
+        }
+        finalSlug = trimmedSlug
+      }
+
       const { error } = await supabase.from('user_lists').update({
         title: editTitle.trim(),
         description: editDesc.trim(),
         is_public: editPublic,
         is_collaborative: editCollaborative,
+        slug: finalSlug,
       }).eq('id', listId)
       if (error) throw error
 
-      setList(prev => prev ? { ...prev, title: editTitle.trim(), description: editDesc.trim(), is_public: editPublic, is_collaborative: editCollaborative } : prev)
+      setList(prev => prev ? { ...prev, title: editTitle.trim(), description: editDesc.trim(), is_public: editPublic, is_collaborative: editCollaborative, slug: finalSlug } : prev)
       setEditing(false)
+      setSlugError(null)
       showToast('リストを更新しました')
     } catch (err) {
       console.error('Failed to save:', err)
@@ -868,6 +912,48 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
                 background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 14, resize: 'vertical',
                 boxSizing: 'border-box', fontFamily: 'inherit',
               }} />
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 4, fontWeight: 500 }}>
+              シェアURL
+            </label>
+            <p style={{ fontSize: 11, color: 'var(--fm-text-muted)', margin: '0 0 6px', lineHeight: 1.5 }}>
+              リストのシェアリンクを覚えやすい文字列に変更できます。例: <code style={{ background: 'var(--fm-bg-input)', padding: '1px 5px', borderRadius: 3 }}>my-90s-favorites</code>
+            </p>
+            <div style={{
+              display: 'flex', alignItems: 'center', borderRadius: 8,
+              border: `1px solid ${slugError ? '#ef4444' : 'var(--fm-border)'}`,
+              background: 'var(--fm-bg-input)', overflow: 'hidden',
+            }}>
+              <span style={{ padding: '10px 0 10px 12px', fontSize: 13, color: 'var(--fm-text-muted)', whiteSpace: 'nowrap' }}>
+                filmo.me/lists/
+              </span>
+              <input
+                value={editSlug}
+                onChange={e => {
+                  const v = e.target.value.toLowerCase()
+                  setEditSlug(v)
+                  setSlugError(validateSlug(v))
+                }}
+                placeholder="my-favorite-films"
+                maxLength={60}
+                style={{
+                  flex: 1, padding: '10px 12px 10px 0', border: 'none',
+                  background: 'transparent', color: 'var(--fm-text)', fontSize: 14,
+                  outline: 'none', minWidth: 0,
+                }} />
+            </div>
+            {slugError ? (
+              <p style={{ fontSize: 11, color: '#ef4444', margin: '4px 0 0' }}>{slugError}</p>
+            ) : editSlug.trim() && editSlug.trim().toLowerCase() !== (list?.slug || '') ? (
+              <p style={{ fontSize: 11, color: '#f59e0b', margin: '4px 0 0', lineHeight: 1.5 }}>
+                ⚠️ URLを変更すると、以前のシェアリンクからは開けなくなります
+              </p>
+            ) : (
+              <p style={{ fontSize: 11, color: 'var(--fm-text-muted)', margin: '4px 0 0', lineHeight: 1.5 }}>
+                半角英数字とハイフンのみ・3〜60文字。空欄で現在のURLを維持します。
+              </p>
+            )}
           </div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 10 }}>
             <input type="checkbox" checked={editPublic} onChange={e => setEditPublic(e.target.checked)}

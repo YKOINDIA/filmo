@@ -35,8 +35,15 @@ interface ListData {
   user_avatar: string | null
 }
 
-async function fetchListData(slug: string): Promise<{ list: ListData; items: ListItem[] } | null> {
+async function fetchListData(rawSlug: string): Promise<{ list: ListData; items: ListItem[] } | null> {
   try {
+    let slug: string
+    try {
+      slug = decodeURIComponent(rawSlug)
+    } catch {
+      slug = rawSlug
+    }
+
     const { createClient } = await import('@supabase/supabase-js')
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
