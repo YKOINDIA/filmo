@@ -225,6 +225,9 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const [reviewSpoiler, setReviewSpoiler] = useState(false)
   const [reviewDraft, setReviewDraft] = useState(false)
   const [savingReview, setSavingReview] = useState(false)
+  // 保存後 5秒だけインラインで「✓ 投稿しました」を出してユーザーに保存完了を保証する。
+  // toast が UI に隠れた場合の保険。
+  const [reviewJustSaved, setReviewJustSaved] = useState<'posted' | 'draft' | 'failed' | null>(null)
 
   // State: Other reviews
   const [reviews, setReviews] = useState<ReviewWithUser[]>([])
@@ -625,8 +628,26 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   // ── Review Actions ───────────────────────────────────────────────────────
 
   const handleSaveReview = async (isDraft: boolean) => {
+    if (savingReview) return
+    if (!reviewBody.trim()) {
+      showToast('レビュー本文を入力してください')
+      return
+    }
     setSavingReview(true)
     try {
+      // movies テーブルに作品が無いと FK 違反で reviews.insert が落ちる。
+      // fetchDetail で upsert してるはずだが、レアケース (ネットワーク失敗等) に備えて
+      // 必須最小フィールドで upsert する。
+      if (detail) {
+        await supabase.from('movies').upsert({
+          id: workId,
+          tmdb_id: workId,
+          title: detail.title || detail.name || '',
+          poster_path: detail.poster_path,
+          media_type: workType,
+        }, { onConflict: 'tmdb_id' })
+      }
+
       const reviewData: Record<string, unknown> = {
         user_id: userId, movie_id: workId, body: reviewBody,
         has_spoiler: reviewSpoiler,
@@ -661,13 +682,21 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         // GA4: レビュー投稿 (key event 候補)
         trackReviewPosted(workId, score || 0, false)
         showToast(`✍️ レビューを投稿しました！ +${pts}pt`)
+        setReviewJustSaved('posted')
         setShareCardType('mark')
       } else {
         trackReviewPosted(workId, score || 0, true)
         showToast('下書きを保存しました')
+        setReviewJustSaved('draft')
       }
-    } catch {
-      showToast('レビューの保存に失敗しました')
+      setTimeout(() => setReviewJustSaved(null), 5000)
+    } catch (err) {
+      // エラー詳細を console + toast (ユーザーにも具体的に見せる)
+      console.error('Review save failed:', err)
+      const msg = err instanceof Error ? err.message : 'レビューの保存に失敗しました'
+      showToast(`保存失敗: ${msg.length > 60 ? msg.slice(0, 60) + '…' : msg}`)
+      setReviewJustSaved('failed')
+      setTimeout(() => setReviewJustSaved(null), 8000)
     } finally {
       setSavingReview(false)
     }
@@ -1481,6 +1510,37 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                   fontSize: 12, color: 'var(--fm-warning)',
                 }}>
                   下書き保存中
+                </div>
+              )}
+              {/* 保存直後インラインフィードバック (toast の保険) */}
+              {reviewJustSaved === 'posted' && (
+                <div style={{
+                  padding: '10px 14px', borderRadius: 10,
+                  background: 'rgba(46,204,138,0.15)', border: '1px solid #2ecc8a',
+                  fontSize: 13, fontWeight: 700, color: '#2ecc8a',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span>✅</span><span>レビューを投稿しました</span>
+                </div>
+              )}
+              {reviewJustSaved === 'draft' && (
+                <div style={{
+                  padding: '10px 14px', borderRadius: 10,
+                  background: 'rgba(240,192,64,0.15)', border: '1px solid var(--fm-warning)',
+                  fontSize: 13, fontWeight: 600, color: 'var(--fm-warning)',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span>📝</span><span>下書きとして保存しました</span>
+                </div>
+              )}
+              {reviewJustSaved === 'failed' && (
+                <div style={{
+                  padding: '10px 14px', borderRadius: 10,
+                  background: 'rgba(239,68,68,0.15)', border: '1px solid #ef4444',
+                  fontSize: 13, fontWeight: 700, color: '#ef4444',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span>❌</span><span>保存に失敗しました。再度お試しください。</span>
                 </div>
               )}
 
