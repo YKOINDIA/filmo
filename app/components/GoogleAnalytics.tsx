@@ -22,8 +22,18 @@ import { usePathname, useSearchParams } from 'next/navigation'
 
 function detectPlatform(): 'web' | 'ios_capacitor' | 'android_capacitor' {
   if (typeof window === 'undefined') return 'web'
-  const w = window as unknown as { Capacitor?: { platform?: string } }
-  const p = w.Capacitor?.platform
+  const w = window as unknown as {
+    Capacitor?: { platform?: string; getPlatform?: () => string }
+  }
+  const cap = w.Capacitor
+  if (!cap) return 'web'
+  // Capacitor 8.x では getPlatform() が正式 API。platform プロパティは廃止された。
+  let p: string | undefined
+  if (typeof cap.getPlatform === 'function') {
+    try { p = cap.getPlatform() } catch { /* keep undefined */ }
+  } else if (cap.platform) {
+    p = cap.platform
+  }
   if (p === 'ios') return 'ios_capacitor'
   if (p === 'android') return 'android_capacitor'
   return 'web'
@@ -69,7 +79,14 @@ export default function GoogleAnalytics() {
           function gtag(){dataLayer.push(arguments);}
           window.gtag = gtag;
           gtag('js', new Date());
-          var __platform = (window.Capacitor && window.Capacitor.platform) || 'web';
+          // Capacitor 8.x は getPlatform() メソッドのみ。古い 'platform' プロパティへもフォールバック。
+          var __platform = 'web';
+          try {
+            if (window.Capacitor) {
+              if (typeof window.Capacitor.getPlatform === 'function') __platform = window.Capacitor.getPlatform();
+              else if (window.Capacitor.platform) __platform = window.Capacitor.platform;
+            }
+          } catch(e) {}
           if (__platform === 'ios') __platform = 'ios_capacitor';
           else if (__platform === 'android') __platform = 'android_capacitor';
           gtag('set', 'user_properties', { app_platform: __platform });
