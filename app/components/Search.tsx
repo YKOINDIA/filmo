@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import Link from 'next/link'
 import WorkRegisterModal from './WorkRegisterModal'
 import { useTmdbFetch, useLocale } from '../lib/i18n'
 import { supabase } from '../lib/supabase'
@@ -593,9 +594,11 @@ const S = {
   } as React.CSSProperties,
 } as const
 
-export default function Search({ userId, onOpenWork: onOpenWorkRaw }: {
+export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenreBrowse, onGenreBrowseConsumed }: {
   userId: string
   onOpenWork: (id: number, type?: 'movie' | 'tv') => void
+  initialGenreBrowse?: { id: number; label: string } | null
+  onGenreBrowseConsumed?: () => void
 }) {
   // GA4: 作品オープンを Search 経由として記録 (source='search')
   const onOpenWork = useCallback((id: number, type?: 'movie' | 'tv') => {
@@ -1076,6 +1079,22 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw }: {
     transition: 'all 0.15s ease',
   })
 
+  const renderPeopleLinks = () => (
+    <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
+      <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36' }}>人物で探す</div>
+      <Link href="/directors" style={{ ...linkItemStyle, textDecoration: 'none' }}>
+        <span>🎬</span>
+        <span>監督一覧</span>
+        <span style={linkArrow}>›</span>
+      </Link>
+      <Link href="/screenwriters" style={{ ...linkItemStyle, textDecoration: 'none' }}>
+        <span>✍️</span>
+        <span>脚本家一覧</span>
+        <span style={linkArrow}>›</span>
+      </Link>
+    </div>
+  )
+
   const renderGenreChips = () => {
     const genres = activeTab === 'movie' ? MOVIE_GENRES
       : activeTab === 'drama' ? TV_GENRES
@@ -1543,6 +1562,14 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortMode])
 
+  // 別タブ (Dashboard) からジャンル選択でやって来た場合、自動でブラウズを開始
+  useEffect(() => {
+    if (!initialGenreBrowse) return
+    browseGenre(initialGenreBrowse.id, initialGenreBrowse.label)
+    onGenreBrowseConsumed?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialGenreBrowse])
+
   // --- Browse results (genre/year drill-down) ---
   const renderBrowseView = () => {
     const items = filterWatched(browse.items)
@@ -1619,6 +1646,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw }: {
       return (
         <>
           {renderScrollSection('trending_movie')}
+          {renderPeopleLinks()}
           {renderScrollSection('now_playing')}
           {renderScrollSection('upcoming')}
           {renderProviderChips()}
@@ -1634,6 +1662,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw }: {
       return (
         <>
           {renderScrollSection('trending_tv')}
+          {renderPeopleLinks()}
           {renderScrollSection('jp_drama')}
           {renderScrollSection('kr_drama')}
           {renderScrollSection('us_drama')}
@@ -1647,6 +1676,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw }: {
       return (
         <>
           {renderScrollSection('trending_anime')}
+          {renderPeopleLinks()}
           {renderScrollSection('airing_anime')}
           {renderProviderChips()}
           {renderGenreChips()}

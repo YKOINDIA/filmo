@@ -326,7 +326,7 @@ export default function PersonDetail({ personId, userId, onClose, onOpenWork }: 
                 </div>
                 {credit.vote_average > 0 && (
                   <div style={{ fontSize: 11, color: 'var(--fm-accent)', marginTop: 2, fontWeight: 600 }}>
-                    ★ {credit.vote_average.toFixed(1)}
+                    ★ {(credit.vote_average / 2).toFixed(1)}
                   </div>
                 )}
               </div>
