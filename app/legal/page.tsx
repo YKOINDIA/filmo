@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 
 type Tab = 'terms' | 'privacy' | 'tokusho'
 
@@ -61,7 +62,7 @@ function TermsContent() {
   return (
     <div>
       <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>利用規約</h2>
-      <p style={{ color: 'var(--fm-text-muted)', marginBottom: 24 }}>最終更新日: 2026年4月12日</p>
+      <p style={{ color: 'var(--fm-text-muted)', marginBottom: 24 }}>最終更新日: 2026年5月2日</p>
 
       <SectionTitle>第1条（適用）</SectionTitle>
       <p>本規約は、Filmo（以下「本サービス」）の利用に関する条件を定めるものです。ユーザーは本規約に同意の上、本サービスを利用するものとします。</p>
@@ -75,12 +76,14 @@ function TermsContent() {
       <p>以下の行為を禁止します：</p>
       <ul style={{ paddingLeft: 20, marginTop: 8 }}>
         <li>法令または公序良俗に違反する行為</li>
-        <li>他のユーザーへの嫌がらせ、誹謗中傷</li>
-        <li>スパム行為、大量の自動アクセス</li>
+        <li>他のユーザーへの嫌がらせ、誹謗中傷、差別的表現</li>
+        <li>暴力的・性的・違法または不快感を与えるコンテンツの投稿</li>
+        <li>スパム行為、大量の自動アクセス、無関係な宣伝・勧誘</li>
         <li>虚偽の情報の登録</li>
         <li>本サービスの運営を妨害する行為</li>
         <li>不正アクセス、リバースエンジニアリング</li>
-        <li>著作権その他知的財産権を侵害する行為</li>
+        <li>著作権その他知的財産権を侵害する行為（無断転載・盗用を含む）</li>
+        <li>他のユーザーになりすます行為</li>
       </ul>
 
       <SectionTitle>第4条（コンテンツ）</SectionTitle>
@@ -88,15 +91,27 @@ function TermsContent() {
       <p>2. ユーザーは本サービスに対し、コンテンツの表示・配信に必要な範囲で非独占的な利用許諾を付与するものとします。</p>
       <p>3. 映画・ドラマ・アニメのデータはTMDB (The Movie Database) より提供されています。</p>
 
-      <SectionTitle>第5条（サービスの変更・停止）</SectionTitle>
+      <SectionTitle>第5条（通報・モデレーション・ブロック）</SectionTitle>
+      <p>1. ユーザーは、レビュー・リスト・他のユーザーが本規約第3条に違反していると判断した場合、各コンテンツの「⋯」メニューより通報できます。</p>
+      <p>2. 運営者は、通報を受けた内容を <strong>原則として24時間以内に確認・対応</strong> し、必要に応じて以下の措置を講じます：</p>
+      <ul style={{ paddingLeft: 20, marginTop: 8 }}>
+        <li>違反コンテンツの非公開化または削除</li>
+        <li>違反ユーザーへの警告</li>
+        <li>違反ユーザーのアカウントの一時停止または永久停止（BAN）</li>
+      </ul>
+      <p style={{ marginTop: 12 }}>3. ユーザーは他のユーザーをブロックすることで、相手のレビュー・リストを自身のフィードから非表示にできます。ブロック機能は各ユーザーのプロフィールページから利用可能です。</p>
+      <p>4. 運営者は、本規約に違反すると判断したコンテンツを、通報の有無にかかわらず予告なく削除できるものとします。</p>
+      <p>5. 通報・モデレーションに関するお問い合わせは <Link href="/support" style={{ color: 'var(--fm-accent)' }}>お問い合わせフォーム</Link> よりご連絡ください。</p>
+
+      <SectionTitle>第6条（サービスの変更・停止）</SectionTitle>
       <p>運営者は、事前の通知なくサービスの内容変更、一時停止、終了を行うことがあります。これによりユーザーに生じた損害について、運営者は責任を負いません。</p>
 
-      <SectionTitle>第6条（免責事項）</SectionTitle>
+      <SectionTitle>第7条（免責事項）</SectionTitle>
       <p>1. 本サービスは「現状有姿」で提供されます。</p>
       <p>2. 運営者は、本サービスの正確性、完全性、有用性について保証しません。</p>
       <p>3. ユーザー間のトラブルについて、運営者は責任を負いません。</p>
 
-      <SectionTitle>第7条（規約の変更）</SectionTitle>
+      <SectionTitle>第8条（規約の変更）</SectionTitle>
       <p>運営者は本規約を変更できるものとし、変更後の規約は本サービス上に掲示した時点で効力を生じます。</p>
     </div>
   )

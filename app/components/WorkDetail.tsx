@@ -11,6 +11,7 @@ import VoiceReviewRecorder from './VoiceReviewRecorder'
 import VoiceReviewPlayer from './VoiceReviewPlayer'
 import ShareCard from './ShareCard'
 import EditProposalModal from './EditProposalModal'
+import ReportModal from './ReportModal'
 import TranslateButton from './TranslateButton'
 import { useLocale } from '../lib/i18n'
 
@@ -235,6 +236,9 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const [reviewSort, setReviewSort] = useState<SortMode>('newest')
   const [spoilerFilter, setSpoilerFilter] = useState<'all' | 'no_spoiler'>('all')
   const [revealedSpoilers, setRevealedSpoilers] = useState<Set<string>>(new Set())
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set())
+  const [openMenuReviewId, setOpenMenuReviewId] = useState<string | null>(null)
+  const [reportTarget, setReportTarget] = useState<{ type: 'review' | 'user'; id: string; label?: string } | null>(null)
 
   // State: Voice reviews
   const [voiceReviews, setVoiceReviews] = useState<{
@@ -422,12 +426,18 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   }, [userId, workId, workType])
 
   const fetchReviews = useCallback(async () => {
-    const { data } = await supabase
+    let query = supabase
       .from('reviews')
       .select('*, users(display_name, avatar_url)')
       .eq('movie_id', workId)
       .neq('user_id', userId)
       .eq('is_draft', false)
+
+    if (blockedUserIds.size > 0) {
+      query = query.not('user_id', 'in', `(${[...blockedUserIds].join(',')})`)
+    }
+
+    const { data } = await query
 
     if (!data) { setReviews([]); return }
 
@@ -452,7 +462,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
     }))
 
     setReviews(enriched)
-  }, [workId, userId])
+  }, [workId, userId, blockedUserIds])
 
   const fetchVoiceReviews = useCallback(async () => {
     const { data: vrs } = await supabase
@@ -516,6 +526,47 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   useEffect(() => {
     buildTasteProfile(userId).then(setTasteProfile)
   }, [userId])
+
+  // Fetch blocked users to filter from reviews
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('user_blocks')
+        .select('blocked_id')
+        .eq('blocker_id', userId)
+      if (cancelled) return
+      const ids = new Set<string>((data || []).map((r: { blocked_id: string }) => r.blocked_id))
+      setBlockedUserIds(ids)
+    })()
+    return () => { cancelled = true }
+  }, [userId])
+
+  const handleBlockUser = useCallback(async (targetUserId: string) => {
+    if (!confirm('このユーザーをブロックします。\nブロックすると、相手のレビューやリストが表示されなくなります。')) return
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { showToast('ログインが必要です'); return }
+      const res = await fetch('/api/blocks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ blockedId: targetUserId }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        showToast(data.error || 'ブロックに失敗しました')
+        return
+      }
+      setBlockedUserIds(prev => new Set(prev).add(targetUserId))
+      setReviews(prev => prev.filter(r => r.user_id !== targetUserId))
+      showToast('ブロックしました')
+    } catch {
+      showToast('ブロックに失敗しました')
+    }
+  }, [])
 
   // Calculate match score when detail and profile are ready
   useEffect(() => {
@@ -1703,6 +1754,58 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                       </div>
                     </Link>
                     {review.score && <StarRating value={review.score} size={16} readonly />}
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => setOpenMenuReviewId(openMenuReviewId === review.id ? null : review.id)}
+                        aria-label="メニュー"
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: 'var(--fm-text-muted)', fontSize: 18, padding: '4px 8px',
+                          borderRadius: 6, lineHeight: 1,
+                        }}
+                      >⋯</button>
+                      {openMenuReviewId === review.id && (
+                        <>
+                          <div
+                            onClick={() => setOpenMenuReviewId(null)}
+                            style={{ position: 'fixed', inset: 0, zIndex: 50 }}
+                          />
+                          <div style={{
+                            position: 'absolute', top: '100%', right: 0, zIndex: 51,
+                            background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
+                            borderRadius: 10, minWidth: 160, padding: 4,
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                          }}>
+                            <button
+                              onClick={() => {
+                                setReportTarget({
+                                  type: 'review',
+                                  id: review.id,
+                                  label: `${review.users?.display_name || '匿名ユーザー'} さんのレビュー`,
+                                })
+                                setOpenMenuReviewId(null)
+                              }}
+                              style={{
+                                width: '100%', textAlign: 'left', padding: '10px 12px',
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                color: 'var(--fm-text)', fontSize: 13, borderRadius: 6,
+                              }}
+                            >🚩 通報する</button>
+                            <button
+                              onClick={() => {
+                                setOpenMenuReviewId(null)
+                                handleBlockUser(review.user_id)
+                              }}
+                              style={{
+                                width: '100%', textAlign: 'left', padding: '10px 12px',
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                color: 'var(--fm-danger)', fontSize: 13, borderRadius: 6,
+                              }}
+                            >🚫 ユーザーをブロック</button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                   {review.has_spoiler && !revealedSpoilers.has(review.id) ? (
                     <div className="spoiler-text"
@@ -2447,6 +2550,16 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           onSubmitted={() => {
             showToast('提案が送信されました')
           }}
+        />
+      )}
+
+      {/* 通報モーダル */}
+      {reportTarget && (
+        <ReportModal
+          targetType={reportTarget.type}
+          targetId={reportTarget.id}
+          targetLabel={reportTarget.label}
+          onClose={() => setReportTarget(null)}
         />
       )}
     </div>
