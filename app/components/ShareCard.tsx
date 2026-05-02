@@ -500,7 +500,7 @@ export default function ShareCard({ type, data, userId, onClose }: Props) {
       <div
         style={{
           background: '#1a1a2e', borderRadius: 20, padding: 16,
-          maxWidth: 400, width: '100%', maxHeight: '90vh', overflowY: 'auto',
+          maxWidth: 400, width: '100%', maxHeight: '90dvh', overflowY: 'auto',
         }}
         onClick={e => e.stopPropagation()}
       >

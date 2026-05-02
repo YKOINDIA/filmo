@@ -249,12 +249,21 @@ export default function FeedbackWidget({ userId }: { userId: string }) {
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              width: '100%', maxWidth: 520, height: '80vh',
+              width: '100%', maxWidth: 520,
+              // dvh (dynamic viewport height) を使うことで iOS キーボード表示時に
+              // モーダルが自動で縮み、textarea + 送信ボタンが必ず画面内に収まる。
+              // vh だとキーボード分が考慮されず、ヘッダーが画面外に押し出されて
+              // 真っ黒な領域だけが見える状態になっていた。
+              height: '80dvh',
+              maxHeight: '80dvh',
               background: 'var(--fm-bg)', borderTopLeftRadius: 16, borderTopRightRadius: 16,
               display: 'flex', flexDirection: 'column',
               // iOS WKWebView で内部要素 (絵文字混じりボタン等) が
-              // 微妙に親をはみ出して右端が切れる現象の防止
-              overflowX: 'hidden',
+              // 微妙に親をはみ出して右端が切れる現象の防止。
+              // overflow-x: hidden を単独で指定すると CSS 仕様で overflow-y が
+              // 強制的に auto になり、内部の overflow-y: auto と二重スクロール
+              // を起こすので overflow-y も明示的に hidden にする。
+              overflow: 'hidden',
             }}
           >
             {/* ヘッダー */}
