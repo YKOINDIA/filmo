@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import AuthGate from '../../components/AuthGate'
+import ProfileActions from '../../components/ProfileActions'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://filmo.me'
@@ -307,6 +308,7 @@ export default async function PublicProfilePage({
               </p>
             )}
           </div>
+          <ProfileActions profileUserId={user.id} profileDisplayName={user.name} />
         </div>
 
         {/* Stats */}
