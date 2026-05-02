@@ -397,7 +397,7 @@ const S = {
   } as React.CSSProperties,
   searchInput: {
     width: '100%',
-    padding: '13px 16px 13px 44px',
+    padding: '13px 16px 13px 48px',
     borderRadius: 12,
     border: '1px solid #2a2b46',
     background: '#12132a',
@@ -408,10 +408,11 @@ const S = {
   } as React.CSSProperties,
   searchIcon: {
     position: 'absolute' as const,
-    left: 30,
+    left: 14,
     top: '50%',
     transform: 'translateY(-50%)',
-    fontSize: 18,
+    fontSize: 16,
+    lineHeight: 1,
     color: '#6c5ce7',
     pointerEvents: 'none' as const,
   } as React.CSSProperties,

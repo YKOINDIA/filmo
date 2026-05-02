@@ -252,6 +252,9 @@ export default function FeedbackWidget({ userId }: { userId: string }) {
               width: '100%', maxWidth: 520, height: '80vh',
               background: 'var(--fm-bg)', borderTopLeftRadius: 16, borderTopRightRadius: 16,
               display: 'flex', flexDirection: 'column',
+              // iOS WKWebView で内部要素 (絵文字混じりボタン等) が
+              // 微妙に親をはみ出して右端が切れる現象の防止
+              overflowX: 'hidden',
             }}
           >
             {/* ヘッダー */}
@@ -431,15 +434,22 @@ export default function FeedbackWidget({ userId }: { userId: string }) {
                         display: 'flex',
                         justifyContent: m.is_admin ? 'flex-start' : 'flex-end',
                         marginBottom: 10,
+                        // 子要素が過度に伸びて吹き出しが画面右端を超えないように
+                        minWidth: 0,
                       }}>
                         <div style={{
-                          maxWidth: '78%',
+                          // 78% は iOS で時計表示と本文の組み合わせで右端が切れることがあったため少し詰める
+                          maxWidth: '75%',
+                          minWidth: 0,
                           padding: '10px 14px',
                           borderRadius: 14,
                           background: m.is_admin ? 'var(--fm-bg-card)' : 'var(--fm-accent)',
                           color: m.is_admin ? 'var(--fm-text)' : '#fff',
                           fontSize: 14, lineHeight: 1.5,
-                          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                          whiteSpace: 'pre-wrap',
+                          // 改善: word-break: break-word は iOS で稀に長い英単語以外も中途半端に切る。
+                          // overflow-wrap: anywhere の方が日本語 + 英数混在でも自然に折り返す。
+                          overflowWrap: 'anywhere',
                           border: m.is_admin ? '1px solid var(--fm-border)' : 'none',
                         }}>
                           {m.is_admin && (

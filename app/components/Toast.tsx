@@ -22,10 +22,15 @@ export default function Toast({ message }: { message: string }) {
       fontWeight: 700,
       boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
       maxWidth: '92vw',
+      // width: max-content にすることで absolute 要素の shrink-to-fit が
+      // word-break: break-word と組み合わさったときに不自然な位置で改行する
+      // iOS Safari の挙動を回避する (例: 「お問い合わせを送信し / ました」のような中途半端な折返し)
+      width: 'max-content',
       textAlign: 'center',
-      // 長文も折り返して見えるように (旧 nowrap だと文字省略していた)
+      // 短文は1行で表示、長文は単語境界で折り返し (anywhere ではなく word で)
       whiteSpace: 'normal',
-      wordBreak: 'break-word',
+      overflowWrap: 'break-word',
+      wordBreak: 'normal',
       lineHeight: 1.5,
       pointerEvents: 'none',
     }}>
