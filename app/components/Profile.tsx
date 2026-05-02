@@ -84,6 +84,7 @@ function ShareMyProfileButton({ userId, userName }: { userId: string; userName: 
               width: '100%', maxWidth: 480,
               background: 'var(--fm-bg)', borderTopLeftRadius: 16, borderTopRightRadius: 16,
               padding: '20px 16px 32px',
+              overflowX: 'hidden',
             }}
           >
             <div style={{
@@ -450,18 +451,28 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork, onOpenPe
     setUploadingAvatar(true)
     try {
       const compressed = await compressImage(file)
-      const path = `avatars/${user.id}/${Date.now()}.webp`
-      const { data: uploadData, error: uploadError } = await supabase.storage.from('avatars').upload(path, compressed, { upsert: true })
+      // Path はバケット内の相対パス。バケット名 'avatars' は from() で指定済みなのでパスに含めない。
+      const path = `${user.id}/${Date.now()}.webp`
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, compressed, { upsert: true, contentType: 'image/webp' })
       if (uploadError) throw uploadError
-      const fileId = uploadData?.id || path
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileId)
-      const avatar_url = urlData.publicUrl
-      await supabase.from('users').update({ avatar_url }).eq('id', user.id)
+      // getPublicUrl にはアップロード時と同じパスを渡す。
+      // 旧コードは uploadData.id を渡していたが、新しい supabase-js では id がオブジェクト UUID
+      // になるため壊れた URL が生成され、avatar が表示されない不具合になっていた。
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+      // キャッシュバスター: 同じパスに upsert した時に img タグが古い画像をキャッシュしてしまうのを防ぐ
+      const avatar_url = `${urlData.publicUrl}?v=${Date.now()}`
+      const { error: updateError } = await supabase.from('users').update({ avatar_url }).eq('id', user.id)
+      if (updateError) throw updateError
       onUpdate({ avatar_url })
+      showToast('プロフィール画像を更新しました')
     } catch (err) {
       console.error('Avatar upload failed:', err)
+      const msg = err instanceof Error ? err.message : 'unknown'
+      showToast(`画像アップロード失敗: ${msg}`)
     }
     setUploadingAvatar(false)
+    // input をリセットして同じファイルを再選択できるようにする
+    e.target.value = ''
   }
 
   // Best movie search

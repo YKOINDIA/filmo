@@ -1330,6 +1330,7 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
               background: 'var(--fm-bg)', borderTopLeftRadius: 16, borderTopRightRadius: 16,
               padding: '20px 16px 32px',
               animation: 'slideUp 0.2s ease-out',
+              overflowX: 'hidden',
             }}
           >
             <style>{`@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
