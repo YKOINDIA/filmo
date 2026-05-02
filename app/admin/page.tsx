@@ -875,52 +875,121 @@ export default function AdminPage() {
       {tab === 'feedback' && (
         <div>
           {!selectedThread ? (
-            feedbackThreads.map(t => (
-              <div key={t.id as string} onClick={() => loadThreadMessages(t.id as string)}
-                style={{ ...S.card, cursor: 'pointer' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontWeight: 600 }}>{t.subject as string}</span>
-                  <span style={{
-                    fontSize: 11, padding: '2px 8px', borderRadius: 4,
-                    background: (t.status as string) === 'resolved' ? 'var(--fm-success)' : (t.status as string) === 'in_progress' ? 'var(--fm-warning)' : 'var(--fm-accent)',
-                    color: '#fff',
-                  }}>
-                    {t.status as string}
-                  </span>
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginTop: 4 }}>
-                  {t.category as string} / {new Date(t.created_at as string).toLocaleDateString('ja-JP')}
-                  {t.unread_admin ? <span style={{ color: 'var(--fm-danger)', marginLeft: 8 }}>● 未読</span> : null}
-                </div>
+            feedbackThreads.length === 0 ? (
+              <div style={{ padding: 40, textAlign: 'center', color: 'var(--fm-text-muted)' }}>
+                まだお問い合わせはありません
               </div>
-            ))
-          ) : (
-            <div>
-              <button onClick={() => setSelectedThread(null)} style={{ ...S.btn, marginBottom: 12, background: 'var(--fm-bg-card)', color: 'var(--fm-text)', border: '1px solid var(--fm-border)' }}>
-                ← 一覧に戻る
-              </button>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-                {threadMessages.map(m => (
-                  <div key={m.id as string} style={{
-                    ...S.card,
-                    marginLeft: m.is_admin ? 40 : 0,
-                    marginRight: m.is_admin ? 0 : 40,
-                    background: m.is_admin ? 'rgba(108,92,231,0.1)' : 'var(--fm-bg-card)',
-                  }}>
-                    <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 4 }}>
-                      {m.is_admin ? '管理者' : 'ユーザー'} / {new Date(m.created_at as string).toLocaleString('ja-JP')}
-                    </div>
-                    <div style={{ fontSize: 14 }}>{m.body as string}</div>
+            ) : feedbackThreads.map(t => {
+              const isAnon = !t.user_id
+              return (
+                <div key={t.id as string} onClick={() => loadThreadMessages(t.id as string)}
+                  style={{ ...S.card, cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                    <span style={{ fontWeight: 600, flex: 1 }}>{t.subject as string}</span>
+                    <span style={{
+                      fontSize: 11, padding: '2px 8px', borderRadius: 4, flexShrink: 0,
+                      background: (t.status as string) === 'resolved' ? 'var(--fm-success)' : (t.status as string) === 'in_progress' ? 'var(--fm-warning)' : 'var(--fm-accent)',
+                      color: '#fff',
+                    }}>
+                      {(t.status as string) === 'open' ? '未対応' : (t.status as string) === 'in_progress' ? '対応中' : '解決済'}
+                    </span>
                   </div>
-                ))}
+                  <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginTop: 4 }}>
+                    {t.category as string} / {new Date(t.created_at as string).toLocaleDateString('ja-JP')}
+                    {t.unread_admin ? <span style={{ color: 'var(--fm-danger)', marginLeft: 8 }}>● 未読</span> : null}
+                  </div>
+                  {isAnon && (
+                    <div style={{ fontSize: 11, color: 'var(--fm-accent)', marginTop: 4 }}>
+                      🌐 /support 経由 — {t.submitter_name ? `${t.submitter_name} ` : ''}&lt;{t.submitter_email as string}&gt;
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          ) : (() => {
+            const t = feedbackThreads.find(x => x.id === selectedThread)
+            const isAnon = t && !t.user_id
+            return (
+              <div>
+                <button onClick={() => setSelectedThread(null)} style={{ ...S.btn, marginBottom: 12, background: 'var(--fm-bg-card)', color: 'var(--fm-text)', border: '1px solid var(--fm-border)' }}>
+                  ← 一覧に戻る
+                </button>
+
+                {/* ステータス変更 + 匿名情報 */}
+                {t && (
+                  <div style={{ ...S.card, marginBottom: 12 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+                      {t.subject as string}
+                    </div>
+                    {isAnon && (
+                      <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 8 }}>
+                        📧 返信先: {t.submitter_name ? `${t.submitter_name} ` : ''}&lt;<a href={`mailto:${t.submitter_email}`} style={{ color: 'var(--fm-accent)' }}>{t.submitter_email as string}</a>&gt;
+                        <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 2 }}>
+                          ※ /support 経由の匿名問い合わせ。返信は手動でメールしてください(アプリ内通知できないため)
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 6, fontSize: 12 }}>
+                      <span style={{ color: 'var(--fm-text-sub)', alignSelf: 'center' }}>ステータス:</span>
+                      {(['open', 'in_progress', 'resolved'] as const).map(s => {
+                        const sel = (t.status as string) === s
+                        const labels = { open: '未対応', in_progress: '対応中', resolved: '解決済' }
+                        return (
+                          <button key={s}
+                            onClick={async () => {
+                              await supabase.from('feedback_threads').update({ status: s }).eq('id', selectedThread)
+                              loadFeedback()
+                            }}
+                            style={{
+                              padding: '4px 12px', borderRadius: 14,
+                              background: sel
+                                ? (s === 'resolved' ? 'var(--fm-success)' : s === 'in_progress' ? 'var(--fm-warning)' : 'var(--fm-accent)')
+                                : 'var(--fm-bg-card)',
+                              color: sel ? '#fff' : 'var(--fm-text-sub)',
+                              border: sel ? '1px solid transparent' : '1px solid var(--fm-border)',
+                              fontSize: 12, fontWeight: sel ? 700 : 500, cursor: 'pointer',
+                            }}>
+                            {labels[s]}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                  {threadMessages.map(m => (
+                    <div key={m.id as string} style={{
+                      ...S.card,
+                      marginLeft: m.is_admin ? 40 : 0,
+                      marginRight: m.is_admin ? 0 : 40,
+                      background: m.is_admin ? 'rgba(108,92,231,0.1)' : 'var(--fm-bg-card)',
+                    }}>
+                      <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 4 }}>
+                        {m.is_admin ? '管理者' : (isAnon ? `${t?.submitter_name || '匿名'}` : 'ユーザー')} / {new Date(m.created_at as string).toLocaleString('ja-JP')}
+                      </div>
+                      <div style={{ fontSize: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.body as string}</div>
+                    </div>
+                  ))}
+                </div>
+                {!isAnon && (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <textarea value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="返信..." rows={2}
+                      style={{ ...S.input, marginBottom: 0, flex: 1 }} />
+                    <button onClick={sendReply} style={S.btn}>送信</button>
+                  </div>
+                )}
+                {isAnon && (
+                  <div style={{
+                    padding: 12, borderRadius: 8, background: 'rgba(240,192,64,0.1)',
+                    border: '1px solid var(--fm-warning)', fontSize: 12, color: 'var(--fm-warning)',
+                  }}>
+                    匿名問い合わせなのでアプリ内返信は不可。<a href={`mailto:${t?.submitter_email as string}?subject=Re: ${encodeURIComponent(t?.subject as string)}`} style={{ color: 'var(--fm-warning)', fontWeight: 700 }}>メールで直接返信 →</a>
+                  </div>
+                )}
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <textarea value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="返信..." rows={2}
-                  style={{ ...S.input, marginBottom: 0, flex: 1 }} />
-                <button onClick={sendReply} style={S.btn}>送信</button>
-              </div>
-            </div>
-          )}
+            )
+          })()}
         </div>
       )}
     </div>

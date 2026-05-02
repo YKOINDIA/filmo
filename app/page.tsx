@@ -15,6 +15,7 @@ import Gamification from './components/Gamification'
 import UserLists from './components/UserLists'
 import NotificationBell from './components/NotificationBell'
 import Toast from './components/Toast'
+import FeedbackWidget from './components/FeedbackWidget'
 import { showToast } from './lib/toast'
 import { setUserContext, trackSignUp } from './lib/analytics'
 import Onboarding from './components/Onboarding'
@@ -480,6 +481,9 @@ export default function Page() {
       </nav>
 
       {toastMsg && <Toast message={toastMsg} />}
+
+      {/* お問い合わせウィジェット (ログインユーザー全員に表示、右下に常駐) */}
+      {user && <FeedbackWidget userId={user.id} />}
 
       {/* Level-up Share Card */}
       {levelUpData && user && (
