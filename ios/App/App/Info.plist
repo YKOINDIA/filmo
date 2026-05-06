@@ -57,13 +57,12 @@
 	<string>プロフィール画像やレビューに添付する写真を選ぶために写真ライブラリにアクセスします。</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>シェア用の画像を写真ライブラリに保存する際に使用します。</string>
-	<!-- 期待の声・感想の声(VoiceReviewRecorder)で getUserMedia を使うため必須。
-	     未設定だと iOS は録音開始時にアプリを強制終了する。 -->
-	<key>NSMicrophoneUsageDescription</key>
-	<string>映画への期待や感想を声で記録するためにマイクを使用します。</string>
-	<!-- 録音中の音声をテキストに自動変換するため Speech Recognition API を使う。
-	     iOS は webkitSpeechRecognition の利用にもこの description を要求する。 -->
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>録音した声をテキストに変換してメモとして保存するために音声認識を使用します。</string>
+	<!--
+	  音声レビュー機能(VoiceReviewRecorder)は WorkDetail.tsx の
+	  VOICE_REVIEW_ENABLED=false で 1.0 リリースでは無効化済み。
+	  Apple は使わない usage description を要求しないため、ここからも削除。
+	  1.1 で機能を再有効化する際に NSMicrophoneUsageDescription /
+	  NSSpeechRecognitionUsageDescription を再追加する。
+	-->
 </dict>
 </plist>

@@ -17,6 +17,13 @@ import { useLocale } from '../lib/i18n'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
+// 音声レビュー機能(期待の声・感想の声)を有効にするか。
+// Capacitor WebView × iOS で getUserMedia の動作が安定しないため、
+// App Store 1.0 リリースでは無効化。1.1 で @capacitor-community/voice-recorder
+// 等のネイティブプラグインに置き換えてから true に戻す。
+// 既存の voice_reviews テーブル / Storage は残すので、後で再有効化したら復活する。
+const VOICE_REVIEW_ENABLED = false
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface WorkDetailProps {
@@ -465,6 +472,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   }, [workId, userId, blockedUserIds])
 
   const fetchVoiceReviews = useCallback(async () => {
+    if (!VOICE_REVIEW_ENABLED) { setVoiceReviews([]); return }
     const { data: vrs } = await supabase
       .from('voice_reviews')
       .select('id, user_id, storage_path, duration_seconds, voice_mode, has_spoiler, created_at')
@@ -1469,7 +1477,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
             </div>
           )}
           {/* Voice Review Recorder */}
-          {detail && (
+          {VOICE_REVIEW_ENABLED && detail && (
             <div style={{ marginBottom: 12 }}>
               <VoiceReviewRecorder
                 movieId={workId}
@@ -1482,7 +1490,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           )}
 
           {/* Voice Review List */}
-          {voiceReviews.length > 0 && (
+          {VOICE_REVIEW_ENABLED && voiceReviews.length > 0 && (
             <div style={{ marginBottom: 12 }}>
               <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)', margin: '0 0 10px' }}>
                 🎙️ ボイスレビュー ({voiceReviews.length})
@@ -1850,7 +1858,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       {currentStatus === 'want_to_watch' && (
         <div style={{ ...s.section }}>
           {/* 期待の声 Recorder */}
-          {detail && (
+          {VOICE_REVIEW_ENABLED && detail && (
             <div style={{ marginBottom: 12 }}>
               <VoiceReviewRecorder
                 movieId={workId}
