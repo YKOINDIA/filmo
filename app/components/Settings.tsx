@@ -431,14 +431,26 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
                 if (deletingAccount) return
                 setDeletingAccount(true)
                 try {
-                  const { error: delErr } = await supabase.from('users').delete().eq('id', userId)
-                  if (delErr) throw delErr
+                  const { data: { session } } = await supabase.auth.getSession()
+                  if (!session) {
+                    showToast('ログインが必要です')
+                    setDeletingAccount(false)
+                    return
+                  }
+                  const res = await fetch('/api/account/delete', {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${session.access_token}` },
+                  })
+                  if (!res.ok) {
+                    const data = await res.json().catch(() => ({}))
+                    throw new Error(data.error || 'アカウント削除に失敗しました')
+                  }
                   await supabase.auth.signOut()
                   showToast('アカウントを削除しました')
                   window.location.reload()
                 } catch (err) {
                   console.error('Account delete failed:', err)
-                  showToast('アカウント削除に失敗しました')
+                  showToast(err instanceof Error ? err.message : 'アカウント削除に失敗しました')
                   setDeletingAccount(false)
                 }
               }}
