@@ -52,6 +52,7 @@ export default function Page() {
   const [authError, setAuthError] = useState('')
   const [authSuccess, setAuthSuccess] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
+  const [authAgreedToTerms, setAuthAgreedToTerms] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const [selectedWorkId, setSelectedWorkId] = useState<number | null>(null)
   const [selectedWorkType, setSelectedWorkType] = useState<'movie' | 'tv'>('movie')
@@ -179,6 +180,10 @@ export default function Page() {
   const handleAuth = async () => {
     setAuthError('')
     setAuthSuccess('')
+    if (authMode === 'signup' && !authAgreedToTerms) {
+      setAuthError('利用規約とプライバシーポリシーへの同意が必要です')
+      return
+    }
     setAuthLoading(true)
     try {
       if (authMode === 'signup') {
@@ -324,14 +329,39 @@ export default function Page() {
                 style={{ width: '100%', padding: '12px 16px', borderRadius: 10, border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 15, boxSizing: 'border-box' }} />
             </div>
 
+            {authMode === 'signup' && (
+              <label style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+                marginBottom: 16, cursor: 'pointer',
+                fontSize: 12, color: 'var(--fm-text-sub)', lineHeight: 1.6,
+              }}>
+                <input
+                  type="checkbox"
+                  checked={authAgreedToTerms}
+                  onChange={e => setAuthAgreedToTerms(e.target.checked)}
+                  style={{ marginTop: 3, flexShrink: 0, width: 16, height: 16, cursor: 'pointer' }}
+                />
+                <span>
+                  <a href="/legal" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fm-accent)', textDecoration: 'underline' }}>利用規約</a>
+                  および
+                  <a href="/legal" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fm-accent)', textDecoration: 'underline' }}>プライバシーポリシー</a>
+                  に同意します。
+                  <br />
+                  <span style={{ color: 'var(--fm-text-muted)', fontSize: 11 }}>
+                    Filmo は不快コンテンツ・濫用ユーザーをゼロ容認(zero-tolerance)します。
+                  </span>
+                </span>
+              </label>
+            )}
+
             {authSuccess && <div style={{ color: 'var(--fm-accent)', fontSize: 13, marginBottom: 12, padding: '12px', background: 'rgba(0,192,48,0.1)', borderRadius: 8, lineHeight: 1.5 }}>{authSuccess}</div>}
             {authError && <div style={{ color: 'var(--fm-danger)', fontSize: 13, marginBottom: 12, padding: '8px 12px', background: 'rgba(255,107,107,0.1)', borderRadius: 8 }}>{authError}</div>}
 
-            <button onClick={handleAuth} disabled={authLoading}
+            <button onClick={handleAuth} disabled={authLoading || (authMode === 'signup' && !authAgreedToTerms)}
               style={{
                 width: '100%', padding: '14px 0', borderRadius: 10, border: 'none',
-                cursor: authLoading ? 'not-allowed' : 'pointer',
-                background: authLoading ? 'var(--fm-text-muted)' : 'var(--fm-accent)',
+                cursor: authLoading || (authMode === 'signup' && !authAgreedToTerms) ? 'not-allowed' : 'pointer',
+                background: authLoading || (authMode === 'signup' && !authAgreedToTerms) ? 'var(--fm-text-muted)' : 'var(--fm-accent)',
                 color: '#fff', fontWeight: 700, fontSize: 15,
                 transition: 'background 0.2s',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
@@ -345,6 +375,16 @@ export default function Page() {
               )}
               {authLoading ? t('auth.processing') : authMode === 'login' ? t('auth.login') : t('auth.createAccount')}
             </button>
+
+            {authMode === 'login' && (
+              <p style={{ marginTop: 12, fontSize: 11, color: 'var(--fm-text-muted)', lineHeight: 1.5, textAlign: 'center' }}>
+                ログインすることで、
+                <a href="/legal" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fm-accent)' }}>利用規約</a>
+                および
+                <a href="/legal" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fm-accent)' }}>プライバシーポリシー</a>
+                に同意したものとみなされます。
+              </p>
+            )}
           </div>
 
           <p style={{ textAlign: 'center', color: 'var(--fm-text-muted)', fontSize: 12, marginTop: 24 }}>

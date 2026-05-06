@@ -62,10 +62,23 @@ function TermsContent() {
   return (
     <div>
       <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>利用規約</h2>
-      <p style={{ color: 'var(--fm-text-muted)', marginBottom: 24 }}>最終更新日: 2026年5月2日</p>
+      <p style={{ color: 'var(--fm-text-muted)', marginBottom: 24 }}>最終更新日: 2026年5月6日</p>
 
       <SectionTitle>第1条（適用）</SectionTitle>
       <p>本規約は、Filmo（以下「本サービス」）の利用に関する条件を定めるものです。ユーザーは本規約に同意の上、本サービスを利用するものとします。</p>
+
+      <div style={{
+        marginTop: 16, padding: 14, borderRadius: 10,
+        background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.4)',
+        fontSize: 13, lineHeight: 1.7,
+      }}>
+        <strong style={{ color: 'var(--fm-danger)' }}>重要 / Zero Tolerance Policy</strong>
+        <br />
+        本サービスは、不快感を与えるコンテンツ(objectionable content)および
+        濫用的・嫌がらせ行為を行うユーザー(abusive users)を一切容認しません。
+        違反が確認された場合、運営は予告なくコンテンツを削除し、該当アカウントを
+        停止または永久 BAN します。
+      </div>
 
       <SectionTitle>第2条（アカウント）</SectionTitle>
       <p>1. ユーザーはメールアドレスとパスワードを登録してアカウントを作成します。</p>
