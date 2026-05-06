@@ -67,14 +67,14 @@ interface WatchlistEntry {
 }
 interface ClipMemoEntry {
   id: string; user_id: string; memo: string; score: number | null;
-  users?: { display_name: string; avatar_url: string | null } | null
+  users?: { name: string; avatar_url: string | null } | null
 }
 interface ReviewEntry {
   id: string; user_id: string; movie_id: number; body: string | null; score: number | null;
   has_spoiler: boolean; is_draft: boolean; created_at: string; updated_at: string
 }
 interface ReviewWithUser extends ReviewEntry {
-  users: { display_name: string; avatar_url: string | null } | null
+  users: { name: string; avatar_url: string | null } | null
   likes_count: number
   liked_by_me: boolean
 }
@@ -435,7 +435,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const fetchReviews = useCallback(async () => {
     let query = supabase
       .from('reviews')
-      .select('*, users(display_name, avatar_url)')
+      .select('*, users(name, avatar_url)')
       .eq('movie_id', workId)
       .neq('user_id', userId)
       .eq('is_draft', false)
@@ -462,7 +462,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       if (l.user_id === userId) myLikes.add(l.review_id)
     })
 
-    const enriched: ReviewWithUser[] = data.map((r: ReviewEntry & { users: { display_name: string; avatar_url: string | null } | null }) => ({
+    const enriched: ReviewWithUser[] = data.map((r: ReviewEntry & { users: { name: string; avatar_url: string | null } | null }) => ({
       ...r,
       likes_count: likesMap[r.id] || 0,
       liked_by_me: myLikes.has(r.id),
@@ -512,7 +512,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const fetchClipMemos = useCallback(async () => {
     const { data } = await supabase
       .from('watchlists')
-      .select('id, user_id, memo, score, users(display_name, avatar_url)')
+      .select('id, user_id, memo, score, users(name, avatar_url)')
       .eq('movie_id', workId)
       .eq('status', 'want_to_watch')
       .neq('user_id', userId)
@@ -760,6 +760,25 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
     } finally {
       setSavingReview(false)
     }
+  }
+
+  const handleDeleteReview = async () => {
+    if (!myReview) return
+    if (!confirm('このレビューを削除しますか?\n削除すると元に戻せません。')) return
+    const { error } = await supabase
+      .from('reviews')
+      .delete()
+      .eq('id', myReview.id)
+    if (error) {
+      console.error('Review delete failed:', error)
+      showToast('削除に失敗しました')
+      return
+    }
+    setMyReview(null)
+    setReviewBody('')
+    setReviewSpoiler(false)
+    setReviewDraft(false)
+    showToast('レビューを削除しました')
   }
 
   // ── Like Action ──────────────────────────────────────────────────────────
@@ -1698,6 +1717,71 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
             </div>
           </div>
 
+          {/* あなたのレビュー (投稿済み・公開状態) */}
+          {myReview && !myReview.is_draft && myReview.body && (
+            <div style={{ marginTop: 16 }}>
+              <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-accent)', margin: '0 0 8px' }}>
+                ✍️ あなたのレビュー
+              </h4>
+              <div style={{
+                ...s.reviewCard,
+                borderLeft: '3px solid var(--fm-accent)',
+                background: 'rgba(108,92,231,0.06)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div style={{
+                    ...s.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 16, color: 'var(--fm-text-muted)',
+                  }}>👤</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-accent)' }}>
+                      あなた
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
+                      {new Date(myReview.created_at).toLocaleDateString('ja-JP')}
+                    </div>
+                  </div>
+                  {myReview.score && <StarRating value={myReview.score} size={16} readonly />}
+                </div>
+                <p style={{ fontSize: 14, color: 'var(--fm-text)', lineHeight: 1.7, margin: 0 }}>
+                  {myReview.body}
+                </p>
+                {myReview.has_spoiler && (
+                  <div style={{
+                    display: 'inline-block', padding: '2px 8px', borderRadius: 4,
+                    background: 'rgba(255,107,107,0.15)', color: 'var(--fm-danger)',
+                    fontSize: 11, fontWeight: 600, marginTop: 8,
+                  }}>⚠ ネタバレあり</div>
+                )}
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <button
+                    onClick={() => {
+                      // 入力欄までスクロール
+                      const ta = scrollRef.current?.querySelector('textarea')
+                      if (ta) {
+                        ta.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                        ;(ta as HTMLTextAreaElement).focus()
+                      }
+                    }}
+                    style={{
+                      padding: '6px 14px', borderRadius: 8, border: '1px solid var(--fm-border)',
+                      background: 'var(--fm-bg-card)', color: 'var(--fm-text)',
+                      fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >✏️ 編集</button>
+                  <button
+                    onClick={handleDeleteReview}
+                    style={{
+                      padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.4)',
+                      background: 'transparent', color: 'var(--fm-danger)',
+                      fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >🗑️ 削除</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* みんなのレビュー inline */}
           <div style={{ marginTop: 16 }}>
             <div style={{
@@ -1754,7 +1838,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                       )}
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)', cursor: 'pointer' }}>
-                          {review.users?.display_name || '匿名ユーザー'}
+                          {review.users?.name || '匿名ユーザー'}
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
                           {new Date(review.created_at).toLocaleDateString('ja-JP')}
@@ -1789,7 +1873,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                                 setReportTarget({
                                   type: 'review',
                                   id: review.id,
-                                  label: `${review.users?.display_name || '匿名ユーザー'} さんのレビュー`,
+                                  label: `${review.users?.name || '匿名ユーザー'} さんのレビュー`,
                                 })
                                 setOpenMenuReviewId(null)
                               }}
@@ -1937,7 +2021,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                       }}>👤</div>
                     )}
                     <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text)', flex: 1, cursor: 'pointer' }}>
-                      {cm.users?.display_name || '匿名ユーザー'}
+                      {cm.users?.name || '匿名ユーザー'}
                     </span>
                   </Link>
                   {cm.score && cm.score > 0 && <StarRating value={cm.score} size={14} readonly />}

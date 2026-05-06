@@ -417,19 +417,27 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork, onOpenPe
     fetch()
   }, [user.id])
 
-  // Compress image to WebP, resize to max dimensions
-  const compressImage = (file: File, maxSize = 200, quality = 0.8): Promise<File> => {
+  // Compress image to WebP, resize to max dimensions.
+  // 100万ユーザー想定のため、保存サイズは可能な限り小さく。
+  //   maxSize 256: Retina ディスプレイで 128px 表示時に綺麗 (2x)
+  //   quality 0.75: 視覚的に十分なクオリティで file size を抑制
+  // 想定 file size: 5〜10 KB / 1枚 → 100万ユーザーで 5〜10 GB
+  const compressImage = (file: File, maxSize = 256, quality = 0.75): Promise<File> => {
     return new Promise((resolve, reject) => {
       const img = new Image()
       img.onload = () => {
-        const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
-        const w = Math.round(img.width * scale)
-        const h = Math.round(img.height * scale)
+        // 正方形にクロップ(中央)してから縮小。
+        // 楕円表示なので元画像が長方形でも中央が出る。
+        const minDim = Math.min(img.width, img.height)
+        const sx = (img.width - minDim) / 2
+        const sy = (img.height - minDim) / 2
+        const dim = Math.min(maxSize, minDim)
         const canvas = document.createElement('canvas')
-        canvas.width = w
-        canvas.height = h
+        canvas.width = dim
+        canvas.height = dim
         const ctx = canvas.getContext('2d')!
-        ctx.drawImage(img, 0, 0, w, h)
+        ctx.imageSmoothingQuality = 'high'
+        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, dim, dim)
         canvas.toBlob(
           blob => {
             if (!blob) return reject(new Error('Compression failed'))
@@ -448,21 +456,42 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork, onOpenPe
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    // 入力ファイルサイズ上限 (圧縮処理でブラウザがクラッシュしないように)
+    const MAX_INPUT_SIZE = 20 * 1024 * 1024 // 20 MB
+    if (file.size > MAX_INPUT_SIZE) {
+      showToast('画像サイズは 20 MB 以下にしてください')
+      e.target.value = ''
+      return
+    }
     setUploadingAvatar(true)
     try {
       const compressed = await compressImage(file)
-      // Path はバケット内の相対パス。バケット名 'avatars' は from() で指定済みなのでパスに含めない。
-      const path = `${user.id}/${Date.now()}.webp`
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, compressed, { upsert: true, contentType: 'image/webp' })
+      // 固定パス。upsert で常に上書きされ、Storage が肥大化しない。
+      // 旧実装は ${user.id}/${Date.now()}.webp で毎回新しいファイルを作っていたため、
+      // ユーザーがアバターを変える度に古いファイルが残って累積していた。
+      const path = `${user.id}/avatar.webp`
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, compressed, { upsert: true, contentType: 'image/webp', cacheControl: '3600' })
       if (uploadError) throw uploadError
-      // getPublicUrl にはアップロード時と同じパスを渡す。
-      // 旧コードは uploadData.id を渡していたが、新しい supabase-js では id がオブジェクト UUID
-      // になるため壊れた URL が生成され、avatar が表示されない不具合になっていた。
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
       // キャッシュバスター: 同じパスに upsert した時に img タグが古い画像をキャッシュしてしまうのを防ぐ
       const avatar_url = `${urlData.publicUrl}?v=${Date.now()}`
       const { error: updateError } = await supabase.from('users').update({ avatar_url }).eq('id', user.id)
       if (updateError) throw updateError
+
+      // 旧実装で蓄積された timestamp 名のファイルを掃除 (best-effort)。
+      // 失敗してもアップロード自体は成功扱い。
+      try {
+        const { data: oldFiles } = await supabase.storage.from('avatars').list(user.id)
+        const stale = (oldFiles || [])
+          .filter(f => f.name !== 'avatar.webp')
+          .map(f => `${user.id}/${f.name}`)
+        if (stale.length > 0) {
+          await supabase.storage.from('avatars').remove(stale)
+        }
+      } catch { /* cleanup is best-effort */ }
+
       onUpdate({ avatar_url })
       showToast('プロフィール画像を更新しました')
     } catch (err) {
