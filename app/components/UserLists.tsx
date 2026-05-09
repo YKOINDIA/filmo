@@ -43,7 +43,10 @@ type ViewMode = 'curated' | 'my' | 'popular' | 'recent'
 
 export default function UserLists({ userId, onOpenWork }: UserListsProps) {
   const { t } = useLocale()
-  const [viewMode, setViewMode] = useState<ViewMode>('my')
+  // ゲスト(未ログイン)時はデフォルトを「編集部」に。
+  // 'my' (マイリスト) はログインが必要なため後段でガード。
+  const isGuest = !userId
+  const [viewMode, setViewMode] = useState<ViewMode>(isGuest ? 'curated' : 'my')
   const [lists, setLists] = useState<ListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
@@ -60,6 +63,12 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
   const fetchLists = useCallback(async () => {
     setLoading(true)
     try {
+      // ゲストが 'my' タブを見ようとした場合は空のリストを返す(LoginPrompt 表示は呼び出し側で)
+      if (viewMode === 'my' && isGuest) {
+        setLists([])
+        setLoading(false)
+        return
+      }
       let query = supabase.from('user_lists').select('*')
 
       if (viewMode === 'my') {
@@ -214,23 +223,26 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
         <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--fm-text)', margin: 0, letterSpacing: 0.3 }}>
           {t('lists.title')}
         </h1>
-        <button
-          onClick={() => setShowCreate(true)}
-          style={{
-            padding: '8px 20px', borderRadius: 8, border: 'none', cursor: 'pointer',
-            background: 'var(--fm-accent)', color: '#fff', fontSize: 13, fontWeight: 600,
-            transition: 'opacity 0.15s',
-          }}
-        >
-          {t('lists.newList')}
-        </button>
+        {/* ゲストには新規作成ボタンを出さない (押しても auth.uid()=null で失敗するため) */}
+        {!isGuest && (
+          <button
+            onClick={() => setShowCreate(true)}
+            style={{
+              padding: '8px 20px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              background: 'var(--fm-accent)', color: '#fff', fontSize: 13, fontWeight: 600,
+              transition: 'opacity 0.15s',
+            }}
+          >
+            {t('lists.newList')}
+          </button>
+        )}
       </div>
 
-      {/* View Tabs */}
+      {/* View Tabs (ゲスト時は 'my' タブを除外) */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'var(--fm-bg-card)', borderRadius: 8, padding: 3, overflowX: 'auto' }}>
         {([
           { key: 'curated' as ViewMode, label: '🎬 編集部' },
-          { key: 'my' as ViewMode, label: t('lists.myLists') },
+          ...(isGuest ? [] : [{ key: 'my' as ViewMode, label: t('lists.myLists') }]),
           { key: 'popular' as ViewMode, label: t('lists.popular') },
           { key: 'recent' as ViewMode, label: t('lists.recent') },
         ]).map(t => (
