@@ -52,6 +52,13 @@ export default async function ScreenwritersPage() {
       maxWidth: 1100, margin: '0 auto', padding: '24px 16px 80px',
       color: 'var(--fm-text)',
     }}>
+      <Link href="/" style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        color: 'var(--fm-accent)', textDecoration: 'none',
+        fontSize: 14, marginBottom: 16,
+      }}>
+        ← Filmoに戻る
+      </Link>
       <header style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 6px' }}>脚本家一覧</h1>
         <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', margin: 0, lineHeight: 1.6 }}>
