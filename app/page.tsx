@@ -21,6 +21,7 @@ import { setUserContext, trackSignUp } from './lib/analytics'
 import Onboarding from './components/Onboarding'
 import ShareCard from './components/ShareCard'
 import PersonDetail from './components/PersonDetail'
+import LoginPrompt from './components/LoginPrompt'
 import { MIN_RATINGS_FOR_MATCH } from './lib/matchScore'
 
 type Tab = 'home' | 'search' | 'feed' | 'lists' | 'profile'
@@ -285,117 +286,14 @@ export default function Page() {
     )
   }
 
-  if (!session || !user) {
-    return (
-      <div style={{ minHeight: '100dvh', background: 'var(--fm-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-        <div style={{ width: '100%', maxWidth: 400 }}>
-          <div style={{ textAlign: 'center', marginBottom: 40 }}>
-            <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: 3, color: 'var(--fm-text)', textTransform: 'uppercase', marginBottom: 8 }}>Filmo</h1>
-            <p style={{ color: 'var(--fm-text-sub)', marginTop: 4, fontSize: 14 }}>{t('auth.tagline')}</p>
-            <p style={{ color: 'var(--fm-text-muted)', marginTop: 2, fontSize: 13 }}>{t('auth.taglineSub')}</p>
-          </div>
+  // ゲスト(未認証)も使えるよう、認証ゲートは撤去。
+  // userId が必要なコンポーネントには空文字を渡し、コンポーネント側で
+  // 認証必須アクションをガードする。
+  // プロフィール / フィード / マイリストの3タブは未認証時に LoginPrompt を表示。
+  const userId = user?.id || ''
+  const onAuthSucceeded = (uid: string) => loadUserProfile(uid)
 
-          <div style={{ display: 'flex', marginBottom: 24, background: 'var(--fm-bg-card)', borderRadius: 12, padding: 4 }}>
-            {(['login', 'signup'] as const).map(m => (
-              <button key={m} onClick={() => { setAuthMode(m); setAuthError(''); setAuthSuccess('') }}
-                style={{
-                  flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
-                  background: authMode === m ? 'var(--fm-accent)' : 'transparent',
-                  color: authMode === m ? '#fff' : 'var(--fm-text-sub)',
-                  fontWeight: 600, fontSize: 14, transition: 'all 0.2s',
-                }}>
-                {m === 'login' ? t('auth.login') : t('auth.signup')}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ background: 'var(--fm-bg-card)', borderRadius: 16, padding: 24, border: '1px solid var(--fm-border)' }}>
-            {authMode === 'signup' && (
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6 }}>{t('auth.nickname')}</label>
-                <input value={authName} onChange={e => setAuthName(e.target.value)} placeholder={t('auth.nicknamePlaceholder')}
-                  style={{ width: '100%', padding: '12px 16px', borderRadius: 10, border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 15, boxSizing: 'border-box' }} />
-              </div>
-            )}
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6 }}>{t('auth.email')}</label>
-              <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="your@email.com"
-                style={{ width: '100%', padding: '12px 16px', borderRadius: 10, border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 15, boxSizing: 'border-box' }} />
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ display: 'block', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6 }}>{t('auth.password')}</label>
-              <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="••••••••"
-                onKeyDown={e => e.key === 'Enter' && handleAuth()}
-                style={{ width: '100%', padding: '12px 16px', borderRadius: 10, border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)', color: 'var(--fm-text)', fontSize: 15, boxSizing: 'border-box' }} />
-            </div>
-
-            {authMode === 'signup' && (
-              <label style={{
-                display: 'flex', alignItems: 'flex-start', gap: 10,
-                marginBottom: 16, cursor: 'pointer',
-                fontSize: 12, color: 'var(--fm-text-sub)', lineHeight: 1.6,
-              }}>
-                <input
-                  type="checkbox"
-                  checked={authAgreedToTerms}
-                  onChange={e => setAuthAgreedToTerms(e.target.checked)}
-                  style={{ marginTop: 3, flexShrink: 0, width: 16, height: 16, cursor: 'pointer' }}
-                />
-                <span>
-                  <a href="/legal" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fm-accent)', textDecoration: 'underline' }}>利用規約</a>
-                  および
-                  <a href="/legal" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fm-accent)', textDecoration: 'underline' }}>プライバシーポリシー</a>
-                  に同意します。
-                  <br />
-                  <span style={{ color: 'var(--fm-text-muted)', fontSize: 11 }}>
-                    Filmo は不快コンテンツ・濫用ユーザーをゼロ容認(zero-tolerance)します。
-                  </span>
-                </span>
-              </label>
-            )}
-
-            {authSuccess && <div style={{ color: 'var(--fm-accent)', fontSize: 13, marginBottom: 12, padding: '12px', background: 'rgba(0,192,48,0.1)', borderRadius: 8, lineHeight: 1.5 }}>{authSuccess}</div>}
-            {authError && <div style={{ color: 'var(--fm-danger)', fontSize: 13, marginBottom: 12, padding: '8px 12px', background: 'rgba(255,107,107,0.1)', borderRadius: 8 }}>{authError}</div>}
-
-            <button onClick={handleAuth} disabled={authLoading || (authMode === 'signup' && !authAgreedToTerms)}
-              style={{
-                width: '100%', padding: '14px 0', borderRadius: 10, border: 'none',
-                cursor: authLoading || (authMode === 'signup' && !authAgreedToTerms) ? 'not-allowed' : 'pointer',
-                background: authLoading || (authMode === 'signup' && !authAgreedToTerms) ? 'var(--fm-text-muted)' : 'var(--fm-accent)',
-                color: '#fff', fontWeight: 700, fontSize: 15,
-                transition: 'background 0.2s',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              }}>
-              {authLoading && (
-                <span style={{
-                  width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)',
-                  borderTopColor: '#fff', borderRadius: '50%',
-                  display: 'inline-block', animation: 'spin 0.6s linear infinite',
-                }} />
-              )}
-              {authLoading ? t('auth.processing') : authMode === 'login' ? t('auth.login') : t('auth.createAccount')}
-            </button>
-
-            {authMode === 'login' && (
-              <p style={{ marginTop: 12, fontSize: 11, color: 'var(--fm-text-muted)', lineHeight: 1.5, textAlign: 'center' }}>
-                ログインすることで、
-                <a href="/legal" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fm-accent)' }}>利用規約</a>
-                および
-                <a href="/legal" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fm-accent)' }}>プライバシーポリシー</a>
-                に同意したものとみなされます。
-              </p>
-            )}
-          </div>
-
-          <p style={{ textAlign: 'center', color: 'var(--fm-text-muted)', fontSize: 12, marginTop: 24 }}>
-            This product uses the TMDB API but is not endorsed or certified by TMDB.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  if (needsOnboarding) {
+  if (needsOnboarding && user) {
     return (
       <Onboarding
         userId={user.id}
@@ -408,7 +306,7 @@ export default function Page() {
     return (
       <PersonDetail
         personId={selectedPersonId}
-        userId={user.id}
+        userId={userId}
         onClose={closePerson}
         onOpenWork={openWork}
       />
@@ -420,7 +318,7 @@ export default function Page() {
       <WorkDetail
         workId={selectedWorkId}
         workType={selectedWorkType}
-        userId={user.id}
+        userId={userId}
         onClose={closeWork}
         onOpenWork={openWork}
         onOpenPerson={openPerson}
@@ -440,18 +338,32 @@ export default function Page() {
           <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: 1.5, color: 'var(--fm-text)', textTransform: 'uppercase' }}>Filmo</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <NotificationBell userId={user.id} />
-          <div style={{
-            background: 'var(--fm-bg-card)', borderRadius: 20, padding: '4px 12px',
-            fontSize: 11, color: 'var(--fm-accent)', fontWeight: 600,
-            border: '1px solid var(--fm-border)',
-          }}>
-            Lv.{user.level}
-          </div>
+          {user ? (
+            <>
+              <NotificationBell userId={user.id} />
+              <div style={{
+                background: 'var(--fm-bg-card)', borderRadius: 20, padding: '4px 12px',
+                fontSize: 11, color: 'var(--fm-accent)', fontWeight: 600,
+                border: '1px solid var(--fm-border)',
+              }}>
+                Lv.{user.level}
+              </div>
+            </>
+          ) : (
+            <button
+              onClick={() => setTab('profile')}
+              style={{
+                padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
+              }}
+            >
+              ログイン
+            </button>
+          )}
         </div>
       </header>
 
-      {streakBonus > 0 && (
+      {user && streakBonus > 0 && (
         <div className="animate-slide-up" style={{
           margin: '12px 16px', padding: '12px 16px', borderRadius: 10,
           background: 'rgba(0,192,48,0.08)',
@@ -466,18 +378,27 @@ export default function Page() {
       )}
 
       <main style={{ padding: '0 0 80px 0' }}>
-        {tab === 'home' && <Dashboard userId={user.id} onOpenWork={openWork} />}
+        {tab === 'home' && <Dashboard userId={userId} onOpenWork={openWork} />}
         {tab === 'search' && (
           <Search
-            userId={user.id}
+            userId={userId}
             onOpenWork={openWork}
             initialGenreBrowse={pendingBrowseGenre}
             onGenreBrowseConsumed={() => setPendingBrowseGenre(null)}
           />
         )}
-        {tab === 'feed' && <Feed userId={user.id} onOpenWork={openWork} />}
-        {tab === 'lists' && <UserLists userId={user.id} onOpenWork={openWork} />}
-        {tab === 'profile' && (
+        {tab === 'feed' && (user
+          ? <Feed userId={user.id} onOpenWork={openWork} />
+          : <LoginPrompt
+              title="フィードを見る"
+              subtitle="ログインすると、フォローしているユーザーの最新の投稿が表示されます。"
+              onAuthenticated={onAuthSucceeded}
+            />
+        )}
+        {/* リストタブはゲストでも編集部・人気・新着が見られる。
+            'my' タブを選んだ時のみ UserLists 内部で空表示にして誘導する。 */}
+        {tab === 'lists' && <UserLists userId={userId} onOpenWork={openWork} />}
+        {tab === 'profile' && (user ? (
           <div>
             <Profile
               user={user}
@@ -491,7 +412,13 @@ export default function Page() {
               <Gamification userId={user.id} />
             </div>
           </div>
-        )}
+        ) : (
+          <LoginPrompt
+            title="ようこそ Filmo へ"
+            subtitle="ログインすると、観た映画を記録・レビュー・リスト作成ができます。"
+            onAuthenticated={onAuthSucceeded}
+          />
+        ))}
       </main>
 
       <nav style={{

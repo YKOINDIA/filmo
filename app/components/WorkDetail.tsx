@@ -211,6 +211,15 @@ function LoadingSpinner() {
 
 export default function WorkDetail({ workId, workType, userId, onClose, onOpenWork, onOpenPerson }: WorkDetailProps) {
   const { t, tmdbLang } = useLocale()
+  // ゲスト(未ログイン)時は userId が空文字。閲覧は可能だが投稿系アクションはガードする。
+  const isGuest = !userId
+  const requireAuth = (msg = 'この機能を使うにはログインが必要です'): boolean => {
+    if (isGuest) {
+      showToast(msg)
+      return false
+    }
+    return true
+  }
   // State: TMDB data
   const [detail, setDetail] = useState<TMDBDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -590,6 +599,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
   const handleStatusChange = async (status: WatchStatus) => {
     if (!status) return
+    if (!requireAuth('観賞ステータスを保存するにはログインが必要です')) return
     setSavingWatchlist(true)
     try {
       if (watchEntry) {
@@ -632,6 +642,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   }
 
   const handleScoreChange = async (newScore: number) => {
+    if (!requireAuth('評価するにはログインが必要です')) return
     setScore(newScore)
     if (watchEntry && newScore > 0) {
       const { error } = await supabase
@@ -643,6 +654,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   }
 
   const handleSaveWatchDetails = async () => {
+    if (!requireAuth('保存するにはログインが必要です')) return
     if (!watchEntry) {
       showToast('先にWatchedまたはWatchlistボタンを押してください')
       return
@@ -689,6 +701,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
   const handleSaveReview = async (isDraft: boolean) => {
     if (savingReview) return
+    if (!requireAuth('レビュー投稿にはログインが必要です')) return
     if (!reviewBody.trim()) {
       showToast('レビュー本文を入力してください')
       return
@@ -784,6 +797,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   // ── Like Action ──────────────────────────────────────────────────────────
 
   const handleLike = async (review: ReviewWithUser) => {
+    if (!requireAuth('いいねするにはログインが必要です')) return
     if (review.liked_by_me) {
       // Unlike
       const { error: delErr } = await supabase

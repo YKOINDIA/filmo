@@ -55,8 +55,11 @@ export const viewport: Viewport = {
   themeColor: '#08090d',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 5,
-  userScalable: true,
+  // iOS の入力フォーカス時の自動ズーム&戻れない問題を防ぐためズーム禁止。
+  // ネイティブアプリ感を出すため pinch-zoom も無効化。
+  // 既にズームされた状態の人向けに maximumScale=1 で強制リセット。
+  maximumScale: 1,
+  userScalable: false,
 };
 
 const jsonLd = {
