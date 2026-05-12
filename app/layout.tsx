@@ -49,6 +49,15 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Filmo' },
   formatDetection: { telephone: false },
+  // Google Search Console / Bing Webmaster Tools の所有権確認用。
+  // 値は環境変数で設定 (Vercel: Production / Preview 両方に登録)。
+  // 未設定なら meta tag 自体が出力されないので安全。
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || undefined,
+    other: process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION
+      ? { 'msvalidate.01': process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION }
+      : undefined,
+  },
 };
 
 export const viewport: Viewport = {
