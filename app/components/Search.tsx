@@ -5,7 +5,7 @@ import Link from 'next/link'
 import WorkRegisterModal from './WorkRegisterModal'
 import { useTmdbFetch, useLocale } from '../lib/i18n'
 import { supabase } from '../lib/supabase'
-import { trackSearchPerformed, trackWorkOpened } from '../lib/analytics'
+import { trackSearchPerformed, trackWorkOpened, trackSearchNoResults, trackGenreBrowsed, trackFilterApplied } from '../lib/analytics'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -781,8 +781,8 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
         searchCacheRef.current.set(debouncedQuery, { results, total_pages })
         setSearchResults(results)
         setSearchTotalPages(total_pages)
-        // GA4: 検索実行 (タブ別の検索ニーズ分析に使う)
         trackSearchPerformed(debouncedQuery, activeTab, results.length)
+        if (results.length === 0) trackSearchNoResults(debouncedQuery, activeTab)
       })
       .catch(() => {})
       .finally(() => setSearchLoading(false))
@@ -803,6 +803,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
 
   // --- Genre / Year browsing ---
   const browseGenre = async (genreId: number, genreName: string, page: number = 1) => {
+    if (page === 1) trackGenreBrowsed(genreName, activeTab)
     const mediaType = activeTab === 'movie' ? 'movie' : 'tv'
     const extraGenre = activeTab === 'anime' ? `16,${genreId}` : String(genreId)
     setBrowse({ mode: 'genre', label: genreName, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
@@ -826,6 +827,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
   }
 
   const browseYear = async (year: number, page: number = 1) => {
+    if (page === 1) trackFilterApplied('year', String(year))
     const label = `${year}年`
     const gte = `${year}-01-01`
     const lte = `${year}-12-31`
@@ -855,6 +857,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
   // 単一IDのときも同じ関数を使う。
   const browseProviders = async (providerIds: number[], providerName: string, page: number = 1) => {
     if (providerIds.length === 0) return
+    if (page === 1) trackFilterApplied('provider', providerName)
     const mediaType = activeTab === 'movie' ? 'movie' : 'tv'
     setBrowse({ mode: 'provider', label: providerName, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1, providerIds })
     try {
@@ -878,6 +881,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
   }
 
   const browseAward = async (award: typeof AWARDS[number], page: number = 1) => {
+    if (page === 1) trackFilterApplied('award', award.name)
     const label = `${award.emoji} ${award.name}`
     setBrowse({ mode: 'award', label, items: page === 1 ? [] : browse.items, loading: true, page, totalPages: 1 })
     try {

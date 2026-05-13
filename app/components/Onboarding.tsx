@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { showToast } from '../lib/toast'
 import { MIN_RATINGS_FOR_MATCH } from '../lib/matchScore'
+import { trackOnboardingStep, trackOnboardingComplete } from '../lib/analytics'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p/w342'
 const TMDB_IMG_PROFILE = 'https://image.tmdb.org/t/p/w185'
@@ -276,6 +277,7 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
           })
         }
       }
+      trackOnboardingStep(1, skip ? 'skip' : 'complete')
       setPage(2)
     } finally {
       setSavingProfile(false)
@@ -350,6 +352,8 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
       showToast(parts.length > 0
         ? `${parts.join(' & ')}を保存しました 🎉`
         : 'セットアップ完了!')
+      trackOnboardingStep(3, 'complete')
+      trackOnboardingComplete(savedRatings, savedFans)
       onComplete()
     } catch (err) {
       console.error('Onboarding save error:', err)
@@ -424,7 +428,7 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
           </div>
 
           <button
-            onClick={() => setPage(1)}
+            onClick={() => { trackOnboardingStep(0, 'complete'); setPage(1) }}
             style={{
               width: '100%', padding: '16px 0', borderRadius: 14, border: 'none', cursor: 'pointer',
               background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)',
@@ -717,7 +721,7 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
           padding: '16px 20px max(16px, env(safe-area-inset-bottom))',
         }}>
           <button
-            onClick={() => setPage(3)}
+            onClick={() => { trackOnboardingStep(2, 'complete'); setPage(3) }}
             disabled={!canProceed}
             style={{
               width: '100%', padding: '14px 0', borderRadius: 12, border: 'none',

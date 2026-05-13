@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { showToast } from '../lib/toast'
-import { trackListLiked, trackListForked, trackListShared, trackFollow } from '../lib/analytics'
+import { trackListLiked, trackListForked, trackListShared, trackFollow, trackListItemAdded } from '../lib/analytics'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -357,6 +357,7 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
           movie_poster: movie.poster_path,
           movie_release_date: movie.release_date || movie.first_air_date || null,
         }])
+        trackListItemAdded(listId)
         showToast(`「${title}」を追加しました`)
       }
     } catch (err) {

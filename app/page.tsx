@@ -17,7 +17,7 @@ import NotificationBell from './components/NotificationBell'
 import Toast from './components/Toast'
 import FeedbackWidget from './components/FeedbackWidget'
 import { showToast } from './lib/toast'
-import { setUserContext, trackSignUp } from './lib/analytics'
+import { setUserContext, trackSignUp, trackAuthStarted, trackAuthFailed, trackSignIn, trackTabChanged } from './lib/analytics'
 import Onboarding from './components/Onboarding'
 import ShareCard from './components/ShareCard'
 import PersonDetail from './components/PersonDetail'
@@ -181,8 +181,10 @@ export default function Page() {
   const handleAuth = async () => {
     setAuthError('')
     setAuthSuccess('')
+    trackAuthStarted(authMode)
     if (authMode === 'signup' && !authAgreedToTerms) {
       setAuthError('利用規約とプライバシーポリシーへの同意が必要です')
+      trackAuthFailed('signup', 'terms_not_agreed')
       return
     }
     setAuthLoading(true)
@@ -228,10 +230,15 @@ export default function Page() {
         })
         if (error) throw error
         setSession(data.session)
-        if (data.user) await loadUserProfile(data.user.id)
+        if (data.user) {
+          trackSignIn()
+          await loadUserProfile(data.user.id)
+        }
       }
     } catch (e: unknown) {
-      setAuthError(e instanceof Error ? e.message : t('common.error'))
+      const msg = e instanceof Error ? e.message : t('common.error')
+      trackAuthFailed(authMode, msg)
+      setAuthError(msg)
     }
     setAuthLoading(false)
   }
@@ -433,7 +440,7 @@ export default function Page() {
           { key: 'lists', labelKey: 'nav.lists', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> },
           { key: 'profile', labelKey: 'nav.profile', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4-4v2"/><circle cx="12" cy="7" r="4"/></svg> },
         ] as { key: Tab; labelKey: string; icon: React.ReactNode }[]).map(item => (
-          <button key={item.key} onClick={() => setTab(item.key)}
+          <button key={item.key} onClick={() => { if (item.key !== tab) trackTabChanged(tab, item.key); setTab(item.key) }}
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
               background: 'none', border: 'none', cursor: 'pointer', padding: '4px 12px',

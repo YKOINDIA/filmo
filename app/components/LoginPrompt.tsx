@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useLocale } from '../lib/i18n'
-import { setUserContext, trackSignUp } from '../lib/analytics'
+import { setUserContext, trackSignUp, trackAuthStarted, trackAuthFailed, trackSignIn } from '../lib/analytics'
 
 interface LoginPromptProps {
   /** 任意の見出し(タブ別の文言を渡せる)。例: "プロフィールを見るにはログインが必要です" */
@@ -40,8 +40,10 @@ export default function LoginPrompt({ title, subtitle, onAuthenticated }: LoginP
   const handleAuth = async () => {
     setAuthError('')
     setAuthSuccess('')
+    trackAuthStarted(authMode)
     if (authMode === 'signup' && !authAgreedToTerms) {
       setAuthError('利用規約とプライバシーポリシーへの同意が必要です')
+      trackAuthFailed('signup', 'terms_not_agreed')
       return
     }
     setAuthLoading(true)
@@ -82,12 +84,15 @@ export default function LoginPrompt({ title, subtitle, onAuthenticated }: LoginP
         })
         if (error) throw error
         if (data.user) {
+          trackSignIn()
           setUserContext({ authenticated: true })
           onAuthenticated?.(data.user.id)
         }
       }
     } catch (e: unknown) {
-      setAuthError(e instanceof Error ? e.message : t('common.error'))
+      const msg = e instanceof Error ? e.message : t('common.error')
+      trackAuthFailed(authMode, msg)
+      setAuthError(msg)
     }
     setAuthLoading(false)
   }
