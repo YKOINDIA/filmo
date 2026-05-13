@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import { addPoints, POINT_CONFIG } from '../lib/points'
 import { showToast } from '../lib/toast'
-import { trackReviewPosted } from '../lib/analytics'
+import { trackReviewPosted, trackWorkDetailOpened, trackWatchStatusChanged, trackScoreSet, trackAuthGateHit, trackReviewStarted, trackReviewAbandoned } from '../lib/analytics'
 import { buildTasteProfile, calculateMatchScore, type TasteProfile } from '../lib/matchScore'
 import VoiceReviewRecorder from './VoiceReviewRecorder'
 import VoiceReviewPlayer from './VoiceReviewPlayer'
@@ -213,8 +213,9 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const { t, tmdbLang } = useLocale()
   // ゲスト(未ログイン)時は userId が空文字。閲覧は可能だが投稿系アクションはガードする。
   const isGuest = !userId
-  const requireAuth = (msg = 'この機能を使うにはログインが必要です'): boolean => {
+  const requireAuth = (msg = 'この機能を使うにはログインが必要です', feature = 'unknown'): boolean => {
     if (isGuest) {
+      trackAuthGateHit(feature)
       showToast(msg)
       return false
     }
@@ -290,6 +291,9 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const [showAllCrew, setShowAllCrew] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  const reviewStartedRef = useRef(false)
+  const reviewBodyRef = useRef('')
+  const reviewSavedRef = useRef(false)
 
   // ── Data Fetching ────────────────────────────────────────────────────────
 
@@ -531,6 +535,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   }, [workId, userId])
 
   useEffect(() => {
+    trackWorkDetailOpened(workId, workType, 'app')
     fetchDetail()
     fetchUserData()
     fetchReviews()
@@ -538,6 +543,17 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
     fetchClipMemos()
     scrollRef.current?.scrollTo(0, 0)
   }, [fetchDetail, fetchUserData, fetchReviews, fetchVoiceReviews, fetchClipMemos])
+
+  useEffect(() => { reviewBodyRef.current = reviewBody }, [reviewBody])
+  useEffect(() => { if (reviewJustSaved === 'posted' || reviewJustSaved === 'draft') reviewSavedRef.current = true }, [reviewJustSaved])
+  useEffect(() => {
+    return () => {
+      if (reviewStartedRef.current && reviewBodyRef.current.trim() && !reviewSavedRef.current) {
+        trackReviewAbandoned(workId, reviewBodyRef.current.length)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Build taste profile once per mount
   useEffect(() => {
@@ -599,7 +615,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
   const handleStatusChange = async (status: WatchStatus) => {
     if (!status) return
-    if (!requireAuth('観賞ステータスを保存するにはログインが必要です')) return
+    if (!requireAuth('観賞ステータスを保存するにはログインが必要です', 'watch_status')) return
     setSavingWatchlist(true)
     try {
       if (watchEntry) {
@@ -625,6 +641,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         if (data) setWatchEntry(data as unknown as WatchlistEntry)
       }
       setCurrentStatus(status)
+      trackWatchStatusChanged(workId, status, !!watchEntry)
 
       if (status === 'watched') {
         await addPoints(userId, POINT_CONFIG.WATCH_COMPLETE, '鑑賞完了')
@@ -642,8 +659,9 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   }
 
   const handleScoreChange = async (newScore: number) => {
-    if (!requireAuth('評価するにはログインが必要です')) return
+    if (!requireAuth('評価するにはログインが必要です', 'score')) return
     setScore(newScore)
+    trackScoreSet(workId, newScore)
     if (watchEntry && newScore > 0) {
       const { error } = await supabase
         .from('watchlists')
@@ -654,7 +672,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   }
 
   const handleSaveWatchDetails = async () => {
-    if (!requireAuth('保存するにはログインが必要です')) return
+    if (!requireAuth('保存するにはログインが必要です', 'watch_details')) return
     if (!watchEntry) {
       showToast('先にWatchedまたはWatchlistボタンを押してください')
       return
@@ -701,7 +719,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
   const handleSaveReview = async (isDraft: boolean) => {
     if (savingReview) return
-    if (!requireAuth('レビュー投稿にはログインが必要です')) return
+    if (!requireAuth('レビュー投稿にはログインが必要です', 'review')) return
     if (!reviewBody.trim()) {
       showToast('レビュー本文を入力してください')
       return
@@ -797,7 +815,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   // ── Like Action ──────────────────────────────────────────────────────────
 
   const handleLike = async (review: ReviewWithUser) => {
-    if (!requireAuth('いいねするにはログインが必要です')) return
+    if (!requireAuth('いいねするにはログインが必要です', 'like')) return
     if (review.liked_by_me) {
       // Unlike
       const { error: delErr } = await supabase
@@ -1564,6 +1582,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                 style={s.textarea}
                 value={reviewBody}
                 onChange={e => setReviewBody(e.target.value)}
+                onFocus={() => { if (!reviewStartedRef.current) { reviewStartedRef.current = true; trackReviewStarted(workId) } }}
                 placeholder="感想を書く..."
                 maxLength={5000}
               />

@@ -102,3 +102,63 @@ export const trackProfileShared = (channel: 'twitter' | 'line' | 'copy_link' | '
 
 export const trackSignUp = (method: 'email' | 'google' | 'apple') =>
   track('sign_up', { method })
+
+// ========== Funnel / Drop-off tracking (離脱ポイント分析) ==========
+
+// --- Auth funnel ---
+export const trackAuthStarted = (mode: 'login' | 'signup') =>
+  track('auth_started', { mode })
+
+export const trackAuthFailed = (mode: 'login' | 'signup', reason: string) =>
+  track('auth_failed', { mode, error_reason: reason.slice(0, 100) })
+
+export const trackSignIn = () =>
+  track('sign_in', {})
+
+// --- Onboarding funnel ---
+export const trackOnboardingStep = (step: 0 | 1 | 2 | 3, action: 'view' | 'complete' | 'skip') =>
+  track('onboarding_step', { step, action })
+
+export const trackOnboardingComplete = (ratingsCount: number, fansCount: number) =>
+  track('onboarding_complete', { ratings_count: ratingsCount, fans_count: fansCount })
+
+// --- Tab navigation ---
+export const trackTabChanged = (fromTab: string, toTab: string) =>
+  track('tab_changed', { from_tab: fromTab, to_tab: toTab })
+
+// --- Work detail / Watchlist funnel ---
+export const trackWorkDetailOpened = (tmdbId: number, mediaType: 'movie' | 'tv', source: string) =>
+  track('work_detail_opened', { tmdb_id: tmdbId, media_type: mediaType, source })
+
+export const trackWatchStatusChanged = (tmdbId: number, status: string, hadPrevious: boolean) =>
+  track('watch_status_changed', { tmdb_id: tmdbId, status, had_previous: hadPrevious })
+
+export const trackScoreSet = (tmdbId: number, score: number) =>
+  track('score_set', { tmdb_id: tmdbId, score })
+
+export const trackAuthGateHit = (feature: string) =>
+  track('auth_gate_hit', { feature })
+
+// --- Review funnel ---
+export const trackReviewStarted = (tmdbId: number) =>
+  track('review_started', { tmdb_id: tmdbId })
+
+export const trackReviewAbandoned = (tmdbId: number, bodyLength: number) =>
+  track('review_abandoned', { tmdb_id: tmdbId, body_length: bodyLength })
+
+// --- List funnel ---
+export const trackListStarted = () =>
+  track('list_started', {})
+
+export const trackListItemAdded = (listId: string) =>
+  track('list_item_added', { list_id: listId })
+
+// --- Search funnel ---
+export const trackSearchNoResults = (query: string, tab: string) =>
+  track('search_no_results', { query: query.slice(0, 100), tab })
+
+export const trackGenreBrowsed = (genreName: string, mediaType: string) =>
+  track('genre_browsed', { genre_name: genreName, media_type: mediaType })
+
+export const trackFilterApplied = (filterType: string, filterValue: string) =>
+  track('filter_applied', { filter_type: filterType, filter_value: filterValue })

@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import ListDetail from './ListDetail'
 import { useLocale } from '../lib/i18n'
 import { showToast } from '../lib/toast'
-import { trackListCreated } from '../lib/analytics'
+import { trackListCreated, trackListStarted } from '../lib/analytics'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -226,7 +226,7 @@ export default function UserLists({ userId, onOpenWork }: UserListsProps) {
         {/* ゲストには新規作成ボタンを出さない (押しても auth.uid()=null で失敗するため) */}
         {!isGuest && (
           <button
-            onClick={() => setShowCreate(true)}
+            onClick={() => { trackListStarted(); setShowCreate(true) }}
             style={{
               padding: '8px 20px', borderRadius: 8, border: 'none', cursor: 'pointer',
               background: 'var(--fm-accent)', color: '#fff', fontSize: 13, fontWeight: 600,
