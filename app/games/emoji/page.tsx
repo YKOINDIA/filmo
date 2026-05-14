@@ -4,6 +4,33 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { addPoints, POINT_CONFIG } from '../../lib/points'
+import { trackMinigameShared } from '../../lib/analytics'
+
+const SHARE_URL = 'https://filmo.me/games/emoji'
+
+function buildTweetText(correctCount: number, score: number, results: AttemptResult[]) {
+  // 正解した問題の絵文字をティーザーとして1つ載せる。なければ最初の問題のものを使う。
+  const teaserQuiz = results.find(r => r.isCorrect)?.quiz || results[0]?.quiz
+  const emojis = teaserQuiz?.emojis.join('') || '🎬✨❓'
+
+  let opener: string
+  if (correctCount === 10) {
+    opener = `🎯 PERFECT! 絵文字タイトル当てで全問正解！(${score}点)`
+  } else if (correctCount >= 7) {
+    opener = `🎬 絵文字タイトル当てで${correctCount}/10正解！(${score}点)`
+  } else if (correctCount >= 4) {
+    opener = `🎬 絵文字タイトル当てで${correctCount}/10だった (${score}点)`
+  } else {
+    opener = `絵文字タイトル当て、${correctCount}/10で完敗…リベンジしたい`
+  }
+
+  return `${opener}\n\n${emojis} ← これ何の作品？\nあなたも挑戦してみて👇\n\n#Filmo #絵文字クイズ`
+}
+
+function openTwitterShare(text: string) {
+  const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(SHARE_URL)}`
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
 
 interface Quiz {
   id: string
@@ -521,6 +548,22 @@ export default function EmojiQuizPage() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button
+            onClick={() => {
+              openTwitterShare(buildTweetText(correctCount, score, results))
+              trackMinigameShared('twitter', correctCount, score)
+            }}
+            style={{
+              width: '100%', padding: '14px 0', borderRadius: 12, border: 'none',
+              background: '#000', color: '#fff',
+              fontSize: 15, fontWeight: 700, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+            Xでシェア
+          </button>
           <button
             onClick={startGame}
             style={{

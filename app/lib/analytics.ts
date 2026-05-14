@@ -109,6 +109,12 @@ export const trackFollow = (targetUserId: string, action: 'follow' | 'unfollow')
 export const trackProfileShared = (channel: 'twitter' | 'line' | 'copy_link' | 'system') =>
   track('profile_shared', { share_channel: channel })
 
+export const trackMinigameShared = (
+  channel: 'twitter' | 'system' | 'copy_link',
+  correctCount: number,
+  score: number,
+) => track('minigame_shared', { share_channel: channel, correct_count: correctCount, score })
+
 export const trackSignUp = (method: 'email' | 'google' | 'apple') =>
   track('sign_up', { method })
 
