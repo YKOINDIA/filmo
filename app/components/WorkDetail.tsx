@@ -848,12 +848,18 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
   // ── Fan Action ───────────────────────────────────────────────────────────
 
-  const handleToggleFan = async (personId: number, personName: string) => {
+  const handleToggleFan = async (
+    personId: number,
+    personName: string,
+    personType: 'actor' | 'director' | 'writer',
+    personImage: string | null,
+  ) => {
     if (fanIds.has(personId)) {
       const { error: delErr } = await supabase
         .from('fans')
         .delete()
         .eq('user_id', userId)
+        .eq('person_type', personType)
         .eq('person_id', personId)
       if (delErr) { console.error('Fan delete failed:', delErr); return }
       setFanIds(prev => { const n = new Set(prev); n.delete(personId); return n })
@@ -861,7 +867,13 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
     } else {
       const { error: fanErr } = await supabase
         .from('fans')
-        .insert({ user_id: userId, person_id: personId, person_name: personName })
+        .insert({
+          user_id: userId,
+          person_type: personType,
+          person_id: personId,
+          person_name: personName,
+          person_image: personImage,
+        })
       if (fanErr) { console.error('Fan insert failed:', fanErr); return }
       setFanIds(prev => new Set(prev).add(personId))
       showToast(`${personName} のファンになりました！`)
@@ -2340,7 +2352,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                 <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {person.character}
                 </div>
-                <button style={s.fanBtn(fanIds.has(person.id))} onClick={(e) => { e.stopPropagation(); handleToggleFan(person.id, person.name) }}>
+                <button style={s.fanBtn(fanIds.has(person.id))} onClick={(e) => { e.stopPropagation(); handleToggleFan(person.id, person.name, 'actor', person.profile_path) }}>
                   {fanIds.has(person.id) ? 'Fan! ✓' : 'Fan!'}
                 </button>
               </div>
@@ -2373,7 +2385,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>{d.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--fm-text-sub)' }}>監督</div>
                     </div>
-                    <button style={s.fanBtn(fanIds.has(d.id))} onClick={(e) => { e.stopPropagation(); handleToggleFan(d.id, d.name) }}>
+                    <button style={s.fanBtn(fanIds.has(d.id))} onClick={(e) => { e.stopPropagation(); handleToggleFan(d.id, d.name, 'director', d.profile_path) }}>
                       {fanIds.has(d.id) ? 'Fan! ✓' : 'Fan!'}
                     </button>
                   </div>
@@ -2391,7 +2403,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>{w.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--fm-text-sub)' }}>脚本</div>
                     </div>
-                    <button style={s.fanBtn(fanIds.has(w.id))} onClick={(e) => { e.stopPropagation(); handleToggleFan(w.id, w.name) }}>
+                    <button style={s.fanBtn(fanIds.has(w.id))} onClick={(e) => { e.stopPropagation(); handleToggleFan(w.id, w.name, 'writer', w.profile_path) }}>
                       {fanIds.has(w.id) ? 'Fan! ✓' : 'Fan!'}
                     </button>
                   </div>
