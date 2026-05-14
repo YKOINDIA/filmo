@@ -12,7 +12,8 @@
     "cap:ios": "npx cap open ios",
     "cap:build:android": "npx cap sync android",
     "cap:build:ios": "npx cap sync ios",
-    "seed:curated": "node scripts/seed-curated-lists.mjs"
+    "seed:curated": "node scripts/seed-curated-lists.mjs",
+    "seed:emoji-quizzes": "node scripts/seed-emoji-quizzes.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.0",
@@ -24,6 +25,7 @@
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
     "@formatjs/intl-localematcher": "^0.8.3",
+    "@google/genai": "^2.2.0",
     "@sentry/nextjs": "^10.48.0",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.0",
