@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { getPersonDetailCached } from '@/app/lib/tmdb-cache'
 import { getSupabaseAdmin } from '@/app/lib/supabase-admin'
 import PersonEditProposalTrigger from './PersonEditProposalTrigger'
+import AuthGate from './AuthGate'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://filmo.me'
@@ -387,13 +388,15 @@ export function PublicPersonView({
             Filmo
           </span>
         </Link>
-        <Link href="/" style={{
-          padding: '6px 16px', borderRadius: 6,
-          background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
-          textDecoration: 'none',
-        }}>
-          無料で記録を始める
-        </Link>
+        <AuthGate hideWhenAuthed>
+          <Link href="/" style={{
+            padding: '6px 16px', borderRadius: 6,
+            background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
+            textDecoration: 'none',
+          }}>
+            無料で記録を始める
+          </Link>
+        </AuthGate>
       </header>
 
       <div style={{ maxWidth: 880, margin: '0 auto', padding: '24px 16px 60px' }}>
@@ -508,25 +511,27 @@ export function PublicPersonView({
           stats={reviewStats}
         />
 
-        <section style={{
-          marginTop: 32, padding: 24, borderRadius: 12,
-          background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
-          textAlign: 'center',
-        }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px' }}>
-            {person.name}の作品を Filmo で記録しよう
-          </h3>
-          <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', margin: '0 0 16px' }}>
-            星評価・レビュー・配信情報をまとめて管理。完全無料。
-          </p>
-          <Link href="/" style={{
-            display: 'inline-block', padding: '10px 28px', borderRadius: 8,
-            background: 'var(--fm-accent)', color: '#fff', fontSize: 14, fontWeight: 600,
-            textDecoration: 'none',
+        <AuthGate hideWhenAuthed>
+          <section style={{
+            marginTop: 32, padding: 24, borderRadius: 12,
+            background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
+            textAlign: 'center',
           }}>
-            無料で始める
-          </Link>
-        </section>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px' }}>
+              {person.name}の作品を Filmo で記録しよう
+            </h3>
+            <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', margin: '0 0 16px' }}>
+              星評価・レビュー・配信情報をまとめて管理。完全無料。
+            </p>
+            <Link href="/" style={{
+              display: 'inline-block', padding: '10px 28px', borderRadius: 8,
+              background: 'var(--fm-accent)', color: '#fff', fontSize: 14, fontWeight: 600,
+              textDecoration: 'none',
+            }}>
+              無料で始める
+            </Link>
+          </section>
+        </AuthGate>
       </div>
     </div>
   )

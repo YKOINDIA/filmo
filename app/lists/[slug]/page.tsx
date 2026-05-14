@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import AuthGate from '../../components/AuthGate'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://filmo.me'
@@ -167,13 +168,15 @@ export default async function PublicListPage({
             Filmo
           </span>
         </a>
-        <a href="/" style={{
-          padding: '6px 16px', borderRadius: 6, border: 'none',
-          background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
-          textDecoration: 'none',
-        }}>
-          Sign Up Free
-        </a>
+        <AuthGate hideWhenAuthed>
+          <a href="/" style={{
+            padding: '6px 16px', borderRadius: 6, border: 'none',
+            background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
+            textDecoration: 'none',
+          }}>
+            Sign Up Free
+          </a>
+        </AuthGate>
       </header>
 
       {/* List content */}
@@ -280,25 +283,27 @@ export default async function PublicListPage({
         )}
 
         {/* CTA */}
-        <div style={{
-          marginTop: 40, padding: 24, borderRadius: 10,
-          background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
-          textAlign: 'center',
-        }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--fm-text)', margin: '0 0 8px' }}>
-            Create your own lists on Filmo
-          </h3>
-          <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', margin: '0 0 16px' }}>
-            Track films, write reviews, and share your favorites.
-          </p>
-          <a href="/" style={{
-            display: 'inline-block', padding: '10px 28px', borderRadius: 8,
-            background: 'var(--fm-accent)', color: '#fff', fontSize: 14, fontWeight: 600,
-            textDecoration: 'none',
+        <AuthGate hideWhenAuthed>
+          <div style={{
+            marginTop: 40, padding: 24, borderRadius: 10,
+            background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
+            textAlign: 'center',
           }}>
-            Get Started — It's Free
-          </a>
-        </div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--fm-text)', margin: '0 0 8px' }}>
+              Create your own lists on Filmo
+            </h3>
+            <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', margin: '0 0 16px' }}>
+              Track films, write reviews, and share your favorites.
+            </p>
+            <a href="/" style={{
+              display: 'inline-block', padding: '10px 28px', borderRadius: 8,
+              background: 'var(--fm-accent)', color: '#fff', fontSize: 14, fontWeight: 600,
+              textDecoration: 'none',
+            }}>
+              Get Started — It's Free
+            </a>
+          </div>
+        </AuthGate>
       </div>
     </div>
   )
