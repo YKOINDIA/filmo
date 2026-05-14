@@ -57,12 +57,22 @@ interface AttemptResult {
   hintUsed: boolean
 }
 
+interface LeaderboardEntry {
+  user_id: string
+  user_name: string
+  user_avatar: string | null
+  best_score: number
+  total_time_ms: number
+  achieved_at: string
+}
+
 type Phase = 'menu' | 'loading' | 'playing' | 'result'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p/w185'
 const QUESTIONS_PER_SESSION = 10
 const POOL_FETCH_SIZE = 200
 const RECENT_EXCLUDE_DAYS = 30
+const LEADERBOARD_LIMIT = 20
 
 export default function EmojiQuizPage() {
   const [userId, setUserId] = useState<string | null>(null)
@@ -81,6 +91,8 @@ export default function EmojiQuizPage() {
   const [results, setResults] = useState<AttemptResult[]>([])
   const [pointsAwarded, setPointsAwarded] = useState(0)
   const [newBest, setNewBest] = useState(false)
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false)
 
   const loadStats = useCallback(async (uid: string) => {
     const [bestRes, totalRes, correctRes] = await Promise.all([
@@ -274,6 +286,21 @@ export default function EmojiQuizPage() {
       if (stats && score > stats.best_score) setNewBest(true)
     }
     setPhase('result')
+    fetchLeaderboard()
+  }
+
+  async function fetchLeaderboard() {
+    setLeaderboardLoading(true)
+    try {
+      const { data, error: rpcErr } = await supabase.rpc('get_emoji_quiz_leaderboard', {
+        p_limit: LEADERBOARD_LIMIT,
+      })
+      if (rpcErr) throw rpcErr
+      setLeaderboard((data || []) as LeaderboardEntry[])
+    } catch {
+      setLeaderboard([])
+    }
+    setLeaderboardLoading(false)
   }
 
   function backToMenu() {
@@ -583,8 +610,114 @@ export default function EmojiQuizPage() {
             メニューに戻る
           </button>
         </div>
+
+        <Leaderboard
+          entries={leaderboard}
+          loading={leaderboardLoading}
+          currentUserId={userId}
+        />
       </div>
     </PageShell>
+  )
+}
+
+function Leaderboard({
+  entries,
+  loading,
+  currentUserId,
+}: {
+  entries: LeaderboardEntry[]
+  loading: boolean
+  currentUserId: string | null
+}) {
+  return (
+    <div style={{
+      marginTop: 24, background: 'var(--fm-bg-card)', borderRadius: 12,
+      padding: 16, border: '1px solid var(--fm-border)',
+    }}>
+      <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>
+        🏆 ランキング (TOP {entries.length || ''})
+      </h3>
+
+      {loading ? (
+        <div style={{ padding: 20, textAlign: 'center', color: 'var(--fm-text-sub)', fontSize: 13 }}>
+          読み込み中...
+        </div>
+      ) : entries.length === 0 ? (
+        <div style={{ padding: 20, textAlign: 'center', color: 'var(--fm-text-sub)', fontSize: 13 }}>
+          まだランキングがありません
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {entries.map((e, i) => {
+            const rank = i + 1
+            const isSelf = currentUserId === e.user_id
+            const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : ''
+            const timeSec = Math.round(e.total_time_ms / 1000)
+            const timeLabel = timeSec >= 60
+              ? `${Math.floor(timeSec / 60)}m ${timeSec % 60}s`
+              : `${timeSec}s`
+            return (
+              <Link
+                key={e.user_id}
+                href={`/u/${e.user_id}`}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 8px',
+                  borderBottom: i < entries.length - 1 ? '1px solid var(--fm-border)' : 'none',
+                  textDecoration: 'none', color: 'inherit',
+                  background: isSelf ? 'rgba(0,192,48,0.10)' : 'transparent',
+                  borderRadius: isSelf ? 8 : 0,
+                  margin: isSelf ? '0 -4px' : 0,
+                  paddingLeft: isSelf ? 12 : 8,
+                  paddingRight: isSelf ? 12 : 8,
+                }}>
+                <span style={{
+                  minWidth: 28, fontSize: medal ? 18 : 13, fontWeight: 700,
+                  color: medal ? undefined : 'var(--fm-text-muted)', textAlign: 'center',
+                }}>
+                  {medal || rank}
+                </span>
+                {e.user_avatar ? (
+                  <img
+                    src={e.user_avatar}
+                    alt=""
+                    style={{
+                      width: 32, height: 32, borderRadius: '50%',
+                      objectFit: 'cover', background: 'var(--fm-bg-secondary)',
+                    }}
+                  />
+                ) : (
+                  <div style={{
+                    width: 32, height: 32, borderRadius: '50%',
+                    background: 'var(--fm-bg-secondary)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 14, color: 'var(--fm-text-muted)',
+                  }}>
+                    {e.user_name?.[0] || '?'}
+                  </div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 13, fontWeight: 600,
+                    color: isSelf ? 'var(--fm-accent)' : 'var(--fm-text)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {e.user_name || '名無し'}{isSelf && ' (あなた)'}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
+                    {timeLabel}
+                  </div>
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--fm-accent)' }}>
+                  {e.best_score}
+                </div>
+              </Link>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 
