@@ -92,7 +92,7 @@ export default function AdminPage() {
 
   // Work requests state
   const [workRequests, setWorkRequests] = useState<Record<string, unknown>[]>([])
-  const [workReqFilter, setWorkReqFilter] = useState<'pending' | 'approved' | 'rejected'>('pending')
+  const [workReqFilter, setWorkReqFilter] = useState<'pending' | 'auto_approved' | 'approved' | 'rejected'>('pending')
 
   // Edit proposals state
   const [editProposals, setEditProposals] = useState<Record<string, unknown>[]>([])
@@ -808,7 +808,7 @@ export default function AdminPage() {
       {tab === 'work_requests' && (
         <div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            {(['pending', 'approved', 'rejected'] as const).map(f => (
+            {(['pending', 'auto_approved', 'approved', 'rejected'] as const).map(f => (
               <button key={f} onClick={() => { setWorkReqFilter(f); setTimeout(loadWorkRequests, 100) }}
                 style={{
                   ...S.btn,
@@ -816,7 +816,10 @@ export default function AdminPage() {
                   color: workReqFilter === f ? '#fff' : 'var(--fm-text-sub)',
                   border: '1px solid var(--fm-border)',
                 }}>
-                {f === 'pending' ? '未処理' : f === 'approved' ? '承認済' : '却下'}
+                {f === 'pending' ? '未処理'
+                  : f === 'auto_approved' ? 'ユーザー登録（要検証）'
+                  : f === 'approved' ? '承認済'
+                  : '却下'}
               </button>
             ))}
           </div>

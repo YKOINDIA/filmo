@@ -1,15 +1,24 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { awardContributionPoints, POINT_CONFIG } from '../lib/points'
 import { showToast } from '../lib/toast'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
+export interface WorkRegisterInitialPerson {
+  id: number
+  name: string
+  profilePath: string | null
+  role: 'director' | 'writer' | 'cast'
+}
+
 interface WorkRegisterModalProps {
   userId: string
   initialQuery: string
+  /** 監督画面など、人物に紐付けて作品登録を開始する場合に渡す */
+  initialPerson?: WorkRegisterInitialPerson
   onClose: () => void
   onOpenWork: (id: number, type?: 'movie' | 'tv') => void
 }
@@ -34,9 +43,32 @@ interface LocalResult {
   data_source: string
 }
 
+interface PersonResult {
+  id: number
+  name: string
+  profile_path: string | null
+  known_for_department?: string | null
+  data_source?: string
+}
+
+interface CreditDraft {
+  key: string                 // React key
+  personId: number | null     // TMDB or Filmo persons.id（負ID）。手入力の場合は null。
+  name: string
+  profilePath: string | null
+  role: 'director' | 'writer' | 'cast'
+  character?: string
+}
+
 type Step = 'search' | 'form' | 'done'
 
-export default function WorkRegisterModal({ userId, initialQuery, onClose, onOpenWork }: WorkRegisterModalProps) {
+export default function WorkRegisterModal({
+  userId,
+  initialQuery,
+  initialPerson,
+  onClose,
+  onOpenWork,
+}: WorkRegisterModalProps) {
   const [step, setStep] = useState<Step>('search')
   const [query, setQuery] = useState(initialQuery)
   const [tmdbResults, setTmdbResults] = useState<TMDBResult[]>([])
@@ -49,12 +81,29 @@ export default function WorkRegisterModal({ userId, initialQuery, onClose, onOpe
   const [originalTitle, setOriginalTitle] = useState('')
   const [mediaType, setMediaType] = useState<'movie' | 'tv' | 'anime'>('tv')
   const [year, setYear] = useState('')
+  const [releaseDate, setReleaseDate] = useState('')   // YYYY-MM-DD（任意、年より優先）
+  const [homepage, setHomepage] = useState('')
   const [description, setDescription] = useState('')
+  const [credits, setCredits] = useState<CreditDraft[]>(() =>
+    initialPerson
+      ? [{
+          key: `init-${initialPerson.id}`,
+          personId: initialPerson.id,
+          name: initialPerson.name,
+          profilePath: initialPerson.profilePath,
+          role: initialPerson.role,
+        }]
+      : [],
+  )
   const [submitting, setSubmitting] = useState(false)
   const [createdWorkId, setCreatedWorkId] = useState<number | null>(null)
 
-  // 初回検索
+  // 初回検索（initialPerson が指定されている場合はフォームを直接開く）
   useEffect(() => {
+    if (initialPerson) {
+      setStep('form')
+      return
+    }
     if (initialQuery.trim()) {
       handleSearch()
     }
@@ -88,6 +137,14 @@ export default function WorkRegisterModal({ userId, initialQuery, onClose, onOpe
     }
   }, [query])
 
+  const buildCreditsPayload = useCallback(() => credits.map(c => ({
+    personId: c.personId ?? undefined,
+    name: c.name,
+    profilePath: c.profilePath,
+    role: c.role,
+    character: c.character,
+  })), [credits])
+
   const handleRegister = useCallback(async () => {
     if (!title.trim()) return
     setSubmitting(true)
@@ -109,7 +166,10 @@ export default function WorkRegisterModal({ userId, initialQuery, onClose, onOpe
           originalTitle: originalTitle.trim() || undefined,
           mediaType,
           year: year ? Number(year) : undefined,
+          releaseDate: releaseDate || undefined,
           description: description.trim() || undefined,
+          homepage: homepage.trim() || undefined,
+          credits: buildCreditsPayload(),
         }),
       })
 
@@ -156,7 +216,7 @@ export default function WorkRegisterModal({ userId, initialQuery, onClose, onOpe
     } finally {
       setSubmitting(false)
     }
-  }, [userId, title, originalTitle, mediaType, year, description])
+  }, [userId, title, originalTitle, mediaType, year, releaseDate, homepage, description, buildCreditsPayload])
 
   const handleRequest = useCallback(async () => {
     if (!title.trim()) return
@@ -173,7 +233,10 @@ export default function WorkRegisterModal({ userId, initialQuery, onClose, onOpe
           originalTitle: originalTitle.trim() || undefined,
           mediaType,
           year: year ? Number(year) : undefined,
+          releaseDate: releaseDate || undefined,
           description: description.trim() || undefined,
+          homepage: homepage.trim() || undefined,
+          credits: buildCreditsPayload(),
         }),
       })
 
@@ -198,10 +261,41 @@ export default function WorkRegisterModal({ userId, initialQuery, onClose, onOpe
     } finally {
       setSubmitting(false)
     }
-  }, [userId, title, originalTitle, mediaType, year, description, onClose])
+  }, [userId, title, originalTitle, mediaType, year, releaseDate, homepage, description, buildCreditsPayload, onClose])
 
   const getTitle = (r: TMDBResult) => r.title || r.name || ''
   const getYear = (r: TMDBResult) => (r.release_date || r.first_air_date || '').substring(0, 4)
+
+  const addCredit = (p: PersonResult, role: CreditDraft['role']) => {
+    if (credits.some(c => c.personId === p.id && c.role === role)) return
+    setCredits(prev => [...prev, {
+      key: `${role}-${p.id}-${Date.now()}`,
+      personId: p.id,
+      name: p.name,
+      profilePath: p.profile_path,
+      role,
+    }])
+  }
+
+  const addCreditByName = (name: string, role: CreditDraft['role']) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setCredits(prev => [...prev, {
+      key: `manual-${role}-${trimmed}-${Date.now()}`,
+      personId: null,
+      name: trimmed,
+      profilePath: null,
+      role,
+    }])
+  }
+
+  const removeCredit = (key: string) => {
+    setCredits(prev => prev.filter(c => c.key !== key))
+  }
+
+  const updateCreditCharacter = (key: string, character: string) => {
+    setCredits(prev => prev.map(c => c.key === key ? { ...c, character } : c))
+  }
 
   return (
     <div style={s.overlay} onClick={onClose}>
@@ -374,17 +468,62 @@ export default function WorkRegisterModal({ userId, initialQuery, onClose, onOpe
             </div>
 
             <div style={s.formGroup}>
-              <label style={s.label}>公開年（オプション）</label>
+              <label style={s.label}>公開日（オプション）</label>
+              <input
+                type="date"
+                value={releaseDate}
+                onChange={e => {
+                  setReleaseDate(e.target.value)
+                  if (e.target.value) setYear(e.target.value.slice(0, 4))
+                }}
+                style={{ ...s.input, width: '100%' }}
+              />
+              <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 4 }}>
+                正確な日付が分かる場合に入力してください
+              </div>
+            </div>
+
+            <div style={s.formGroup}>
+              <label style={s.label}>公開年のみ（日付が分からない場合）</label>
               <input
                 type="number"
                 value={year}
-                onChange={e => setYear(e.target.value)}
+                onChange={e => {
+                  setYear(e.target.value)
+                  // 年だけ入力された場合は詳細日付を空にする
+                  if (releaseDate && releaseDate.slice(0, 4) !== e.target.value) {
+                    setReleaseDate('')
+                  }
+                }}
                 placeholder="2024"
                 min="1900"
                 max="2030"
-                style={{ ...s.input, width: 120 }}
+                disabled={!!releaseDate}
+                style={{ ...s.input, width: 120, opacity: releaseDate ? 0.5 : 1 }}
               />
             </div>
+
+            <div style={s.formGroup}>
+              <label style={s.label}>公式サイト（オプション）</label>
+              <input
+                type="url"
+                value={homepage}
+                onChange={e => setHomepage(e.target.value)}
+                placeholder="https://bakkon-movie.jp/"
+                style={s.input}
+              />
+              <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 4 }}>
+                公式ページや特設サイトの URL を入力してください
+              </div>
+            </div>
+
+            <CreditPicker
+              credits={credits}
+              onAddByPerson={addCredit}
+              onAddByName={addCreditByName}
+              onRemove={removeCredit}
+              onUpdateCharacter={updateCreditCharacter}
+            />
 
             <div style={s.formGroup}>
               <label style={s.label}>説明（オプション）</label>
@@ -416,12 +555,14 @@ export default function WorkRegisterModal({ userId, initialQuery, onClose, onOpe
               </button>
             </div>
 
-            <button
-              onClick={() => setStep('search')}
-              style={{ background: 'none', border: 'none', color: 'var(--fm-text-muted)', fontSize: 13, cursor: 'pointer', marginTop: 8, display: 'block' }}
-            >
-              ← 検索に戻る
-            </button>
+            {!initialPerson && (
+              <button
+                onClick={() => setStep('search')}
+                style={{ background: 'none', border: 'none', color: 'var(--fm-text-muted)', fontSize: 13, cursor: 'pointer', marginTop: 8, display: 'block' }}
+              >
+                ← 検索に戻る
+              </button>
+            )}
           </div>
         )}
 
@@ -453,6 +594,220 @@ export default function WorkRegisterModal({ userId, initialQuery, onClose, onOpe
   )
 }
 
+// ── CreditPicker ────────────────────────────────────────────────────────────
+// 監督・脚本・キャストを TMDB / Filmo persons から検索して追加する。
+
+function CreditPicker({
+  credits,
+  onAddByPerson,
+  onAddByName,
+  onRemove,
+  onUpdateCharacter,
+}: {
+  credits: CreditDraft[]
+  onAddByPerson: (p: PersonResult, role: CreditDraft['role']) => void
+  onAddByName: (name: string, role: CreditDraft['role']) => void
+  onRemove: (key: string) => void
+  onUpdateCharacter: (key: string, character: string) => void
+}) {
+  const [role, setRole] = useState<CreditDraft['role']>('director')
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState<PersonResult[]>([])
+  const [loading, setLoading] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    const query = q.trim()
+    if (!query) { setResults([]); return }
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const [tmdbRes, localRes] = await Promise.all([
+          fetch(`/api/tmdb?action=search_person&query=${encodeURIComponent(query)}`).then(r => r.json()),
+          supabase
+            .from('persons')
+            .select('id, name, profile_path, known_for_department, data_source')
+            .ilike('name', `%${query}%`)
+            .limit(6),
+        ])
+        const tmdb = ((tmdbRes.results || []) as PersonResult[]).slice(0, 8)
+        const local = ((localRes.data as PersonResult[] | null) || [])
+        // 重複 ID 除去（ローカル優先）
+        const seen = new Set(local.map(p => p.id))
+        const merged = [...local, ...tmdb.filter(p => !seen.has(p.id))]
+        setResults(merged.slice(0, 12))
+      } catch {
+        setResults([])
+      } finally {
+        setLoading(false)
+      }
+    }, 300)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [q])
+
+  const directors = credits.filter(c => c.role === 'director')
+  const writers = credits.filter(c => c.role === 'writer')
+  const cast = credits.filter(c => c.role === 'cast')
+
+  return (
+    <div style={s.formGroup}>
+      <label style={s.label}>監督・キャスト（オプション）</label>
+
+      {/* Selected list */}
+      {credits.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 12 }}>
+          {directors.length > 0 && (
+            <CreditGroup title="監督" items={directors} onRemove={onRemove} />
+          )}
+          {writers.length > 0 && (
+            <CreditGroup title="脚本" items={writers} onRemove={onRemove} />
+          )}
+          {cast.length > 0 && (
+            <CreditGroup
+              title="キャスト"
+              items={cast}
+              onRemove={onRemove}
+              onUpdateCharacter={onUpdateCharacter}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Role picker */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        {([['director', '監督'], ['writer', '脚本'], ['cast', 'キャスト']] as const).map(([val, label]) => (
+          <button
+            key={val}
+            type="button"
+            onClick={() => setRole(val)}
+            style={s.tab(role === val)}
+          >
+            {label}を追加
+          </button>
+        ))}
+      </div>
+
+      {/* Search input */}
+      <input
+        type="text"
+        value={q}
+        onChange={e => setQ(e.target.value)}
+        placeholder={`${role === 'director' ? '監督' : role === 'writer' ? '脚本家' : 'キャスト'}の名前で検索`}
+        style={s.input}
+      />
+
+      {loading && (
+        <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', padding: 6 }}>検索中…</div>
+      )}
+
+      {results.length > 0 && (
+        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {results.map(p => (
+            <button
+              key={`${p.id}-${p.data_source || 'tmdb'}`}
+              type="button"
+              onClick={() => { onAddByPerson(p, role); setQ('') }}
+              style={s.personRow}
+            >
+              {p.profile_path ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={p.profile_path.startsWith('http') ? p.profile_path : `${TMDB_IMG}/w92${p.profile_path}`}
+                  alt={p.name}
+                  style={s.personThumb}
+                />
+              ) : (
+                <div style={{ ...s.personThumb, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'var(--fm-text-muted)' }}>👤</div>
+              )}
+              <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text)' }}>{p.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
+                  {p.known_for_department || '人物'}
+                  {p.data_source === 'user' ? ' / Filmo' : ''}
+                </div>
+              </div>
+              <span style={{ fontSize: 12, color: 'var(--fm-accent)' }}>+追加</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!loading && q.trim() && results.length === 0 && (
+        <div style={{ marginTop: 8, padding: 8, borderRadius: 6, background: 'var(--fm-bg-hover)', fontSize: 12, color: 'var(--fm-text-sub)' }}>
+          見つからない場合は名前のみで登録できます。
+          <button
+            type="button"
+            onClick={() => { onAddByName(q, role); setQ('') }}
+            style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--fm-accent)', fontSize: 12, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+          >
+            「{q.trim()}」を追加
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CreditGroup({
+  title,
+  items,
+  onRemove,
+  onUpdateCharacter,
+}: {
+  title: string
+  items: CreditDraft[]
+  onRemove: (key: string) => void
+  onUpdateCharacter?: (key: string, character: string) => void
+}) {
+  return (
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fm-text-sub)', marginBottom: 6 }}>{title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {items.map(c => (
+          <div key={c.key} style={s.creditChip}>
+            {c.profilePath ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={c.profilePath.startsWith('http') ? c.profilePath : `${TMDB_IMG}/w92${c.profilePath}`}
+                alt={c.name}
+                style={s.creditThumb}
+              />
+            ) : (
+              <div style={{ ...s.creditThumb, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: 'var(--fm-text-muted)' }}>👤</div>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text)' }}>{c.name}</div>
+              {onUpdateCharacter && (
+                <input
+                  type="text"
+                  value={c.character || ''}
+                  onChange={e => onUpdateCharacter(c.key, e.target.value)}
+                  placeholder="役名（オプション）"
+                  style={{
+                    width: '100%', marginTop: 4, padding: '4px 8px', borderRadius: 4,
+                    border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)',
+                    color: 'var(--fm-text)', fontSize: 12, boxSizing: 'border-box',
+                  }}
+                />
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => onRemove(c.key)}
+              style={{
+                background: 'none', border: 'none', color: 'var(--fm-text-muted)',
+                fontSize: 18, cursor: 'pointer', padding: 4, lineHeight: 1,
+              }}
+              aria-label="削除"
+            >×</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 const s = {
   overlay: {
     position: 'fixed' as const, inset: 0, zIndex: 2000,
@@ -479,7 +834,7 @@ const s = {
     padding: 16, overflowY: 'auto' as const, flex: 1,
   },
   input: {
-    flex: 1, padding: '10px 12px', borderRadius: 8,
+    flex: 1, width: '100%', padding: '10px 12px', borderRadius: 8,
     border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)',
     color: 'var(--fm-text)', fontSize: 14, boxSizing: 'border-box' as const,
     minHeight: 44,
@@ -524,5 +879,24 @@ const s = {
     padding: 20, borderRadius: 12,
     background: 'var(--fm-bg-card)', border: '1px solid var(--fm-accent)',
     textAlign: 'center' as const,
+  },
+  personRow: {
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
+    background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
+    width: '100%', fontFamily: 'inherit',
+  },
+  personThumb: {
+    width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' as const,
+    background: 'var(--fm-bg-hover)', flexShrink: 0,
+  },
+  creditChip: {
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '6px 10px', borderRadius: 6,
+    background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
+  },
+  creditThumb: {
+    width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' as const,
+    background: 'var(--fm-bg-hover)', flexShrink: 0,
   },
 }

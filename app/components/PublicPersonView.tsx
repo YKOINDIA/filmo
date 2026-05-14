@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { getPersonDetailCached } from '@/app/lib/tmdb-cache'
 import { getSupabaseAdmin } from '@/app/lib/supabase-admin'
 import PersonEditProposalTrigger from './PersonEditProposalTrigger'
+import PersonAddWorkTrigger from './PersonAddWorkTrigger'
 import AuthGate from './AuthGate'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
@@ -444,7 +445,17 @@ export function PublicPersonView({
                   </span>
                 </div>
               )}
-              <div style={{ marginTop: 10 }}>
+              <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <PersonAddWorkTrigger
+                  personId={person.id}
+                  personName={person.name}
+                  profilePath={person.profile_path}
+                  role={
+                    person.known_for_department === 'Acting' ? 'cast'
+                    : person.known_for_department === 'Writing' ? 'writer'
+                    : 'director'
+                  }
+                />
                 <PersonEditProposalTrigger
                   personId={person.id}
                   current={{

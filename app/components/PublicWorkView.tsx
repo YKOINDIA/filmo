@@ -25,6 +25,10 @@ export interface PublicWorkData {
   poster_path: string | null
   backdrop_path: string | null
   release_date: string | null
+  /** ユーザー登録で「年のみ」入力された作品では release_date が YYYY-01-01 になる。
+   *  この場合は表示で日付までは見せず年だけ出すためのフラグ。 */
+  release_year_only: boolean
+  homepage: string | null
   runtime: number | null
   vote_average: number
   vote_count: number
@@ -69,6 +73,8 @@ interface UserWorkRow {
   poster_path?: string | null
   backdrop_path?: string | null
   release_date?: string | null
+  release_year_only?: boolean | null
+  homepage?: string | null
   runtime?: number | null
   vote_average?: number | null
   vote_count?: number | null
@@ -90,6 +96,8 @@ function normalizeUserWork(row: UserWorkRow, type: 'movie' | 'tv'): PublicWorkDa
     poster_path: row.poster_path || null,
     backdrop_path: row.backdrop_path || null,
     release_date: row.release_date || null,
+    release_year_only: !!row.release_year_only,
+    homepage: row.homepage || null,
     runtime: row.runtime || null,
     vote_average: row.vote_average || 0,
     vote_count: row.vote_count || 0,
@@ -114,6 +122,7 @@ interface TmdbDetail {
   backdrop_path?: string | null
   release_date?: string
   first_air_date?: string
+  homepage?: string | null
   runtime?: number
   episode_run_time?: number[]
   vote_average?: number
@@ -139,6 +148,8 @@ function normalizeTmdbWork(data: TmdbDetail, type: 'movie' | 'tv'): PublicWorkDa
     poster_path: data.poster_path || null,
     backdrop_path: data.backdrop_path || null,
     release_date: data.release_date || data.first_air_date || null,
+    release_year_only: false,
+    homepage: data.homepage || null,
     runtime: data.runtime || data.episode_run_time?.[0] || null,
     vote_average: data.vote_average || 0,
     vote_count: data.vote_count || 0,
@@ -199,7 +210,10 @@ export function buildWorkJsonLd(w: PublicWorkData): Record<string, unknown> {
   if (w.original_title && w.original_title !== w.title) jsonLd.alternateName = w.original_title
   if (image) jsonLd.image = image
   if (w.overview) jsonLd.description = w.overview
-  if (w.release_date) jsonLd.datePublished = w.release_date
+  // 「年のみ」のユーザー登録作品は schema.org でも年だけ出す
+  if (w.release_date) {
+    jsonLd.datePublished = w.release_year_only ? w.release_date.slice(0, 4) : w.release_date
+  }
   if (w.runtime && w.type === 'movie') jsonLd.duration = `PT${w.runtime}M`
   if (w.genres.length > 0) jsonLd.genre = w.genres.map(g => g.name)
   if (w.production_countries.length > 0) {
@@ -333,6 +347,19 @@ export function PublicWorkView({ work }: { work: PublicWorkData }) {
                     </Link>
                   </span>
                 ))}
+              </div>
+            )}
+            {work.homepage && (
+              <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', marginTop: 4 }}>
+                公式サイト:{' '}
+                <a
+                  href={work.homepage}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: 'var(--fm-accent)', textDecoration: 'underline', wordBreak: 'break-all' }}
+                >
+                  {work.homepage.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                </a>
               </div>
             )}
           </div>

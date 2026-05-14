@@ -776,9 +776,11 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
     setSearchLoading(true)
     setSearchPage(1)
 
-    // TMDB検索 + アニメタブならAnnict検索も並列実行
+    // TMDB検索 + ユーザー登録作品 (ローカルDB) を並列実行。
+    // アニメタブの場合は Annict 検索も加える。順序: [tmdb, local, annict?]
     const fetches: Promise<unknown>[] = [
       tmdbFetch(`/api/tmdb?action=search&query=${encodeURIComponent(debouncedQuery)}&page=1`).then(r => r.json()),
+      fetch(`/api/works?action=search_local&query=${encodeURIComponent(debouncedQuery)}`).then(r => r.json()).catch(() => ({ results: [] })),
     ]
     if (activeTab === 'anime') {
       fetches.push(
@@ -787,7 +789,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
     }
 
     Promise.all(fetches)
-      .then(([tmdbData, annictData]: unknown[]) => {
+      .then(([tmdbData, localData, annictData]: unknown[]) => {
         const tmdb = tmdbData as { results?: (TMDBItem & { profile_path?: string | null; known_for_department?: string })[]; total_pages?: number }
         const raw = tmdb.results || []
         const total_pages = tmdb.total_pages || 1
@@ -808,6 +810,36 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
           } else {
             results.push(r)
           }
+        }
+
+        // ユーザー登録作品 (data_source='user', 負ID) を結果の先頭にマージ。
+        // TMDB に同じ作品が無いことが多いユーザー投稿なので、見つけてもらいやすいよう
+        // 検索結果の上に出す。
+        if (localData) {
+          const local = localData as {
+            results?: {
+              id: number; title: string; original_title?: string | null
+              media_type: string; release_date: string | null
+              poster_path: string | null; vote_average: number
+            }[]
+          }
+          const mapped: TMDBItem[] = (local.results || []).map(r => ({
+            id: r.id,
+            title: r.media_type === 'movie' ? r.title : undefined,
+            name: r.media_type !== 'movie' ? r.title : undefined,
+            poster_path: r.poster_path,
+            backdrop_path: null,
+            media_type: r.media_type,
+            release_date: r.media_type === 'movie' ? (r.release_date || undefined) : undefined,
+            first_air_date: r.media_type !== 'movie' ? (r.release_date || undefined) : undefined,
+            vote_average: r.vote_average || 0,
+            overview: '',
+            genre_ids: [],
+          }))
+          // 既に結果に同じ ID（負ID）があれば重複しないように
+          const existing = new Set(results.map(r => r.id))
+          const unique = mapped.filter(r => !existing.has(r.id))
+          results.unshift(...unique)
         }
 
         // Annict結果をマージ（TMDB IDと重複しないもののみ）
@@ -1536,10 +1568,11 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
   const renderSearchView = () => {
     const baseFiltered = searchResults.filter(r => {
       const isAnnict = !!(r as unknown as Record<string, unknown>)._annict
-      if (!r.poster_path && !isAnnict) return false
+      const isUserRegistered = r.id < 0      // 負ID = data_source='user'。ポスター無しでも表示する
+      if (!r.poster_path && !isAnnict && !isUserRegistered) return false
       if (activeTab === 'movie') return r.media_type === 'movie'
       if (activeTab === 'drama') return r.media_type === 'tv' && !isAnnict
-      if (activeTab === 'anime') return isAnnict || r.media_type === 'tv' || r.genre_ids?.includes(16)
+      if (activeTab === 'anime') return isAnnict || r.media_type === 'anime' || r.media_type === 'tv' || r.genre_ids?.includes(16)
       return true
     })
     const filtered = filterWatched(baseFiltered)

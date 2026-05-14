@@ -117,6 +117,8 @@ interface TMDBDetail {
   revenue?: number
   spoken_languages?: { english_name: string; name: string; iso_639_1: string }[]
   data_source?: string  // 'tmdb' | 'annict' | 'user'
+  release_year_only?: boolean  // 年のみ入力で登録された作品 (公開日は YYYY-01-01)
+  homepage?: string | null     // 公式サイト URL
 }
 
 type SortMode = 'newest' | 'likes' | 'score_high' | 'score_low'
@@ -288,6 +290,8 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           number_of_seasons: row.number_of_seasons || 0,
           number_of_episodes: row.number_of_episodes || 0,
           data_source: row.data_source || 'user',
+          release_year_only: !!row.release_year_only,
+          homepage: row.homepage || null,
         }
         setDetail(asDetail)
         setProviders(null)
@@ -1013,7 +1017,12 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const title = detail?.title || detail?.name || ''
   const originalTitle = detail?.original_title || detail?.original_name || ''
   const year = (detail?.release_date || detail?.first_air_date || '').slice(0, 4)
-  const releaseDate = detail?.release_date || detail?.first_air_date || ''
+  const rawReleaseDate = detail?.release_date || detail?.first_air_date || ''
+  // 年のみ入力で登録された作品は YYYY/01/01 を見せず年だけ表示する
+  const releaseDate = detail?.release_year_only && year
+    ? year
+    : rawReleaseDate
+  const homepage = detail?.homepage || null
   const runtime = detail?.runtime || (detail?.episode_run_time?.[0]) || null
   const director = detail?.credits?.crew?.find(c => c.job === 'Director') || null
   const directors = detail?.credits?.crew?.filter(c => c.job === 'Director') || []
@@ -2266,8 +2275,23 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           <div style={s.infoGrid}>
             {releaseDate && (
               <>
-                <span style={s.infoLabel}>公開日</span>
+                <span style={s.infoLabel}>{detail?.release_year_only ? '公開年' : '公開日'}</span>
                 <span style={s.infoValue}>{releaseDate.replace(/-/g, '/')}</span>
+              </>
+            )}
+            {homepage && (
+              <>
+                <span style={s.infoLabel}>公式サイト</span>
+                <span style={s.infoValue}>
+                  <a
+                    href={homepage}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'var(--fm-accent)', textDecoration: 'underline', wordBreak: 'break-all' }}
+                  >
+                    {homepage.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                  </a>
+                </span>
               </>
             )}
             {runtime && (
