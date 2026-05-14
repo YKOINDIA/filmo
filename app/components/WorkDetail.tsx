@@ -13,6 +13,7 @@ import ShareCard from './ShareCard'
 import EditProposalModal from './EditProposalModal'
 import ReportModal from './ReportModal'
 import TranslateButton from './TranslateButton'
+import StarRating from './StarRating'
 import { useLocale } from '../lib/i18n'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
@@ -138,66 +139,6 @@ const STREAMING_PLATFORMS = [
 ] as const
 
 // ── Helper Components ──────────────────────────────────────────────────────
-
-function StarRating({
-  value, onChange, size = 20, readonly = false,
-}: {
-  value: number; onChange?: (v: number) => void; size?: number; readonly?: boolean
-}) {
-  const [hover, setHover] = useState<number | null>(null)
-  const display = hover ?? value
-
-  return (
-    <span style={{ display: 'inline-flex', gap: 1, cursor: readonly ? 'default' : 'pointer' }}>
-      {[1, 2, 3, 4, 5].map(star => {
-        const full = display >= star
-        const half = !full && display >= star - 0.5
-        return (
-          <span
-            key={star}
-            style={{ position: 'relative', width: size, height: size, fontSize: size }}
-            onMouseLeave={() => !readonly && setHover(null)}
-          >
-            {/* left half */}
-            <span
-              style={{
-                position: 'absolute', left: 0, top: 0, width: '50%', height: '100%',
-                overflow: 'hidden', zIndex: 2,
-              }}
-              onMouseEnter={() => !readonly && setHover(star - 0.5)}
-              onClick={() => !readonly && onChange?.(star - 0.5)}
-            >
-              <span style={{ color: (full || half) ? 'var(--fm-star)' : 'var(--fm-text-muted)' }}>★</span>
-            </span>
-            {/* right half */}
-            <span
-              style={{
-                position: 'absolute', left: '50%', top: 0, width: '50%', height: '100%',
-                overflow: 'hidden', zIndex: 2,
-              }}
-              onMouseEnter={() => !readonly && setHover(star)}
-              onClick={() => !readonly && onChange?.(star)}
-            >
-              <span style={{ marginLeft: -(size / 2), color: full ? 'var(--fm-star)' : 'var(--fm-text-muted)' }}>★</span>
-            </span>
-            {/* background full star */}
-            <span style={{
-              position: 'absolute', left: 0, top: 0,
-              color: full ? 'var(--fm-star)' : half ? 'var(--fm-text-muted)' : 'var(--fm-text-muted)',
-            }}>★</span>
-            {/* half star overlay */}
-            {half && (
-              <span style={{
-                position: 'absolute', left: 0, top: 0, width: '50%', overflow: 'hidden',
-                color: 'var(--fm-star)',
-              }}>★</span>
-            )}
-          </span>
-        )
-      })}
-    </span>
-  )
-}
 
 function LoadingSpinner() {
   return (
