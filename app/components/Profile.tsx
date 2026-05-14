@@ -1034,7 +1034,7 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork, onOpenPe
                       width: '100%', height: '100%', display: 'flex', alignItems: 'center',
                       justifyContent: 'center', fontSize: 20, color: 'var(--fm-text-muted)',
                     }}>
-                      {fan.person_type === 'director' ? '\uD83C\uDFAC' : '\uD83C\uDFAD'}
+                      {fan.person_type === 'director' ? '\uD83C\uDFAC' : fan.person_type === 'writer' ? '\u270D\uFE0F' : '\uD83C\uDFAD'}
                     </div>
                   )}
                 </div>
