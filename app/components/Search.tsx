@@ -1141,6 +1141,11 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
   const renderPeopleLinks = () => (
     <div style={{ margin: '20px 16px 0', background: '#12132a', borderRadius: 12, border: '1px solid #1e1f36', overflow: 'hidden' }}>
       <div style={{ padding: '14px 16px', fontWeight: 700, fontSize: 15, color: '#e0e0f0', borderBottom: '1px solid #1e1f36' }}>人物で探す</div>
+      <Link href="/actors" style={{ ...linkItemStyle, textDecoration: 'none' }}>
+        <span>🎭</span>
+        <span>俳優一覧</span>
+        <span style={linkArrow}>›</span>
+      </Link>
       <Link href="/directors" style={{ ...linkItemStyle, textDecoration: 'none' }}>
         <span>🎬</span>
         <span>監督一覧</span>

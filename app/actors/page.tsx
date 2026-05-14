@@ -9,46 +9,46 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 export const metadata: Metadata = {
-  title: '監督一覧 — Filmo',
-  description: 'Filmoに登録された映画から、監督を作品数順に一覧表示。お気に入りの監督の作品をまとめて発見しよう。',
+  title: '俳優一覧 — Filmo',
+  description: 'Filmoに登録された映画から、俳優を出演本数順に一覧表示。お気に入りの俳優の作品をまとめて発見しよう。',
   openGraph: {
     type: 'website',
-    title: '監督一覧 — Filmo',
-    description: 'Filmoに登録された映画から、監督を作品数順に一覧表示',
-    url: `${APP_URL}/directors`,
+    title: '俳優一覧 — Filmo',
+    description: 'Filmoに登録された映画から、俳優を出演本数順に一覧表示',
+    url: `${APP_URL}/actors`,
     siteName: 'Filmo',
   },
 }
 
-interface DirectorRow {
+interface ActorRow {
   person_id: number
   name: string
   profile_path: string | null
   film_count: number
 }
 
-async function fetchDirectors(country: string | null, movieQuery: string | null): Promise<DirectorRow[]> {
+async function fetchActors(country: string | null, movieQuery: string | null): Promise<ActorRow[]> {
   try {
     const { createClient } = await import('@supabase/supabase-js')
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-    const { data, error } = await admin.rpc('get_filmo_directors', {
+    const { data, error } = await admin.rpc('get_filmo_actors', {
       p_limit: 200,
       p_offset: 0,
       p_country: country,
       p_movie_query: movieQuery,
     })
     if (error) {
-      console.error('get_filmo_directors RPC failed:', error)
+      console.error('get_filmo_actors RPC failed:', error)
       return []
     }
-    return (data || []) as DirectorRow[]
+    return (data || []) as ActorRow[]
   } catch (e) {
-    console.error('fetchDirectors failed:', e)
+    console.error('fetchActors failed:', e)
     return []
   }
 }
 
-export default async function DirectorsPage({
+export default async function ActorsPage({
   searchParams,
 }: {
   searchParams: Promise<{ country?: string; movie?: string }>
@@ -58,7 +58,7 @@ export default async function DirectorsPage({
   const movieQuery = sp.movie?.trim() || null
   const hasFilter = !!country || !!movieQuery
 
-  const directors = await fetchDirectors(country, movieQuery)
+  const actors = await fetchActors(country, movieQuery)
 
   return (
     <main style={{
@@ -73,32 +73,32 @@ export default async function DirectorsPage({
         ← Filmoに戻る
       </Link>
       <header style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 6px' }}>監督一覧</h1>
+        <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 6px' }}>俳優一覧</h1>
         <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', margin: 0, lineHeight: 1.6 }}>
-          Filmoに登録されている映画から監督を集計しています。<br />
-          一覧に名前がない場合は下の検索ボックスでTMDB全体から探せます（例: 泉原航一）。
+          Filmoに登録されている映画から俳優を集計しています。<br />
+          一覧に名前がない場合は下の検索ボックスでTMDB全体から探せます。
         </p>
       </header>
 
-      <PersonSearch placeholder="監督名で検索（TMDB全体から）" filterDepartment="Directing" />
+      <PersonSearch placeholder="俳優名で検索（TMDB全体から）" />
 
       <PersonListFilter
         initialCountry={country || ''}
         initialMovie={movieQuery || ''}
-        moviePlaceholder="🎬 監督作の映画タイトルで絞り込み"
+        moviePlaceholder="🎬 出演映画タイトルで絞り込み"
       />
 
       <section style={{ marginTop: 28 }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 12px' }}>
-          {hasFilter ? '絞り込み結果' : '作品数の多い監督'}{' '}
-          <span style={{ color: 'var(--fm-text-muted)', fontWeight: 500, fontSize: 13 }}>（{directors.length}名）</span>
+          {hasFilter ? '絞り込み結果' : '出演本数の多い俳優'}{' '}
+          <span style={{ color: 'var(--fm-text-muted)', fontWeight: 500, fontSize: 13 }}>（{actors.length}名）</span>
         </h2>
 
-        {directors.length === 0 ? (
+        {actors.length === 0 ? (
           <p style={{ color: 'var(--fm-text-muted)', fontSize: 14, padding: 24, textAlign: 'center' }}>
             {hasFilter
-              ? '条件に一致する監督が見つかりません。条件を変えて試してみてください。'
-              : 'まだ集計データがありません。映画を登録すると監督が反映されます。'}
+              ? '条件に一致する俳優が見つかりません。条件を変えて試してみてください。'
+              : 'まだ集計データがありません。映画を登録すると俳優が反映されます。'}
           </p>
         ) : (
           <div style={{
@@ -106,26 +106,26 @@ export default async function DirectorsPage({
             gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
             gap: 14,
           }}>
-            {directors.map(d => (
-              <Link key={d.person_id} href={`/people/${d.person_id}`} style={{
+            {actors.map(a => (
+              <Link key={a.person_id} href={`/people/${a.person_id}`} style={{
                 textDecoration: 'none', color: 'inherit',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
                 padding: 12, borderRadius: 10,
                 background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
                 transition: 'border-color 0.15s',
               }}>
-                {d.profile_path ? (
-                  <img src={`${TMDB_IMG}/w185${d.profile_path}`} alt={d.name}
+                {a.profile_path ? (
+                  <img src={`${TMDB_IMG}/w185${a.profile_path}`} alt={a.name}
                     loading="lazy"
                     style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover' }} />
                 ) : (
                   <div style={{
                     width: 96, height: 96, borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)',
+                    background: 'linear-gradient(135deg, #ff7675, #fd79a8)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     color: '#fff', fontSize: 32, fontWeight: 700,
                   }}>
-                    {d.name.charAt(0)}
+                    {a.name.charAt(0)}
                   </div>
                 )}
                 <div style={{
@@ -133,10 +133,10 @@ export default async function DirectorsPage({
                   overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',
                   WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                 }}>
-                  {d.name}
+                  {a.name}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
-                  {d.film_count}作品
+                  {a.film_count}作品
                 </div>
               </Link>
             ))}
