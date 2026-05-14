@@ -73,6 +73,9 @@ export const trackReviewPosted = (movieId: number, score?: number, isDraft?: boo
 export const trackPersonReviewPosted = (personId: number, score?: number, isDraft?: boolean) =>
   track('person_review_posted', { person_id: personId, score: score ?? 0, is_draft: isDraft ?? false })
 
+export const trackPersonRegistered = (personId: number, department?: string) =>
+  track('person_registered', { person_id: personId, department: department || 'unknown' })
+
 export const trackListCreated = (listId: string, isPublic: boolean, isCollaborative: boolean) =>
   track('list_created', { list_id: listId, is_public: isPublic, is_collaborative: isCollaborative })
 

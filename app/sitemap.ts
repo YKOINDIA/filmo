@@ -106,20 +106,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
 
     // 人物ページ (profile_path を持つ persons のみ、新しいものから)
+    // ユーザー登録 (tmdb_id IS NULL) も含めるため id を fallback として使用。
     const { data: persons } = await admin
       .from('persons')
-      .select('tmdb_id, profile_path, cached_at')
+      .select('id, tmdb_id, profile_path, cached_at')
       .not('profile_path', 'is', null)
       .order('cached_at', { ascending: false })
       .limit(PERSON_LIMIT)
-    const personRows = (persons || []) as { tmdb_id: number; profile_path: string; cached_at: string }[]
+    const personRows = (persons || []) as { id: number; tmdb_id: number | null; profile_path: string; cached_at: string }[]
     for (const p of personRows) {
+      const idForUrl = p.tmdb_id ?? p.id
+      const imageUrl = p.profile_path.startsWith('http')
+        ? p.profile_path
+        : `https://image.tmdb.org/t/p/w300${p.profile_path}`
       dynamicEntries.push({
-        url: `${APP_URL}/people/${p.tmdb_id}`,
+        url: `${APP_URL}/people/${idForUrl}`,
         lastModified: p.cached_at ? new Date(p.cached_at) : new Date(),
         changeFrequency: 'monthly',
         priority: 0.5,
-        images: [`https://image.tmdb.org/t/p/w300${p.profile_path}`],
+        images: [imageUrl],
       })
     }
   } catch (err) {
