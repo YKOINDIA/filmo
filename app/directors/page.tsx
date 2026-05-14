@@ -85,7 +85,7 @@ export default async function DirectorsPage() {
             gap: 14,
           }}>
             {directors.map(d => (
-              <Link key={d.person_id} href={`/?person=${d.person_id}`} style={{
+              <Link key={d.person_id} href={`/people/${d.person_id}`} style={{
                 textDecoration: 'none', color: 'inherit',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
                 padding: 12, borderRadius: 10,

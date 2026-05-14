@@ -13,10 +13,15 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
  * 動的ページ:
  *  - 公開リスト ( /lists/[slug] )
  *  - 公開プロフィール ( /u/[id] ※ is_profile_public=true のみ )
+ *  - 作品ページ ( /movies/[id], /tv/[id] ※ poster_path 持ちのみ)
+ *  - 人物ページ ( /people/[id] ※ profile_path 持ちのみ)
  *
- * 100万ユーザー想定でも sitemap は分割不要(最大 50,000件まで OK)。
- * その上限を超える場合は sitemapIndex に分割するが、現状では不要。
+ * Google の 1 sitemap あたり上限は 50,000 URL。
+ * (作品 × 2 type) + 人物 + 既存 lists/users で 60K を超えそうなら
+ * generateSitemaps による分割が必要。当面は各カテゴリでキャップする。
  */
+const WORK_LIMIT_PER_TYPE = 20000
+const PERSON_LIMIT = 15000
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticEntries: MetadataRoute.Sitemap = [
     { url: APP_URL, lastModified: new Date(), changeFrequency: 'daily', priority: 1.0 },
@@ -67,6 +72,54 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         lastModified: new Date(u.updated_at),
         changeFrequency: 'weekly',
         priority: 0.4,
+      })
+    }
+
+    // 作品ページ (poster を持つ verified 作品のみ、人気順)。
+    // TMDB 作品 + ユーザー登録作品(負ID)を同列に扱う。
+    // TODO: 30K 超になったら app/movies/sitemap.ts に切り出して generateSitemaps で分割。
+    for (const mediaType of ['movie', 'tv'] as const) {
+      const { data: works } = await admin
+        .from('movies')
+        .select('id, tmdb_id, cached_at, vote_count, poster_path')
+        .eq('media_type', mediaType)
+        .not('poster_path', 'is', null)
+        .order('vote_count', { ascending: false, nullsFirst: false })
+        .limit(WORK_LIMIT_PER_TYPE)
+      const path = mediaType === 'movie' ? 'movies' : 'tv'
+      const rows = (works || []) as { id: number; tmdb_id: number | null; cached_at: string; poster_path: string }[]
+      for (const w of rows) {
+        // tmdb_id が null = ユーザー登録作品。負の id をそのまま使う。
+        const idForUrl = w.tmdb_id ?? w.id
+        // ユーザー登録作品は完全 URL を保存しているケースがあるので両対応。
+        const imageUrl = w.poster_path.startsWith('http')
+          ? w.poster_path
+          : `https://image.tmdb.org/t/p/w500${w.poster_path}`
+        dynamicEntries.push({
+          url: `${APP_URL}/${path}/${idForUrl}`,
+          lastModified: w.cached_at ? new Date(w.cached_at) : new Date(),
+          changeFrequency: 'monthly',
+          priority: 0.6,
+          images: [imageUrl],
+        })
+      }
+    }
+
+    // 人物ページ (profile_path を持つ persons のみ、新しいものから)
+    const { data: persons } = await admin
+      .from('persons')
+      .select('tmdb_id, profile_path, cached_at')
+      .not('profile_path', 'is', null)
+      .order('cached_at', { ascending: false })
+      .limit(PERSON_LIMIT)
+    const personRows = (persons || []) as { tmdb_id: number; profile_path: string; cached_at: string }[]
+    for (const p of personRows) {
+      dynamicEntries.push({
+        url: `${APP_URL}/people/${p.tmdb_id}`,
+        lastModified: p.cached_at ? new Date(p.cached_at) : new Date(),
+        changeFrequency: 'monthly',
+        priority: 0.5,
+        images: [`https://image.tmdb.org/t/p/w300${p.profile_path}`],
       })
     }
   } catch (err) {

@@ -85,7 +85,7 @@ export default async function ScreenwritersPage() {
             gap: 14,
           }}>
             {writers.map(w => (
-              <Link key={w.person_id} href={`/?person=${w.person_id}`} style={{
+              <Link key={w.person_id} href={`/people/${w.person_id}`} style={{
                 textDecoration: 'none', color: 'inherit',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
                 padding: 12, borderRadius: 10,

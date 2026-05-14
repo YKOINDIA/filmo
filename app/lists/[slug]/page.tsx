@@ -11,6 +11,7 @@ interface ListMovie {
   poster_path: string | null
   release_date: string | null
   vote_average: number | null
+  media_type: string | null
 }
 
 interface ListItem {
@@ -68,7 +69,7 @@ async function fetchListData(rawSlug: string): Promise<{ list: ListData; items: 
       const movieIds = [...new Set(enrichedItems.map(i => i.movie_id))]
       const { data: movies } = await admin
         .from('movies')
-        .select('tmdb_id, title, poster_path, release_date, vote_average')
+        .select('tmdb_id, title, poster_path, release_date, vote_average, media_type')
         .in('tmdb_id', movieIds)
 
       const movieMap = new Map<number, ListMovie>()
@@ -214,9 +215,9 @@ export default async function PublicListPage({
         ) : list.is_ranked ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {items.map((item, idx) => (
-              <div key={item.id} style={{
+              <a key={item.id} href={`/${item.movie?.media_type === 'tv' ? 'tv' : 'movies'}/${item.movie_id}`} style={{
                 display: 'flex', alignItems: 'center', gap: 14, padding: '10px 4px',
-                borderBottom: '1px solid var(--fm-border)',
+                borderBottom: '1px solid var(--fm-border)', textDecoration: 'none', color: 'inherit',
               }}>
                 <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--fm-text-muted)', width: 32, textAlign: 'center', flexShrink: 0 }}>
                   {idx + 1}
@@ -247,7 +248,7 @@ export default async function PublicListPage({
                     </div>
                   )}
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         ) : (
@@ -257,7 +258,7 @@ export default async function PublicListPage({
             gap: 8,
           }}>
             {items.map(item => (
-              <div key={item.id} className="poster-item" style={{ cursor: 'default' }}>
+              <a key={item.id} href={`/${item.movie?.media_type === 'tv' ? 'tv' : 'movies'}/${item.movie_id}`} className="poster-item" style={{ display: 'block' }}>
                 {item.movie?.poster_path ? (
                   <img
                     src={`${TMDB_IMG}/w300${item.movie.poster_path}`}
@@ -273,7 +274,7 @@ export default async function PublicListPage({
                     {item.movie?.title || 'No Image'}
                   </div>
                 )}
-              </div>
+              </a>
             ))}
           </div>
         )}
