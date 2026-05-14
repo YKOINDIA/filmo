@@ -1,17 +1,85 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/app/lib/supabase-admin'
-import { createClient } from '@supabase/supabase-js'
 
-// ユーザー認証を取得
-async function getAuthUser(request: NextRequest) {
-  const authHeader = request.headers.get('authorization')
-  if (!authHeader) return null
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
-  const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
-  return user
+function sanitizeHomepage(input: unknown): string | null {
+  if (typeof input !== 'string') return null
+  const trimmed = input.trim()
+  if (!trimmed) return null
+  try {
+    const u = new URL(trimmed)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
+    return u.toString()
+  } catch {
+    return null
+  }
+}
+
+// YYYY-MM-DD 形式の日付を検証して返す。範囲外の月日や不正な日付は null。
+function sanitizeReleaseDate(input: unknown): string | null {
+  if (typeof input !== 'string') return null
+  const v = input.trim()
+  if (!v) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null
+  const d = new Date(`${v}T00:00:00Z`)
+  if (Number.isNaN(d.getTime())) return null
+  // 入力と再フォーマット結果が一致しない（例: 2024-02-30）場合は弾く
+  if (d.toISOString().slice(0, 10) !== v) return null
+  return v
+}
+
+interface CreditInput {
+  personId?: number          // 既存 persons（TMDB or ユーザー登録）のID
+  name: string
+  profilePath?: string | null
+  role: 'director' | 'writer' | 'cast'
+  character?: string         // role='cast' のとき
+}
+
+interface CreditsBlob {
+  cast: Array<{
+    id: number | null
+    name: string
+    profile_path: string | null
+    character?: string
+    order?: number
+  }>
+  crew: Array<{
+    id: number | null
+    name: string
+    profile_path: string | null
+    job: string
+    department: string
+  }>
+}
+
+// クライアントから受け取った credits 配列を movies.credits の JSONB 形式に整形する
+function buildCreditsBlob(raw: unknown): CreditsBlob {
+  const out: CreditsBlob = { cast: [], crew: [] }
+  if (!Array.isArray(raw)) return out
+  let castOrder = 0
+  for (const r of raw) {
+    if (!r || typeof r !== 'object') continue
+    const c = r as Partial<CreditInput>
+    const name = typeof c.name === 'string' ? c.name.trim().slice(0, 100) : ''
+    if (!name) continue
+    const id = typeof c.personId === 'number' && Number.isFinite(c.personId) ? c.personId : null
+    const profile_path = typeof c.profilePath === 'string' && c.profilePath ? c.profilePath : null
+    if (c.role === 'cast') {
+      out.cast.push({
+        id,
+        name,
+        profile_path,
+        character: typeof c.character === 'string' ? c.character.trim().slice(0, 200) : undefined,
+        order: castOrder++,
+      })
+    } else if (c.role === 'writer') {
+      out.crew.push({ id, name, profile_path, job: 'Screenplay', department: 'Writing' })
+    } else {
+      // default: director
+      out.crew.push({ id, name, profile_path, job: 'Director', department: 'Directing' })
+    }
+  }
+  return out
 }
 
 export async function GET(request: NextRequest) {
@@ -85,7 +153,7 @@ export async function POST(request: NextRequest) {
     switch (action) {
       // 簡易登録: ユーザーが作品をタイトルだけで登録
       case 'register': {
-        const { userId, title, originalTitle, mediaType, year, description } = body
+        const { userId, title, originalTitle, mediaType, year, releaseDate: releaseDateInput, description, homepage, credits } = body
         if (!userId || !title) {
           return NextResponse.json({ error: 'userId and title required' }, { status: 400 })
         }
@@ -115,8 +183,14 @@ export async function POST(request: NextRequest) {
           .single()
         const newId = Math.min((minRow?.id || 0) - 1, -1)
 
-        // release_date を年から組み立て
-        const releaseDate = year ? `${year}-01-01` : null
+        // release_date は「年月日」優先、無ければ「年」から YYYY-01-01 を組み立て、
+        // 後者の場合は year_only フラグを立てて表示時に年だけ見せる。
+        const sanitizedDate = sanitizeReleaseDate(releaseDateInput)
+        const releaseDate = sanitizedDate ?? (year ? `${year}-01-01` : null)
+        const releaseYearOnly = !sanitizedDate && !!year && releaseDate !== null
+
+        const homepageClean = sanitizeHomepage(homepage)
+        const creditsBlob = buildCreditsBlob(credits)
 
         const { data: inserted, error } = await supabase.from('movies').insert({
           id: newId,
@@ -126,6 +200,8 @@ export async function POST(request: NextRequest) {
           overview: description?.trim() || null,
           media_type: mediaType || 'tv',
           release_date: releaseDate,
+          release_year_only: releaseYearOnly,
+          homepage: homepageClean,
           data_source: 'user',
           created_by: userId,
           is_verified: false,
@@ -135,7 +211,7 @@ export async function POST(request: NextRequest) {
           vote_count: 0,
           genres: [],
           production_countries: [],
-          credits: { cast: [], crew: [] },
+          credits: creditsBlob,
           cached_at: new Date().toISOString(),
         }).select().single()
 
@@ -143,15 +219,39 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: error.message }, { status: 500 })
         }
 
+        // 管理画面で検証できるよう、work_requests に auto_approved として記録する。
+        // 失敗しても作品登録自体は成功扱いとする（管理側の可視化は best-effort）。
+        try {
+          await supabase.from('work_requests').insert({
+            user_id: userId,
+            title: title.trim(),
+            original_title: originalTitle?.trim() || null,
+            media_type: mediaType || 'tv',
+            year: year || null,
+            release_date: sanitizedDate,
+            description: description?.trim() || null,
+            homepage: homepageClean,
+            credits: creditsBlob,
+            status: 'auto_approved',
+            movie_id: inserted.id,
+          })
+        } catch (e) {
+          console.error('work_requests mirror insert failed (non-fatal):', e)
+        }
+
         return NextResponse.json({ work: inserted })
       }
 
       // リクエスト: 管理者に追加を依頼
       case 'request': {
-        const { userId, title, originalTitle, mediaType, year, description } = body
+        const { userId, title, originalTitle, mediaType, year, releaseDate: releaseDateInput, description, homepage, credits } = body
         if (!userId || !title) {
           return NextResponse.json({ error: 'userId and title required' }, { status: 400 })
         }
+
+        const homepageClean = sanitizeHomepage(homepage)
+        const creditsBlob = buildCreditsBlob(credits)
+        const sanitizedDate = sanitizeReleaseDate(releaseDateInput)
 
         const { data: req, error } = await supabase.from('work_requests').insert({
           user_id: userId,
@@ -159,7 +259,10 @@ export async function POST(request: NextRequest) {
           original_title: originalTitle?.trim() || null,
           media_type: mediaType || 'tv',
           year: year || null,
+          release_date: sanitizedDate,
           description: description?.trim() || null,
+          homepage: homepageClean,
+          credits: creditsBlob,
           status: 'pending',
         }).select().single()
 

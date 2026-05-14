@@ -193,7 +193,11 @@ export async function POST(request: NextRequest) {
           .single()
         const newId = Math.min((minRow?.id || 0) - 1, -1)
 
-        const releaseDate = req.year ? `${req.year}-01-01` : null
+        // 正確な日付があればそれを優先、無ければ年から組み立てて year_only フラグを立てる
+        const releaseDate = req.release_date
+          ? req.release_date
+          : req.year ? `${req.year}-01-01` : null
+        const releaseYearOnly = !req.release_date && !!req.year && releaseDate !== null
 
         const { data: movie, error } = await supabase.from('movies').insert({
           id: newId,
@@ -203,6 +207,8 @@ export async function POST(request: NextRequest) {
           overview: req.description || null,
           media_type: req.media_type || 'tv',
           release_date: releaseDate,
+          release_year_only: releaseYearOnly,
+          homepage: req.homepage || null,
           data_source: 'user',
           created_by: req.user_id,
           is_verified: true,
@@ -212,7 +218,7 @@ export async function POST(request: NextRequest) {
           vote_count: 0,
           genres: [],
           production_countries: [],
-          credits: { cast: [], crew: [] },
+          credits: req.credits || { cast: [], crew: [] },
           cached_at: new Date().toISOString(),
         }).select().single()
 
