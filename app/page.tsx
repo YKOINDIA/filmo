@@ -12,6 +12,7 @@ import Feed from './components/Feed'
 import Statistics from './components/Statistics'
 import Settings from './components/Settings'
 import Gamification from './components/Gamification'
+import Link from 'next/link'
 import UserLists from './components/UserLists'
 import NotificationBell from './components/NotificationBell'
 import Toast from './components/Toast'
@@ -416,6 +417,25 @@ export default function Page() {
             />
             <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px' }}>
               <Statistics userId={user.id} onOpenWork={openWork} />
+              <Link
+                href="/games/emoji"
+                style={{
+                  display: 'block', marginTop: 16, padding: 16, borderRadius: 14,
+                  background: 'linear-gradient(135deg, rgba(108,92,231,0.18), rgba(0,192,48,0.10))',
+                  border: '1px solid var(--fm-border)',
+                  textDecoration: 'none', color: 'inherit',
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ fontSize: 28 }}>🎮</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700 }}>絵文字タイトル当て</div>
+                    <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginTop: 2 }}>
+                      🚢💎🥶 → ？　全10問でスコアを競おう
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
+                </div>
+              </Link>
               <Gamification userId={user.id} />
             </div>
           </div>

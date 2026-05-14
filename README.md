@@ -29,6 +29,26 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## ミニゲーム (絵文字タイトル当て) のセットアップ
+
+1. Supabase でマイグレーション `supabase/migrations/00015_emoji_quiz.sql` を適用
+2. https://aistudio.google.com/apikey で API キーを発行（無料、クレカ不要）
+3. `.env.local` に追加:
+   ```
+   GEMINI_API_KEY=AIza...
+   ```
+4. 出題プールをシード（無料枠内、500件で約8分）:
+   ```bash
+   npm install
+   npm run seed:emoji-quizzes
+   ```
+5. `npm run dev` を起動して Profile タブ →「🎮 絵文字タイトル当て」から動作確認
+
+オプション:
+- `npm run seed:emoji-quizzes -- --limit=100` で件数を絞る
+- `npm run seed:emoji-quizzes -- --type=tv` でドラマのみ
+- `npm run seed:emoji-quizzes -- --dry-run` で生成せず TMDB 取得だけ確認
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.

@@ -38,6 +38,10 @@ export const POINT_CONFIG = {
   PERSON_PROPOSAL_APPROVED: 10, // キャスト提案が承認
   ADD_CAST_INFO: 5,             // ユーザー作品にキャスト追加
   FIRST_DATA_CONTRIBUTION: 30,  // 初めてのデータ貢献ボーナス
+  // ミニゲーム (絵文字クイズ)
+  MINIGAME_CORRECT: 3,          // 1問正解
+  MINIGAME_PERFECT: 30,         // 10/10 ボーナス
+  MINIGAME_DAILY_CAP: 100,      // 1日のミニゲーム獲得上限
 }
 
 export const addPoints = async (userId: string, pts: number, reason: string): Promise<void> => {
