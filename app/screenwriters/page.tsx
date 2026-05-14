@@ -1,13 +1,12 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import PersonSearch from '../components/PersonSearch'
+import PersonListFilter from '../components/PersonListFilter'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://filmo.me'
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
-
-export const revalidate = 600
 
 export const metadata: Metadata = {
   title: '脚本家一覧 — Filmo',
@@ -28,11 +27,16 @@ interface WriterRow {
   film_count: number
 }
 
-async function fetchWriters(): Promise<WriterRow[]> {
+async function fetchWriters(country: string | null, movieQuery: string | null): Promise<WriterRow[]> {
   try {
     const { createClient } = await import('@supabase/supabase-js')
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-    const { data, error } = await admin.rpc('get_filmo_screenwriters', { p_limit: 200, p_offset: 0 })
+    const { data, error } = await admin.rpc('get_filmo_screenwriters', {
+      p_limit: 200,
+      p_offset: 0,
+      p_country: country,
+      p_movie_query: movieQuery,
+    })
     if (error) {
       console.error('get_filmo_screenwriters RPC failed:', error)
       return []
@@ -44,8 +48,17 @@ async function fetchWriters(): Promise<WriterRow[]> {
   }
 }
 
-export default async function ScreenwritersPage() {
-  const writers = await fetchWriters()
+export default async function ScreenwritersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ country?: string; movie?: string }>
+}) {
+  const sp = await searchParams
+  const country = sp.country?.trim() || null
+  const movieQuery = sp.movie?.trim() || null
+  const hasFilter = !!country || !!movieQuery
+
+  const writers = await fetchWriters(country, movieQuery)
 
   return (
     <main style={{
@@ -69,14 +82,23 @@ export default async function ScreenwritersPage() {
 
       <PersonSearch placeholder="脚本家名で検索（TMDB全体から）" filterDepartment="Writing" />
 
+      <PersonListFilter
+        initialCountry={country || ''}
+        initialMovie={movieQuery || ''}
+        moviePlaceholder="🎬 脚本作の映画タイトルで絞り込み"
+      />
+
       <section style={{ marginTop: 28 }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 12px' }}>
-          作品数の多い脚本家 <span style={{ color: 'var(--fm-text-muted)', fontWeight: 500, fontSize: 13 }}>（{writers.length}名）</span>
+          {hasFilter ? '絞り込み結果' : '作品数の多い脚本家'}{' '}
+          <span style={{ color: 'var(--fm-text-muted)', fontWeight: 500, fontSize: 13 }}>（{writers.length}名）</span>
         </h2>
 
         {writers.length === 0 ? (
           <p style={{ color: 'var(--fm-text-muted)', fontSize: 14, padding: 24, textAlign: 'center' }}>
-            まだ集計データがありません。映画を登録すると脚本家が反映されます。
+            {hasFilter
+              ? '条件に一致する脚本家が見つかりません。条件を変えて試してみてください。'
+              : 'まだ集計データがありません。映画を登録すると脚本家が反映されます。'}
           </p>
         ) : (
           <div style={{
