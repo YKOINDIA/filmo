@@ -25,6 +25,15 @@ interface CombinedCredit {
   department?: string
 }
 
+export interface ExternalLink {
+  /** UI 表示名 (X, Instagram, IMDb, ...) */
+  label: string
+  /** 完成形 URL */
+  url: string
+  /** 識別キー (sameAs JSON-LD と key prop に使用) */
+  key: string
+}
+
 export interface PublicPersonData {
   id: number
   name: string
@@ -35,10 +44,22 @@ export interface PublicPersonData {
   place_of_birth: string | null
   profile_path: string | null
   known_for_department: string | null
+  homepage: string | null
+  external_links: ExternalLink[]
   cast: CombinedCredit[]
   crew: CombinedCredit[]
   director_works: CombinedCredit[]
   writer_works: CombinedCredit[]
+}
+
+interface TmdbExternalIds {
+  imdb_id?: string | null
+  twitter_id?: string | null
+  instagram_id?: string | null
+  facebook_id?: string | null
+  youtube_id?: string | null
+  tiktok_id?: string | null
+  wikidata_id?: string | null
 }
 
 interface TmdbPerson {
@@ -51,10 +72,45 @@ interface TmdbPerson {
   place_of_birth?: string | null
   profile_path?: string | null
   known_for_department?: string | null
+  homepage?: string | null
+  external_ids?: TmdbExternalIds
   combined_credits?: {
     cast?: CombinedCredit[]
     crew?: CombinedCredit[]
   }
+}
+
+/** TMDB の external_ids から表示・JSON-LD 用のリンクリストに整形 */
+function buildExternalLinks(ext: TmdbExternalIds | undefined, homepage: string | null): ExternalLink[] {
+  const links: ExternalLink[] = []
+  // TikTok などはハンドルに @ が含まれる場合があるので除去。
+  const clean = (s: string) => s.replace(/^@/, '').trim()
+  if (ext?.twitter_id) {
+    links.push({ key: 'x', label: 'X (Twitter)', url: `https://x.com/${clean(ext.twitter_id)}` })
+  }
+  if (ext?.instagram_id) {
+    links.push({ key: 'instagram', label: 'Instagram', url: `https://www.instagram.com/${clean(ext.instagram_id)}/` })
+  }
+  if (ext?.tiktok_id) {
+    links.push({ key: 'tiktok', label: 'TikTok', url: `https://www.tiktok.com/@${clean(ext.tiktok_id)}` })
+  }
+  if (ext?.youtube_id) {
+    links.push({ key: 'youtube', label: 'YouTube', url: `https://www.youtube.com/${clean(ext.youtube_id)}` })
+  }
+  if (ext?.facebook_id) {
+    links.push({ key: 'facebook', label: 'Facebook', url: `https://www.facebook.com/${clean(ext.facebook_id)}` })
+  }
+  if (ext?.imdb_id) {
+    links.push({ key: 'imdb', label: 'IMDb', url: `https://www.imdb.com/name/${ext.imdb_id}/` })
+  }
+  if (ext?.wikidata_id) {
+    links.push({ key: 'wikidata', label: 'Wikidata', url: `https://www.wikidata.org/wiki/${ext.wikidata_id}` })
+  }
+  if (homepage) {
+    // 公式サイトは TMDB の person.homepage に入っているケースがある (映画と同じスキーマ風)。
+    links.push({ key: 'homepage', label: '公式サイト', url: homepage })
+  }
+  return links
 }
 
 export async function fetchPublicPerson(rawId: string): Promise<PublicPersonData | null> {
@@ -84,6 +140,8 @@ export async function fetchPublicPerson(rawId: string): Promise<PublicPersonData
       place_of_birth: data.place_of_birth || null,
       profile_path: data.profile_path || null,
       known_for_department: data.known_for_department || null,
+      homepage: data.homepage || null,
+      external_links: buildExternalLinks(data.external_ids, data.homepage || null),
       cast,
       crew,
       director_works,
@@ -173,6 +231,11 @@ export function buildPersonJsonLd(p: PublicPersonData): Record<string, unknown> 
   }
   if (p.known_for_department) {
     jsonLd.jobTitle = DEPARTMENT_JA[p.known_for_department] || p.known_for_department
+  }
+  // sameAs はエンティティ統合の手掛かりとして Google が重視する。
+  // X / Instagram / IMDb / Wikidata / 公式サイトを並べる。
+  if (p.external_links.length > 0) {
+    jsonLd.sameAs = p.external_links.map(l => l.url)
   }
   // 監督作品を knowsAbout/worksFor 風に並べると過剰なので、知名度の高い作品だけ alumniOf 替わりに付ける
   const topWorks = [...p.director_works.slice(0, 5), ...p.cast.slice(0, 5)]
@@ -266,6 +329,32 @@ export function PublicPersonView({ person }: { person: PublicPersonData }) {
           </section>
         )}
 
+        {person.external_links.length > 0 && (
+          <section style={{ marginBottom: 28 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px' }}>リンク</h2>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {person.external_links.map(l => (
+                <a
+                  key={l.key}
+                  href={l.url}
+                  target="_blank"
+                  rel="noopener noreferrer me"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '7px 12px', borderRadius: 999,
+                    background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
+                    color: 'var(--fm-text)', fontSize: 13, fontWeight: 600,
+                    textDecoration: 'none',
+                  }}
+                >
+                  <ExternalIcon type={l.key} />
+                  {l.label}
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
+
         {person.director_works.length > 0 && (
           <CreditSection title="監督作品" works={person.director_works} />
         )}
@@ -297,6 +386,32 @@ export function PublicPersonView({ person }: { person: PublicPersonData }) {
         </section>
       </div>
     </div>
+  )
+}
+
+/** SNS / 外部リンク用のシンプルな emoji 風アイコン。
+ *  React Native との依存ライブラリを増やしたくないので絵文字で代用。 */
+function ExternalIcon({ type }: { type: string }) {
+  const map: Record<string, string> = {
+    x: '𝕏',
+    instagram: '📸',
+    tiktok: '🎵',
+    youtube: '▶︎',
+    facebook: 'f',
+    imdb: '🎬',
+    wikidata: '📖',
+    homepage: '🌐',
+  }
+  const ch = map[type] || '🔗'
+  return (
+    <span aria-hidden="true" style={{
+      width: 16, height: 16, display: 'inline-flex',
+      alignItems: 'center', justifyContent: 'center',
+      fontSize: type === 'x' ? 14 : 13,
+      lineHeight: 1,
+    }}>
+      {ch}
+    </span>
   )
 }
 

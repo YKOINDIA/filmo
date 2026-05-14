@@ -119,7 +119,7 @@ export async function getPersonDetailCached(id: number, language?: string) {
   if (language && language !== 'ja-JP') {
     return tmdbFetchRaw(`/person/${id}`, {
       language,
-      append_to_response: 'combined_credits',
+      append_to_response: 'combined_credits,external_ids',
     })
   }
 
@@ -132,13 +132,16 @@ export async function getPersonDetailCached(id: number, language?: string) {
     .eq('tmdb_id', id)
     .single()
 
-  if (cachedActor?.cached_at && isWithinHours(cachedActor.cached_at, CACHE_TTL.person) && cachedActor.full_response) {
-    return cachedActor.full_response
+  // external_ids が無い古いキャッシュは強制リフレッシュ (SNS リンク表示のため)。
+  const cachedFull = cachedActor?.full_response as Record<string, unknown> | undefined
+  const hasExternalIds = cachedFull && 'external_ids' in cachedFull
+  if (cachedActor?.cached_at && isWithinHours(cachedActor.cached_at, CACHE_TTL.person) && cachedFull && hasExternalIds) {
+    return cachedFull
   }
 
   // 2. TMDBから取得
   const fresh = await tmdbFetchRaw(`/person/${id}`, {
-    append_to_response: 'combined_credits',
+    append_to_response: 'combined_credits,external_ids',
   })
 
   // 3. personsテーブルにupsert
