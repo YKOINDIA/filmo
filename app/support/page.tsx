@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import AuthGate from '../components/AuthGate'
 
 const CATEGORIES = [
   { value: 'question', label: '❓ 質問' },
@@ -52,11 +53,13 @@ export default function SupportPage() {
             color: 'var(--fm-text)', textTransform: 'uppercase' as const,
           }}>Filmo</span>
         </Link>
-        <Link href="/" style={{
-          padding: '6px 16px', borderRadius: 6,
-          background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
-          textDecoration: 'none',
-        }}>無料で始める</Link>
+        <AuthGate hideWhenAuthed>
+          <Link href="/" style={{
+            padding: '6px 16px', borderRadius: 6,
+            background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
+            textDecoration: 'none',
+          }}>無料で始める</Link>
+        </AuthGate>
       </header>
 
       <main style={{ maxWidth: 640, margin: '0 auto', padding: '32px 20px 60px' }}>

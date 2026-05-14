@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import AuthGate from '../components/AuthGate'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://filmo.me'
@@ -200,13 +201,15 @@ export default async function ListsIndexPage() {
             Filmo
           </span>
         </Link>
-        <Link href="/" style={{
-          padding: '6px 16px', borderRadius: 6, border: 'none',
-          background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
-          textDecoration: 'none',
-        }}>
-          無料で始める
-        </Link>
+        <AuthGate hideWhenAuthed>
+          <Link href="/" style={{
+            padding: '6px 16px', borderRadius: 6, border: 'none',
+            background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
+            textDecoration: 'none',
+          }}>
+            無料で始める
+          </Link>
+        </AuthGate>
       </header>
 
       <main style={{ maxWidth: 980, margin: '0 auto', padding: '24px 16px 60px' }}>
@@ -277,25 +280,27 @@ export default async function ListsIndexPage() {
           </>
         )}
 
-        <div style={{
-          marginTop: 60, padding: 24, borderRadius: 10,
-          background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
-          textAlign: 'center',
-        }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--fm-text)', margin: '0 0 8px' }}>
-            自分のリストを公開しよう
-          </h3>
-          <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', margin: '0 0 16px' }}>
-            あなたの好きな映画をテーマ別にまとめて、みんなとシェア。
-          </p>
-          <Link href="/" style={{
-            display: 'inline-block', padding: '10px 28px', borderRadius: 8,
-            background: 'var(--fm-accent)', color: '#fff', fontSize: 14, fontWeight: 600,
-            textDecoration: 'none',
+        <AuthGate hideWhenAuthed>
+          <div style={{
+            marginTop: 60, padding: 24, borderRadius: 10,
+            background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
+            textAlign: 'center',
           }}>
-            無料で始める
-          </Link>
-        </div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--fm-text)', margin: '0 0 8px' }}>
+              自分のリストを公開しよう
+            </h3>
+            <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', margin: '0 0 16px' }}>
+              あなたの好きな映画をテーマ別にまとめて、みんなとシェア。
+            </p>
+            <Link href="/" style={{
+              display: 'inline-block', padding: '10px 28px', borderRadius: 8,
+              background: 'var(--fm-accent)', color: '#fff', fontSize: 14, fontWeight: 600,
+              textDecoration: 'none',
+            }}>
+              無料で始める
+            </Link>
+          </div>
+        </AuthGate>
       </main>
     </div>
   )
