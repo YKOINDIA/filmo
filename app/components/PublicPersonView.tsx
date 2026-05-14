@@ -8,6 +8,7 @@
 import Link from 'next/link'
 import { getPersonDetailCached } from '@/app/lib/tmdb-cache'
 import { getSupabaseAdmin } from '@/app/lib/supabase-admin'
+import PersonEditProposalTrigger from './PersonEditProposalTrigger'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://filmo.me'
@@ -440,6 +441,18 @@ export function PublicPersonView({
                   </span>
                 </div>
               )}
+              <div style={{ marginTop: 10 }}>
+                <PersonEditProposalTrigger
+                  personId={person.id}
+                  current={{
+                    name: person.name,
+                    biography: person.biography,
+                    birthday: person.birthday,
+                    place_of_birth: person.place_of_birth,
+                    homepage: person.homepage,
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>

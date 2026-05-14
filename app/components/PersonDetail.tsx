@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useTmdbFetch } from '../lib/i18n'
 import PersonReviewSection from './PersonReviewSection'
+import PersonEditProposalModal from './PersonEditProposalModal'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -56,6 +57,7 @@ export default function PersonDetail({ personId, userId, onClose, onOpenWork }: 
   const [roleTab, setRoleTab] = useState<RoleTab>('cast')
   const [isFan, setIsFan] = useState(false)
   const [showFullBio, setShowFullBio] = useState(false)
+  const [showEditProposal, setShowEditProposal] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -226,9 +228,23 @@ export default function PersonDetail({ personId, userId, onClose, onOpenWork }: 
                 </span>
               )}
             </div>
-            <button onClick={handleToggleFan} style={s.fanBtn(isFan)}>
-              {isFan ? 'Fan! ✓' : 'Fan!'}
-            </button>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+              <button onClick={handleToggleFan} style={s.fanBtn(isFan)}>
+                {isFan ? 'Fan! ✓' : 'Fan!'}
+              </button>
+              {userId && (
+                <button
+                  onClick={() => setShowEditProposal(true)}
+                  style={{
+                    padding: '6px 14px', borderRadius: 999, border: '1px solid var(--fm-border)',
+                    background: 'transparent', color: 'var(--fm-text-sub)',
+                    fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  ✎ 編集を提案
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -347,6 +363,19 @@ export default function PersonDetail({ personId, userId, onClose, onOpenWork }: 
         personName={person.name}
         userId={userId}
       />
+
+      {showEditProposal && (
+        <PersonEditProposalModal
+          personId={personId}
+          current={{
+            name: person.name,
+            biography: person.biography,
+            birthday: person.birthday,
+            place_of_birth: person.place_of_birth,
+          }}
+          onClose={() => setShowEditProposal(false)}
+        />
+      )}
     </div>
   )
 }
