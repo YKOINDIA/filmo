@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { showToast } from '../lib/toast'
 
-export type ReportTargetType = 'review' | 'list' | 'user'
+export type ReportTargetType = 'review' | 'list' | 'user' | 'person_review'
 
 interface ReportModalProps {
   targetType: ReportTargetType
@@ -26,6 +26,7 @@ const TARGET_LABEL: Record<ReportTargetType, string> = {
   review: 'このレビュー',
   list: 'このリスト',
   user: 'このユーザー',
+  person_review: 'このレビュー',
 }
 
 export default function ReportModal({ targetType, targetId, targetLabel, onClose }: ReportModalProps) {

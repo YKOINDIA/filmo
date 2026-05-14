@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useTmdbFetch } from '../lib/i18n'
+import PersonReviewSection from './PersonReviewSection'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -340,6 +341,12 @@ export default function PersonDetail({ personId, userId, onClose, onOpenWork }: 
           </div>
         )}
       </div>
+
+      <PersonReviewSection
+        personId={personId}
+        personName={person.name}
+        userId={userId}
+      />
     </div>
   )
 }

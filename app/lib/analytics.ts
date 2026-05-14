@@ -70,6 +70,9 @@ export function track(eventName: string, params: Record<string, unknown> = {}): 
 export const trackReviewPosted = (movieId: number, score?: number, isDraft?: boolean) =>
   track('review_posted', { movie_id: movieId, score: score ?? 0, is_draft: isDraft ?? false })
 
+export const trackPersonReviewPosted = (personId: number, score?: number, isDraft?: boolean) =>
+  track('person_review_posted', { person_id: personId, score: score ?? 0, is_draft: isDraft ?? false })
+
 export const trackListCreated = (listId: string, isPublic: boolean, isCollaborative: boolean) =>
   track('list_created', { list_id: listId, is_public: isPublic, is_collaborative: isCollaborative })
 
