@@ -391,6 +391,7 @@ export default function Page() {
           <Search
             userId={userId}
             onOpenWork={openWork}
+            onOpenPerson={openPerson}
             initialGenreBrowse={pendingBrowseGenre}
             onGenreBrowseConsumed={() => setPendingBrowseGenre(null)}
           />
