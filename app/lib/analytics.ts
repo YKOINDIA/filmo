@@ -76,6 +76,9 @@ export const trackPersonReviewPosted = (personId: number, score?: number, isDraf
 export const trackPersonRegistered = (personId: number, department?: string) =>
   track('person_registered', { person_id: personId, department: department || 'unknown' })
 
+export const trackPersonEditProposed = (personId: number, changedFields: number) =>
+  track('person_edit_proposed', { person_id: personId, changed_fields: changedFields })
+
 export const trackListCreated = (listId: string, isPublic: boolean, isCollaborative: boolean) =>
   track('list_created', { list_id: listId, is_public: isPublic, is_collaborative: isCollaborative })
 

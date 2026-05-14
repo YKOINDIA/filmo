@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 
 import { isAdminEmail } from '../lib/adminAuth'
 
-type Tab = 'kpi' | 'users' | 'reviews' | 'segments' | 'fraud' | 'community' | 'security' | 'xpost' | 'coupons' | 'announce' | 'cron' | 'feedback' | 'work_requests' | 'edit_proposals'
+type Tab = 'kpi' | 'users' | 'reviews' | 'segments' | 'fraud' | 'community' | 'security' | 'xpost' | 'coupons' | 'announce' | 'cron' | 'feedback' | 'work_requests' | 'edit_proposals' | 'person_proposals'
 
 interface KpiData {
   totals: { users: number; reviews: number; watches: number; lists: number; comments: number }
@@ -98,6 +98,10 @@ export default function AdminPage() {
   const [editProposals, setEditProposals] = useState<Record<string, unknown>[]>([])
   const [editPropFilter, setEditPropFilter] = useState<'pending' | 'approved' | 'rejected'>('pending')
 
+  // Person edit proposals state
+  const [personProposals, setPersonProposals] = useState<Record<string, unknown>[]>([])
+  const [personPropFilter, setPersonPropFilter] = useState<'pending' | 'approved' | 'rejected'>('pending')
+
   useEffect(() => {
     checkAdmin()
   }, [])
@@ -136,6 +140,7 @@ export default function AdminPage() {
       case 'feedback': await loadFeedback(); break
       case 'work_requests': await loadWorkRequests(); break
       case 'edit_proposals': await loadEditProposals(); break
+      case 'person_proposals': await loadPersonProposals(); break
     }
   }
 
@@ -285,6 +290,32 @@ export default function AdminPage() {
     loadEditProposals()
   }
 
+  const loadPersonProposals = async () => {
+    try {
+      const res = await fetch(`/api/edit-proposals?action=person_proposals&status=${personPropFilter}`)
+      const data = await res.json()
+      setPersonProposals(data.proposals || [])
+    } catch { /* ignore */ }
+  }
+
+  const handlePersonProposal = async (proposalId: string, approve: boolean) => {
+    const { data: session } = await supabase.auth.getSession()
+    const token = session.session?.access_token
+    if (!token) return
+    await fetch('/api/edit-proposals', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        action: approve ? 'person_approve' : 'person_reject',
+        proposalId,
+      }),
+    })
+    loadPersonProposals()
+  }
+
   const toggleBan = async (userId: string, isBanned: boolean) => {
     await supabase.from('users').update({ is_banned: !isBanned }).eq('id', userId)
     loadUsers()
@@ -393,6 +424,7 @@ export default function AdminPage() {
     { key: 'feedback', label: '📝 フィードバック', group: '運用' },
     { key: 'work_requests', label: '🎬 作品リクエスト', group: '運用' },
     { key: 'edit_proposals', label: '🛠 修正提案', group: '運用' },
+    { key: 'person_proposals', label: '👤 人物提案', group: '運用' },
   ]
 
   const S = {
@@ -868,6 +900,75 @@ export default function AdminPage() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 人物編集提案 */}
+      {tab === 'person_proposals' && (
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            {(['pending', 'approved', 'rejected'] as const).map(f => (
+              <button key={f} onClick={() => { setPersonPropFilter(f); setTimeout(loadPersonProposals, 100) }}
+                style={{
+                  ...S.btn,
+                  background: personPropFilter === f ? 'var(--fm-accent)' : 'var(--fm-bg-card)',
+                  color: personPropFilter === f ? '#fff' : 'var(--fm-text-sub)',
+                  border: '1px solid var(--fm-border)',
+                }}>
+                {f === 'pending' ? '未処理' : f === 'approved' ? '承認済' : '却下'}
+              </button>
+            ))}
+          </div>
+          {personProposals.length === 0 ? (
+            <div style={S.card}><span style={{ color: 'var(--fm-text-sub)' }}>提案はありません</span></div>
+          ) : personProposals.map(p => {
+            const changes = ((p.proposed_data as { changes?: { field_name: string; current_value: string | null; proposed_value: string }[] })?.changes) || []
+            return (
+              <div key={p.id as string} style={S.card}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontWeight: 600 }}>
+                    Person ID: {p.person_id as number} / {p.proposal_type as string}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
+                    {new Date(p.created_at as string).toLocaleDateString('ja-JP')}
+                  </span>
+                </div>
+                {changes.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
+                    {changes.map((c, i) => (
+                      <div key={i}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fm-text-sub)', marginBottom: 4 }}>{c.field_name}</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          <div style={{ padding: 8, borderRadius: 6, background: 'rgba(255,0,0,0.05)', border: '1px solid rgba(255,0,0,0.15)', fontSize: 13 }}>
+                            <div style={{ fontSize: 10, color: 'var(--fm-text-muted)', marginBottom: 4 }}>現在</div>
+                            <div style={{ wordBreak: 'break-word' }}>{c.current_value || '（未設定）'}</div>
+                          </div>
+                          <div style={{ padding: 8, borderRadius: 6, background: 'rgba(0,255,0,0.05)', border: '1px solid rgba(0,255,0,0.15)', fontSize: 13 }}>
+                            <div style={{ fontSize: 10, color: 'var(--fm-text-muted)', marginBottom: 4 }}>提案</div>
+                            <div style={{ wordBreak: 'break-word' }}>{c.proposed_value}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ padding: 8, fontSize: 12, color: 'var(--fm-text-muted)' }}>
+                    proposal_data: {JSON.stringify(p.proposed_data)}
+                  </div>
+                )}
+                {p.reason ? <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 8 }}>理由: {String(p.reason)}</div> : null}
+                <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 8 }}>
+                  User: {(p.user_id as string).slice(0, 8)}...
+                </div>
+                {personPropFilter === 'pending' && (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => handlePersonProposal(p.id as string, true)} style={S.btn}>承認（反映）</button>
+                    <button onClick={() => handlePersonProposal(p.id as string, false)} style={S.btnDanger}>却下</button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 

@@ -1,5 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { getSupabaseAdmin } from '@/app/lib/supabase-admin'
+import { isAdminEmail } from '@/app/lib/adminAuth'
+
+// 人物編集提案で受理する field のホワイトリスト。
+// profile_path / known_for などはユーザー編集を許さない (TMDB cache が上書きするため)。
+const PERSON_EDITABLE_FIELDS = new Set([
+  'name', 'original_name', 'biography', 'birthday',
+  'place_of_birth', 'homepage',
+])
+
+interface PersonChange {
+  field_name: string
+  current_value: string | null
+  proposed_value: string
+}
+
+async function getAuthUser(request: NextRequest) {
+  const authHeader = request.headers.get('authorization')
+  if (!authHeader) return null
+  const client = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  )
+  const { data: { user } } = await client.auth.getUser(authHeader.replace('Bearer ', ''))
+  return user
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
@@ -216,6 +242,177 @@ export async function POST(request: NextRequest) {
           admin_note: adminNote || null,
           updated_at: new Date().toISOString(),
         }).eq('id', requestId)
+
+        return NextResponse.json({ success: true })
+      }
+
+      // ────────────────────────────────────────────────────────────────
+      // 人物編集提案 (Bearer 認証必須 — 既存 work actions より厳しめ)
+      // ────────────────────────────────────────────────────────────────
+
+      // ユーザー: 人物編集提案を送信。複数フィールドを 1 提案にまとめる。
+      case 'person_submit': {
+        const user = await getAuthUser(request)
+        if (!user) return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
+
+        const { personId, changes, reason } = body as { personId?: number; changes?: PersonChange[]; reason?: string }
+        if (!personId || !Array.isArray(changes) || changes.length === 0) {
+          return NextResponse.json({ error: 'personId と changes が必要です' }, { status: 400 })
+        }
+
+        // フィールドホワイトリスト + 文字数制限
+        const cleaned: PersonChange[] = []
+        for (const c of changes) {
+          if (!PERSON_EDITABLE_FIELDS.has(c.field_name)) continue
+          const proposed = (c.proposed_value || '').trim()
+          if (!proposed) continue
+          if (proposed.length > 3000) {
+            return NextResponse.json({ error: `${c.field_name} は 3000 文字以内にしてください` }, { status: 400 })
+          }
+          if (proposed === (c.current_value || '').trim()) continue
+          cleaned.push({
+            field_name: c.field_name,
+            current_value: c.current_value || null,
+            proposed_value: proposed,
+          })
+        }
+        if (cleaned.length === 0) {
+          return NextResponse.json({ error: '変更点がありません' }, { status: 400 })
+        }
+
+        // 対象人物の存在確認 (RLS 影響なしの service-role 読み)
+        const { data: target } = await supabase
+          .from('persons')
+          .select('id, data_source')
+          .eq('id', personId)
+          .single()
+        if (!target) return NextResponse.json({ error: '人物が見つかりません' }, { status: 404 })
+
+        const { data, error } = await supabase
+          .from('person_edit_proposals')
+          .insert({
+            user_id: user.id,
+            person_id: personId,
+            proposal_type: 'edit_person',
+            proposed_data: { changes: cleaned },
+            reason: reason ? String(reason).slice(0, 1000) : null,
+            status: 'pending',
+          })
+          .select()
+          .single()
+
+        if (error) {
+          console.error('person_edit_proposal insert failed:', error)
+          return NextResponse.json({ error: '送信に失敗しました' }, { status: 500 })
+        }
+        return NextResponse.json({ proposal: data })
+      }
+
+      // 管理者: 人物編集提案を承認 (persons に反映 + ポイント加算)
+      case 'person_approve': {
+        const user = await getAuthUser(request)
+        if (!user || !isAdminEmail(user.email)) {
+          return NextResponse.json({ error: '管理者権限が必要です' }, { status: 403 })
+        }
+
+        const { proposalId, adminNote } = body
+        if (!proposalId) {
+          return NextResponse.json({ error: 'proposalId required' }, { status: 400 })
+        }
+
+        const { data: proposal } = await supabase
+          .from('person_edit_proposals')
+          .select('*')
+          .eq('id', proposalId)
+          .single()
+        if (!proposal) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 })
+        if (proposal.status !== 'pending') {
+          return NextResponse.json({ error: 'この提案は既に処理済みです' }, { status: 409 })
+        }
+        if (proposal.proposal_type !== 'edit_person' || !proposal.person_id) {
+          return NextResponse.json({ error: '対応していない proposal_type です' }, { status: 400 })
+        }
+
+        // proposed_data.changes から persons の UPDATE データを組み立て
+        const changes = (proposal.proposed_data?.changes || []) as PersonChange[]
+        const updateData: Record<string, unknown> = {}
+        for (const c of changes) {
+          if (!PERSON_EDITABLE_FIELDS.has(c.field_name)) continue
+          updateData[c.field_name] = c.proposed_value
+        }
+        if (Object.keys(updateData).length === 0) {
+          return NextResponse.json({ error: '反映できる変更がありません' }, { status: 400 })
+        }
+
+        const { error: updErr } = await supabase
+          .from('persons')
+          .update(updateData)
+          .eq('id', proposal.person_id)
+        if (updErr) {
+          console.error('persons update failed:', updErr)
+          return NextResponse.json({ error: '反映に失敗しました' }, { status: 500 })
+        }
+
+        await supabase
+          .from('person_edit_proposals')
+          .update({
+            status: 'approved',
+            reviewed_by: user.id,
+            reviewed_at: new Date().toISOString(),
+            admin_note: adminNote || null,
+          })
+          .eq('id', proposalId)
+
+        // ポイントを users.points に直接加算 + data_contributions に記録。
+        // 既存の awardContributionPoints はクライアント側ヘルパなので
+        // ここではサーバから直接適用。
+        const POINTS = 10
+        try {
+          await supabase.from('data_contributions').insert({
+            user_id: proposal.user_id,
+            contribution_type: 'edit_proposal',
+            reference_id: proposalId,
+            person_id: proposal.person_id,
+            points_awarded: POINTS,
+            status: 'awarded',
+          })
+          const { data: userDoc } = await supabase
+            .from('users')
+            .select('points')
+            .eq('id', proposal.user_id)
+            .single()
+          const newPts = (userDoc?.points ?? 0) + POINTS
+          await supabase.from('users').update({ points: newPts }).eq('id', proposal.user_id)
+          await supabase.from('user_points').insert({
+            user_id: proposal.user_id,
+            points: POINTS,
+            reason: '人物編集提案が承認',
+          })
+        } catch (e) {
+          console.error('points award failed (non-fatal):', e)
+        }
+
+        return NextResponse.json({ success: true })
+      }
+
+      // 管理者: 人物編集提案を却下
+      case 'person_reject': {
+        const user = await getAuthUser(request)
+        if (!user || !isAdminEmail(user.email)) {
+          return NextResponse.json({ error: '管理者権限が必要です' }, { status: 403 })
+        }
+
+        const { proposalId, adminNote } = body
+        if (!proposalId) {
+          return NextResponse.json({ error: 'proposalId required' }, { status: 400 })
+        }
+
+        await supabase.from('person_edit_proposals').update({
+          status: 'rejected',
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+          admin_note: adminNote || null,
+        }).eq('id', proposalId)
 
         return NextResponse.json({ success: true })
       }
