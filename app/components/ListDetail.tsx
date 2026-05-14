@@ -81,6 +81,41 @@ interface TMDBResult {
   first_air_date?: string
 }
 
+interface TMDBPersonResult {
+  id: number
+  name: string
+  profile_path: string | null
+  known_for_department?: string
+}
+
+interface PersonCredit extends TMDBResult {
+  _role: string // character / job
+  _roleType: 'cast' | 'crew'
+  _popularity: number
+}
+
+const DEPT_LABEL_JA: Record<string, string> = {
+  Acting: '俳優',
+  Directing: '監督',
+  Writing: '脚本',
+  Production: '製作',
+  Sound: '音楽',
+  Camera: '撮影',
+  Editing: '編集',
+  Art: '美術',
+}
+
+const JOB_LABEL_JA: Record<string, string> = {
+  Director: '監督',
+  Screenplay: '脚本',
+  Writer: '脚本',
+  Story: '原案',
+  'Original Story': '原作',
+  Novel: '原作',
+  Producer: 'プロデューサー',
+  'Executive Producer': '製作総指揮',
+}
+
 export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListDetailProps) {
   const [list, setList] = useState<ListData | null>(null)
   const [items, setItems] = useState<ListItemData[]>([])
@@ -93,8 +128,12 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
   const [showAdd, setShowAdd] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<TMDBResult[]>([])
+  const [peopleResults, setPeopleResults] = useState<TMDBPersonResult[]>([])
   const [searching, setSearching] = useState(false)
   const [adding, setAdding] = useState<number | null>(null)
+  const [selectedPerson, setSelectedPerson] = useState<TMDBPersonResult | null>(null)
+  const [personCredits, setPersonCredits] = useState<PersonCredit[]>([])
+  const [loadingPerson, setLoadingPerson] = useState(false)
 
   // Edit
   const [editing, setEditing] = useState(false)
@@ -306,14 +345,113 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
     setSearching(true)
+    setSelectedPerson(null)
+    setPersonCredits([])
     try {
       const res = await fetch(`/api/tmdb?action=search&query=${encodeURIComponent(searchQuery)}`)
       const data = await res.json()
-      setSearchResults(data.results?.slice(0, 12) || [])
+      const all = (data.results || []) as (TMDBResult & { media_type?: string; profile_path?: string | null; known_for_department?: string })[]
+      const films: TMDBResult[] = []
+      const people: TMDBPersonResult[] = []
+      for (const r of all) {
+        if (r.media_type === 'person') {
+          people.push({
+            id: r.id,
+            name: r.name || '',
+            profile_path: r.profile_path ?? null,
+            known_for_department: r.known_for_department,
+          })
+        } else {
+          films.push(r)
+        }
+      }
+      setPeopleResults(people.slice(0, 8))
+      setSearchResults(films.slice(0, 12))
     } catch {
       setSearchResults([])
+      setPeopleResults([])
     }
     setSearching(false)
+  }
+
+  const handleSelectPerson = async (person: TMDBPersonResult) => {
+    setSelectedPerson(person)
+    setLoadingPerson(true)
+    setPersonCredits([])
+    try {
+      const res = await fetch(`/api/tmdb?action=person&id=${person.id}`)
+      const data = await res.json() as {
+        combined_credits?: {
+          cast?: Array<{ id: number; title?: string; name?: string; poster_path: string | null; media_type?: string; release_date?: string; first_air_date?: string; character?: string; popularity?: number }>
+          crew?: Array<{ id: number; title?: string; name?: string; poster_path: string | null; media_type?: string; release_date?: string; first_air_date?: string; job?: string; popularity?: number }>
+        }
+      }
+      const cast = data.combined_credits?.cast || []
+      const crew = data.combined_credits?.crew || []
+
+      // Merge by (media_type, id); a person can be both cast and crew on one work.
+      const merged = new Map<string, PersonCredit>()
+      for (const c of cast) {
+        if (!c.id) continue
+        const key = `${c.media_type || 'movie'}:${c.id}`
+        merged.set(key, {
+          id: c.id,
+          title: c.title,
+          name: c.name,
+          poster_path: c.poster_path,
+          media_type: c.media_type,
+          release_date: c.release_date,
+          first_air_date: c.first_air_date,
+          _role: c.character || '出演',
+          _roleType: 'cast',
+          _popularity: c.popularity || 0,
+        })
+      }
+      for (const c of crew) {
+        if (!c.id) continue
+        const key = `${c.media_type || 'movie'}:${c.id}`
+        const job = c.job || ''
+        const jobJa = JOB_LABEL_JA[job] || job
+        const existing = merged.get(key)
+        if (existing) {
+          // Prefer crew job label for director/writer searches (more useful than character)
+          existing._role = jobJa ? `${jobJa} / ${existing._role}` : existing._role
+        } else {
+          merged.set(key, {
+            id: c.id,
+            title: c.title,
+            name: c.name,
+            poster_path: c.poster_path,
+            media_type: c.media_type,
+            release_date: c.release_date,
+            first_air_date: c.first_air_date,
+            _role: jobJa || '制作',
+            _roleType: 'crew',
+            _popularity: c.popularity || 0,
+          })
+        }
+      }
+
+      const credits = Array.from(merged.values()).sort((a, b) => {
+        const ay = (a.release_date || a.first_air_date || '')
+        const by = (b.release_date || b.first_air_date || '')
+        if (ay && by) return by.localeCompare(ay) // newest first
+        if (ay) return -1
+        if (by) return 1
+        return b._popularity - a._popularity
+      })
+      setPersonCredits(credits)
+    } catch (err) {
+      console.error('Failed to fetch person credits:', err)
+      setPersonCredits([])
+    }
+    setLoadingPerson(false)
+  }
+
+  const closeAddModal = () => {
+    setShowAdd(false)
+    setSelectedPerson(null)
+    setPersonCredits([])
   }
 
   const handleAddFilm = async (movie: TMDBResult) => {
@@ -1029,7 +1167,7 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
           background: 'var(--fm-overlay)', padding: '60px 20px 20px',
           overflowY: 'auto',
         }}
-        onClick={e => { if (e.target === e.currentTarget) setShowAdd(false) }}
+        onClick={e => { if (e.target === e.currentTarget) closeAddModal() }}
         >
           <div className="animate-fade-in" style={{
             background: 'var(--fm-bg-elevated)', borderRadius: 12, padding: 24,
@@ -1037,7 +1175,7 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--fm-text)', margin: 0 }}>Add Film</h2>
-              <button onClick={() => setShowAdd(false)} style={{ background: 'none', border: 'none', color: 'var(--fm-text-muted)', cursor: 'pointer', fontSize: 18, padding: 4 }}>
+              <button onClick={closeAddModal} style={{ background: 'none', border: 'none', color: 'var(--fm-text-muted)', cursor: 'pointer', fontSize: 18, padding: 4 }}>
                 ×
               </button>
             </div>
@@ -1047,7 +1185,7 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                placeholder="Search films..."
+                placeholder="作品名・俳優・監督・脚本家で検索"
                 autoFocus
                 style={{
                   flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--fm-border)',
@@ -1065,43 +1203,196 @@ export default function ListDetail({ listId, userId, onBack, onOpenWork }: ListD
               </button>
             </div>
 
-            {searchResults.length > 0 && (
-              <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-                {searchResults.map(movie => {
-                  const title = movie.title || movie.name || ''
-                  const year = (movie.release_date || movie.first_air_date || '').slice(0, 4)
-                  const alreadyAdded = items.some(i => i.movie_id === movie.id)
-                  return (
-                    <div key={movie.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px',
-                      borderBottom: '1px solid var(--fm-border)',
-                    }}>
-                      {movie.poster_path ? (
-                        <img src={`${TMDB_IMG}/w92${movie.poster_path}`} alt="" style={{ width: 36, height: 54, borderRadius: 4, objectFit: 'cover', flexShrink: 0 }} />
-                      ) : (
-                        <div style={{ width: 36, height: 54, borderRadius: 4, background: 'var(--fm-bg-secondary)', flexShrink: 0 }} />
-                      )}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {title}
-                        </div>
-                        {year && <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>{year}</div>}
-                      </div>
+            {/* People row (hidden while viewing a person's filmography) */}
+            {!selectedPerson && peopleResults.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 8, fontWeight: 600, letterSpacing: 0.5 }}>
+                  人物
+                </div>
+                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
+                  {peopleResults.map(p => {
+                    const dept = p.known_for_department ? (DEPT_LABEL_JA[p.known_for_department] || p.known_for_department) : ''
+                    return (
                       <button
-                        onClick={() => !alreadyAdded && handleAddFilm(movie)}
-                        disabled={alreadyAdded || adding === movie.id}
+                        key={p.id}
+                        onClick={() => handleSelectPerson(p)}
                         style={{
-                          padding: '6px 14px', borderRadius: 6, border: 'none',
-                          background: alreadyAdded ? 'var(--fm-bg-secondary)' : 'var(--fm-accent)',
-                          color: alreadyAdded ? 'var(--fm-text-muted)' : '#fff',
-                          fontSize: 12, fontWeight: 600, cursor: alreadyAdded ? 'default' : 'pointer',
-                          opacity: adding === movie.id ? 0.6 : 1, flexShrink: 0,
+                          flexShrink: 0, width: 84, display: 'flex', flexDirection: 'column',
+                          alignItems: 'center', gap: 6, background: 'none', border: 'none',
+                          cursor: 'pointer', padding: 0,
+                        }}
+                      >
+                        {p.profile_path ? (
+                          <img src={`${TMDB_IMG}/w185${p.profile_path}`} alt={p.name}
+                            style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', objectPosition: 'top' }} />
+                        ) : (
+                          <div style={{
+                            width: 64, height: 64, borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#fff', fontSize: 22, fontWeight: 700,
+                          }}>
+                            {p.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div style={{
+                          fontSize: 11, color: 'var(--fm-text)', textAlign: 'center', lineHeight: 1.2,
+                          overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',
+                          WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                         }}>
-                        {alreadyAdded ? 'Added' : adding === movie.id ? '...' : 'Add'}
+                          {p.name}
+                        </div>
+                        {dept && (
+                          <div style={{ fontSize: 10, color: 'var(--fm-text-muted)' }}>{dept}</div>
+                        )}
                       </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Selected person's filmography */}
+            {selectedPerson && (
+              <div style={{ marginBottom: 8 }}>
+                <button
+                  onClick={() => { setSelectedPerson(null); setPersonCredits([]) }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none',
+                    border: 'none', color: 'var(--fm-text-sub)', fontSize: 12, cursor: 'pointer',
+                    padding: '4px 0', marginBottom: 8,
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                  検索結果に戻る
+                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  {selectedPerson.profile_path ? (
+                    <img src={`${TMDB_IMG}/w185${selectedPerson.profile_path}`} alt={selectedPerson.name}
+                      style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', objectPosition: 'top' }} />
+                  ) : (
+                    <div style={{
+                      width: 40, height: 40, borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontSize: 16, fontWeight: 700,
+                    }}>
+                      {selectedPerson.name.charAt(0).toUpperCase()}
                     </div>
-                  )
-                })}
+                  )}
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fm-text)' }}>{selectedPerson.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
+                      {loadingPerson ? '読み込み中…' : `${personCredits.length} 作品`}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+                  {loadingPerson ? (
+                    <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--fm-text-muted)', fontSize: 12 }}>
+                      Loading...
+                    </div>
+                  ) : personCredits.length === 0 ? (
+                    <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--fm-text-muted)', fontSize: 12 }}>
+                      作品が見つかりませんでした
+                    </div>
+                  ) : (
+                    personCredits.map(work => {
+                      const title = work.title || work.name || ''
+                      const year = (work.release_date || work.first_air_date || '').slice(0, 4)
+                      const alreadyAdded = items.some(i => i.movie_id === work.id)
+                      return (
+                        <div key={`${work.media_type || 'movie'}-${work.id}`} style={{
+                          display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px',
+                          borderBottom: '1px solid var(--fm-border)',
+                        }}>
+                          {work.poster_path ? (
+                            <img src={`${TMDB_IMG}/w92${work.poster_path}`} alt="" style={{ width: 36, height: 54, borderRadius: 4, objectFit: 'cover', flexShrink: 0 }} />
+                          ) : (
+                            <div style={{ width: 36, height: 54, borderRadius: 4, background: 'var(--fm-bg-secondary)', flexShrink: 0 }} />
+                          )}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {title}
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {year && <span>{year}</span>}
+                              {year && work._role && <span> · </span>}
+                              {work._role && <span>{work._role}</span>}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => !alreadyAdded && handleAddFilm(work)}
+                            disabled={alreadyAdded || adding === work.id}
+                            style={{
+                              padding: '6px 14px', borderRadius: 6, border: 'none',
+                              background: alreadyAdded ? 'var(--fm-bg-secondary)' : 'var(--fm-accent)',
+                              color: alreadyAdded ? 'var(--fm-text-muted)' : '#fff',
+                              fontSize: 12, fontWeight: 600, cursor: alreadyAdded ? 'default' : 'pointer',
+                              opacity: adding === work.id ? 0.6 : 1, flexShrink: 0,
+                            }}>
+                            {alreadyAdded ? 'Added' : adding === work.id ? '...' : 'Add'}
+                          </button>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Film results */}
+            {!selectedPerson && searchResults.length > 0 && (
+              <div>
+                {peopleResults.length > 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 8, fontWeight: 600, letterSpacing: 0.5 }}>
+                    作品
+                  </div>
+                )}
+                <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+                  {searchResults.map(movie => {
+                    const title = movie.title || movie.name || ''
+                    const year = (movie.release_date || movie.first_air_date || '').slice(0, 4)
+                    const alreadyAdded = items.some(i => i.movie_id === movie.id)
+                    return (
+                      <div key={movie.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px',
+                        borderBottom: '1px solid var(--fm-border)',
+                      }}>
+                        {movie.poster_path ? (
+                          <img src={`${TMDB_IMG}/w92${movie.poster_path}`} alt="" style={{ width: 36, height: 54, borderRadius: 4, objectFit: 'cover', flexShrink: 0 }} />
+                        ) : (
+                          <div style={{ width: 36, height: 54, borderRadius: 4, background: 'var(--fm-bg-secondary)', flexShrink: 0 }} />
+                        )}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {title}
+                          </div>
+                          {year && <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>{year}</div>}
+                        </div>
+                        <button
+                          onClick={() => !alreadyAdded && handleAddFilm(movie)}
+                          disabled={alreadyAdded || adding === movie.id}
+                          style={{
+                            padding: '6px 14px', borderRadius: 6, border: 'none',
+                            background: alreadyAdded ? 'var(--fm-bg-secondary)' : 'var(--fm-accent)',
+                            color: alreadyAdded ? 'var(--fm-text-muted)' : '#fff',
+                            fontSize: 12, fontWeight: 600, cursor: alreadyAdded ? 'default' : 'pointer',
+                            opacity: adding === movie.id ? 0.6 : 1, flexShrink: 0,
+                          }}>
+                          {alreadyAdded ? 'Added' : adding === movie.id ? '...' : 'Add'}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Empty state after search */}
+            {!selectedPerson && !searching && searchResults.length === 0 && peopleResults.length === 0 && searchQuery.trim() && (
+              <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--fm-text-muted)', fontSize: 12 }}>
+                該当する作品・人物が見つかりませんでした
               </div>
             )}
           </div>
