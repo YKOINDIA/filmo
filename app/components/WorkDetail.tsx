@@ -69,9 +69,17 @@ interface ClipMemoEntry {
   id: string; user_id: string; memo: string; score: number | null;
   users?: { name: string; avatar_url: string | null } | null
 }
+type WatchContext = 'solo' | 'family' | 'couple' | 'friends'
+const WATCH_CONTEXT_OPTIONS: { value: WatchContext; label: string; icon: string }[] = [
+  { value: 'solo', label: '一人', icon: '👤' },
+  { value: 'family', label: '家族', icon: '👨‍👩‍👧' },
+  { value: 'couple', label: 'カップル', icon: '💑' },
+  { value: 'friends', label: '友人', icon: '👥' },
+]
 interface ReviewEntry {
   id: string; user_id: string; movie_id: number; body: string | null; score: number | null;
-  has_spoiler: boolean; is_draft: boolean; created_at: string; updated_at: string
+  has_spoiler: boolean; is_draft: boolean; created_at: string; updated_at: string;
+  watch_context: WatchContext | null
 }
 interface ReviewWithUser extends ReviewEntry {
   users: { name: string; avatar_url: string | null } | null
@@ -243,6 +251,10 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const [reviewBody, setReviewBody] = useState('')
   const [reviewSpoiler, setReviewSpoiler] = useState(false)
   const [reviewDraft, setReviewDraft] = useState(false)
+  const [reviewWatchContext, setReviewWatchContext] = useState<WatchContext | null>(null)
+  const [watchContextDist, setWatchContextDist] = useState<Record<WatchContext, number>>({
+    solo: 0, family: 0, couple: 0, friends: 0,
+  })
   const [savingReview, setSavingReview] = useState(false)
   // 保存後 5秒だけインラインで「✓ 投稿しました」を出してユーザーに保存完了を保証する。
   // toast が UI に隠れた場合の保険。
@@ -407,6 +419,24 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       setReviewBody(rv.body || '')
       setReviewSpoiler(rv.has_spoiler || false)
       setReviewDraft(rv.is_draft || false)
+      setReviewWatchContext(rv.watch_context || null)
+    }
+
+    // Watch context 分布（公開レビューのみ）
+    const { data: ctxRows } = await supabase
+      .from('reviews')
+      .select('watch_context')
+      .eq('movie_id', workId)
+      .eq('is_draft', false)
+      .eq('is_hidden', false)
+      .not('watch_context', 'is', null)
+
+    if (ctxRows) {
+      const dist: Record<WatchContext, number> = { solo: 0, family: 0, couple: 0, friends: 0 }
+      for (const r of ctxRows as { watch_context: WatchContext }[]) {
+        if (r.watch_context in dist) dist[r.watch_context]++
+      }
+      setWatchContextDist(dist)
     }
 
     // Fan IDs
@@ -743,6 +773,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
         user_id: userId, movie_id: workId, body: reviewBody,
         has_spoiler: reviewSpoiler,
         is_draft: isDraft,
+        watch_context: reviewWatchContext,
       }
       if (score > 0) reviewData.score = score
 
@@ -761,6 +792,18 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           .single()
         if (revErr) throw new Error(revErr.message)
         if (data) setMyReview(data as unknown as ReviewEntry)
+      }
+
+      // DB 保存成功後に集計の差分更新（公開分のみカウント対象）
+      const prevContext = myReview?.is_draft ? null : (myReview?.watch_context || null)
+      const nextContext = isDraft ? null : reviewWatchContext
+      if (prevContext !== nextContext) {
+        setWatchContextDist(prev => {
+          const next = { ...prev }
+          if (prevContext) next[prevContext] = Math.max(0, next[prevContext] - 1)
+          if (nextContext) next[nextContext] = next[nextContext] + 1
+          return next
+        })
       }
 
       setReviewDraft(isDraft)
@@ -805,10 +848,19 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
       showToast('削除に失敗しました')
       return
     }
+    // 集計から削除（公開レビューのみ）
+    const removedContext = myReview.is_draft ? null : (myReview.watch_context || null)
+    if (removedContext) {
+      setWatchContextDist(prev => ({
+        ...prev,
+        [removedContext]: Math.max(0, prev[removedContext] - 1),
+      }))
+    }
     setMyReview(null)
     setReviewBody('')
     setReviewSpoiler(false)
     setReviewDraft(false)
+    setReviewWatchContext(null)
     showToast('レビューを削除しました')
   }
 
@@ -1589,6 +1641,30 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                 )}
               </div>
 
+              {/* Watch context (誰と見たか) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, color: 'var(--fm-text-sub)' }}>誰と見た？</span>
+                {WATCH_CONTEXT_OPTIONS.map(opt => {
+                  const active = reviewWatchContext === opt.value
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setReviewWatchContext(active ? null : opt.value)}
+                      style={{
+                        padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600,
+                        background: active ? 'var(--fm-accent)' : 'transparent',
+                        color: active ? '#fff' : 'var(--fm-text-sub)',
+                        border: `1px solid ${active ? 'var(--fm-accent)' : 'var(--fm-border)'}`,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {opt.icon} {opt.label}
+                    </button>
+                  )
+                })}
+              </div>
+
               {/* Review textarea */}
               <textarea
                 style={s.textarea}
@@ -1791,13 +1867,26 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                 <p style={{ fontSize: 14, color: 'var(--fm-text)', lineHeight: 1.7, margin: 0 }}>
                   {myReview.body}
                 </p>
-                {myReview.has_spoiler && (
-                  <div style={{
-                    display: 'inline-block', padding: '2px 8px', borderRadius: 4,
-                    background: 'rgba(255,107,107,0.15)', color: 'var(--fm-danger)',
-                    fontSize: 11, fontWeight: 600, marginTop: 8,
-                  }}>⚠ ネタバレあり</div>
-                )}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                  {myReview.has_spoiler && (
+                    <span style={{
+                      display: 'inline-block', padding: '2px 8px', borderRadius: 4,
+                      background: 'rgba(255,107,107,0.15)', color: 'var(--fm-danger)',
+                      fontSize: 11, fontWeight: 600,
+                    }}>⚠ ネタバレあり</span>
+                  )}
+                  {myReview.watch_context && (() => {
+                    const opt = WATCH_CONTEXT_OPTIONS.find(o => o.value === myReview.watch_context)
+                    if (!opt) return null
+                    return (
+                      <span style={{
+                        display: 'inline-block', padding: '2px 8px', borderRadius: 4,
+                        background: 'rgba(108,92,231,0.15)', color: 'var(--fm-accent)',
+                        fontSize: 11, fontWeight: 600,
+                      }}>{opt.icon} {opt.label}と鑑賞</span>
+                    )
+                  })()}
+                </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                   <button
                     onClick={() => {
@@ -1971,10 +2060,21 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                       {review.body && <TranslateButton reviewId={review.id} text={review.body} />}
                     </>
                   )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, flexWrap: 'wrap' }}>
                     <button style={s.likeBtn(review.liked_by_me)} onClick={() => handleLike(review)}>
                       {review.liked_by_me ? '❤️' : '🤍'} {review.likes_count}
                     </button>
+                    {review.watch_context && (() => {
+                      const opt = WATCH_CONTEXT_OPTIONS.find(o => o.value === review.watch_context)
+                      if (!opt) return null
+                      return (
+                        <span style={{
+                          fontSize: 11, color: 'var(--fm-text-sub)',
+                          padding: '2px 8px', borderRadius: 999,
+                          background: 'var(--fm-bg-hover)',
+                        }}>{opt.icon} {opt.label}と鑑賞</span>
+                      )
+                    })()}
                   </div>
                 </div>
               ))}
@@ -2331,6 +2431,56 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           )}
         </div>
       </div>
+
+      {/* ── 8.5 Watch Context Distribution (Filmo独自) ── */}
+      {(() => {
+        const total = WATCH_CONTEXT_OPTIONS.reduce((sum, o) => sum + watchContextDist[o.value], 0)
+        if (total === 0) return null
+        const sorted = [...WATCH_CONTEXT_OPTIONS].sort(
+          (a, b) => watchContextDist[b.value] - watchContextDist[a.value],
+        )
+        const topLabel = sorted[0].label
+        return (
+          <div style={s.section}>
+            <h3 style={s.sectionTitle}>
+              👥 みんなはこう見た
+              <span style={{
+                marginLeft: 8, fontSize: 12, fontWeight: 600,
+                color: 'var(--fm-accent)',
+              }}>{topLabel}向け</span>
+            </h3>
+            <div style={s.card}>
+              {sorted.map(opt => {
+                const count = watchContextDist[opt.value]
+                const pct = total > 0 ? Math.round((count / total) * 100) : 0
+                return (
+                  <div key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <span style={{ fontSize: 13, minWidth: 84, color: 'var(--fm-text)' }}>
+                      {opt.icon} {opt.label}
+                    </span>
+                    <div style={{
+                      flex: 1, height: 8, background: 'var(--fm-bg-hover)',
+                      borderRadius: 4, overflow: 'hidden',
+                    }}>
+                      <div style={{
+                        width: `${pct}%`, height: '100%',
+                        background: 'var(--fm-accent)', transition: 'width 0.3s',
+                      }} />
+                    </div>
+                    <span style={{
+                      fontSize: 12, color: 'var(--fm-text-sub)',
+                      minWidth: 60, textAlign: 'right',
+                    }}>{pct}% ({count})</span>
+                  </div>
+                )
+              })}
+              <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 4 }}>
+                n={total}人のレビューから
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── 9. Cast & Crew (Enhanced) ── */}
       {(cast.length > 0 || director) && (
