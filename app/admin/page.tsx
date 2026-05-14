@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 
 import { isAdminEmail } from '../lib/adminAuth'
 
-type Tab = 'kpi' | 'users' | 'reviews' | 'segments' | 'fraud' | 'community' | 'security' | 'xpost' | 'coupons' | 'announce' | 'cron' | 'feedback' | 'work_requests' | 'edit_proposals' | 'person_proposals'
+type Tab = 'kpi' | 'users' | 'reviews' | 'segments' | 'fraud' | 'community' | 'security' | 'xpost' | 'coupons' | 'announce' | 'cron' | 'feedback' | 'work_requests' | 'edit_proposals' | 'person_proposals' | 'user_works'
 
 interface KpiData {
   totals: { users: number; reviews: number; watches: number; lists: number; comments: number }
@@ -102,6 +102,15 @@ export default function AdminPage() {
   const [personProposals, setPersonProposals] = useState<Record<string, unknown>[]>([])
   const [personPropFilter, setPersonPropFilter] = useState<'pending' | 'approved' | 'rejected'>('pending')
 
+  // User-registered works state (data_source='user')
+  const [userWorks, setUserWorks] = useState<Record<string, unknown>[]>([])
+  const [userWorksFilter, setUserWorksFilter] = useState<'all' | 'unverified' | 'verified' | 'active' | 'merged'>('active')
+  const [userWorksQuery, setUserWorksQuery] = useState('')
+  const [userWorksPage, setUserWorksPage] = useState(0)
+  const [userWorksTotal, setUserWorksTotal] = useState(0)
+  const [editingWork, setEditingWork] = useState<Record<string, unknown> | null>(null)
+  const [editWorkSaving, setEditWorkSaving] = useState(false)
+
   useEffect(() => {
     checkAdmin()
   }, [])
@@ -141,7 +150,71 @@ export default function AdminPage() {
       case 'work_requests': await loadWorkRequests(); break
       case 'edit_proposals': await loadEditProposals(); break
       case 'person_proposals': await loadPersonProposals(); break
+      case 'user_works': await loadUserWorks(); break
     }
+  }
+
+  const loadUserWorks = async (page = userWorksPage) => {
+    try {
+      const params = new URLSearchParams({
+        email: myEmail,
+        status: userWorksFilter,
+        page: String(page),
+      })
+      if (userWorksQuery.trim()) params.set('q', userWorksQuery.trim())
+      const res = await fetch(`/api/admin/user-works?${params.toString()}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed')
+      setUserWorks(data.works || [])
+      setUserWorksTotal(data.total || 0)
+      setUserWorksPage(page)
+    } catch (e) {
+      console.error('loadUserWorks failed:', e)
+    }
+  }
+
+  const saveEditWork = async (patch: Record<string, unknown>) => {
+    if (!editingWork) return
+    setEditWorkSaving(true)
+    try {
+      const res = await fetch('/api/admin/user-works', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          email: myEmail,
+          movieId: editingWork.id,
+          patch,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Update failed')
+      setEditingWork(null)
+      await loadUserWorks()
+    } catch (e) {
+      alert(`保存に失敗しました: ${(e as Error).message}`)
+    } finally {
+      setEditWorkSaving(false)
+    }
+  }
+
+  const handleUserWorkVerify = async (movieId: number, verified: boolean) => {
+    await fetch('/api/admin/user-works', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'verify', email: myEmail, movieId, verified }),
+    })
+    await loadUserWorks()
+  }
+
+  const handleUserWorkDelete = async (movieId: number, title: string) => {
+    if (!confirm(`「${title}」を削除します。関連するレビュー・視聴履歴も全て削除されます。本当によろしいですか?`)) return
+    await fetch('/api/admin/user-works', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', email: myEmail, movieId }),
+    })
+    await loadUserWorks()
   }
 
   const loadKPI = async () => {
@@ -423,6 +496,7 @@ export default function AdminPage() {
     { key: 'cron', label: '⏱ Cron', group: '運用' },
     { key: 'feedback', label: '📝 フィードバック', group: '運用' },
     { key: 'work_requests', label: '🎬 作品リクエスト', group: '運用' },
+    { key: 'user_works', label: '📝 ユーザー登録作品', group: '運用' },
     { key: 'edit_proposals', label: '🛠 修正提案', group: '運用' },
     { key: 'person_proposals', label: '👤 人物提案', group: '運用' },
   ]
@@ -855,6 +929,134 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* ユーザー登録作品 (data_source='user' の movies を直接管理) */}
+      {tab === 'user_works' && (
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+            {(['active', 'unverified', 'verified', 'merged', 'all'] as const).map(f => (
+              <button key={f} onClick={() => { setUserWorksFilter(f); setTimeout(() => loadUserWorks(0), 100) }}
+                style={{
+                  ...S.btn,
+                  background: userWorksFilter === f ? 'var(--fm-accent)' : 'var(--fm-bg-card)',
+                  color: userWorksFilter === f ? '#fff' : 'var(--fm-text-sub)',
+                  border: '1px solid var(--fm-border)',
+                }}>
+                {f === 'active' ? '有効'
+                  : f === 'unverified' ? '未検証'
+                  : f === 'verified' ? '検証済'
+                  : f === 'merged' ? '統合済'
+                  : '全件'}
+              </button>
+            ))}
+            <input
+              type="text"
+              value={userWorksQuery}
+              onChange={e => setUserWorksQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && loadUserWorks(0)}
+              placeholder="タイトルで絞り込み (Enter)"
+              style={{
+                flex: 1, minWidth: 200, padding: '6px 10px', borderRadius: 6,
+                border: '1px solid var(--fm-border)', background: 'var(--fm-bg-card)',
+                color: 'var(--fm-text)', fontSize: 13,
+              }}
+            />
+            <button onClick={() => loadUserWorks(0)} style={S.btn}>検索</button>
+          </div>
+
+          <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginBottom: 8 }}>
+            {userWorksTotal} 件中 {userWorksPage * 50 + 1}-{Math.min((userWorksPage + 1) * 50, userWorksTotal)} 件を表示
+          </div>
+
+          {userWorks.length === 0 ? (
+            <div style={S.card}><span style={{ color: 'var(--fm-text-sub)' }}>該当する作品はありません</span></div>
+          ) : userWorks.map(w => {
+            const id = w.id as number
+            const title = (w.title as string) || ''
+            const originalTitle = (w.original_title as string) || ''
+            const releaseDate = (w.release_date as string) || ''
+            const yearOnly = !!w.release_year_only
+            const mediaType = (w.media_type as string) || 'tv'
+            const verified = !!w.is_verified
+            const mergedInto = w.merged_into as number | null
+            const homepage = (w.homepage as string) || ''
+            const createdBy = (w.created_by as string) || ''
+
+            return (
+              <div key={id} style={S.card}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6, gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 700, fontSize: 15 }}>{title}</span>
+                      <span style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>ID: {id}</span>
+                      <span style={{
+                        fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                        background: mediaType === 'movie' ? 'var(--fm-accent)' : mediaType === 'anime' ? '#e91e63' : 'var(--fm-success)',
+                        color: '#fff',
+                      }}>
+                        {mediaType === 'movie' ? '映画' : mediaType === 'anime' ? 'アニメ' : 'ドラマ'}
+                      </span>
+                      {verified ? (
+                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: 'rgba(0,255,0,0.15)', color: 'var(--fm-success)', border: '1px solid rgba(0,255,0,0.3)' }}>検証済</span>
+                      ) : (
+                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: 'rgba(255,200,0,0.15)', color: '#ffa500', border: '1px solid rgba(255,200,0,0.3)' }}>未検証</span>
+                      )}
+                      {mergedInto && (
+                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: 'var(--fm-bg-hover)', color: 'var(--fm-text-muted)' }}>→ ID {mergedInto} に統合済</span>
+                      )}
+                    </div>
+                    {originalTitle && <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginTop: 2 }}>{originalTitle}</div>}
+                    <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 4 }}>
+                      {releaseDate && `${yearOnly ? releaseDate.slice(0, 4) + '年' : releaseDate.replace(/-/g, '/')} / `}
+                      投稿者: {createdBy.slice(0, 8)}…
+                    </div>
+                    {homepage && (
+                      <div style={{ fontSize: 11, marginTop: 4 }}>
+                        <a href={homepage} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fm-accent)', wordBreak: 'break-all' }}>{homepage}</a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  <button onClick={() => setEditingWork(w)} style={S.btn}>編集</button>
+                  <button onClick={() => handleUserWorkVerify(id, !verified)} style={{ ...S.btn, background: verified ? 'var(--fm-bg-card)' : 'var(--fm-success)', color: verified ? 'var(--fm-text-sub)' : '#fff' }}>
+                    {verified ? '未検証に戻す' : '検証済にする'}
+                  </button>
+                  <button onClick={() => handleUserWorkDelete(id, title)} style={S.btnDanger}>削除</button>
+                </div>
+              </div>
+            )
+          })}
+
+          {userWorksTotal > 50 && (
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 16 }}>
+              <button
+                onClick={() => loadUserWorks(Math.max(0, userWorksPage - 1))}
+                disabled={userWorksPage === 0}
+                style={{ ...S.btn, opacity: userWorksPage === 0 ? 0.4 : 1 }}
+              >
+                ← 前へ
+              </button>
+              <button
+                onClick={() => loadUserWorks(userWorksPage + 1)}
+                disabled={(userWorksPage + 1) * 50 >= userWorksTotal}
+                style={{ ...S.btn, opacity: (userWorksPage + 1) * 50 >= userWorksTotal ? 0.4 : 1 }}
+              >
+                次へ →
+              </button>
+            </div>
+          )}
+
+          {editingWork && (
+            <UserWorkEditModal
+              work={editingWork}
+              saving={editWorkSaving}
+              onClose={() => setEditingWork(null)}
+              onSave={saveEditWork}
+            />
+          )}
+        </div>
+      )}
+
       {/* 修正提案 */}
       {tab === 'edit_proposals' && (
         <div>
@@ -1228,6 +1430,185 @@ function Sparkline({ title, data, color }: {
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--fm-text-muted)', marginTop: 4 }}>
         <span>{data[0]?.date.slice(5)}</span>
         <span>{data[data.length - 1]?.date.slice(5)}</span>
+      </div>
+    </div>
+  )
+}
+
+// ── ユーザー登録作品の編集モーダル ────────────────────────────────────────
+// movies (data_source='user') の主要フィールドを管理者が直接編集する。
+function UserWorkEditModal({
+  work,
+  saving,
+  onClose,
+  onSave,
+}: {
+  work: Record<string, unknown>
+  saving: boolean
+  onClose: () => void
+  onSave: (patch: Record<string, unknown>) => void | Promise<void>
+}) {
+  const [title, setTitle] = useState((work.title as string) || '')
+  const [originalTitle, setOriginalTitle] = useState((work.original_title as string) || '')
+  const [overview, setOverview] = useState((work.overview as string) || '')
+  const [mediaType, setMediaType] = useState<'movie' | 'tv' | 'anime'>(((work.media_type as string) || 'tv') as 'movie' | 'tv' | 'anime')
+  const [releaseDate, setReleaseDate] = useState((work.release_date as string) || '')
+  const [yearOnly, setYearOnly] = useState(!!work.release_year_only)
+  const [homepage, setHomepage] = useState((work.homepage as string) || '')
+  const [posterPath, setPosterPath] = useState((work.poster_path as string) || '')
+  const [mergedInto, setMergedInto] = useState<string>(
+    work.merged_into != null ? String(work.merged_into) : ''
+  )
+
+  const handleSave = () => {
+    const patch: Record<string, unknown> = {
+      title: title.trim(),
+      original_title: originalTitle.trim() || null,
+      overview: overview.trim() || null,
+      media_type: mediaType,
+      release_date: releaseDate || null,
+      release_year_only: yearOnly,
+      homepage: homepage.trim() || null,
+      poster_path: posterPath.trim() || null,
+    }
+    // merged_into は数値 (負ID 可) または null
+    const mid = mergedInto.trim()
+    if (mid === '') patch.merged_into = null
+    else {
+      const n = Number(mid)
+      if (Number.isFinite(n)) patch.merged_into = n
+    }
+    onSave(patch)
+  }
+
+  const s = {
+    overlay: {
+      position: 'fixed', inset: 0, zIndex: 3000,
+      background: 'rgba(0,0,0,0.7)', display: 'flex',
+      alignItems: 'center', justifyContent: 'center', padding: 16,
+    } as React.CSSProperties,
+    modal: {
+      background: 'var(--fm-bg)', borderRadius: 12,
+      width: '100%', maxWidth: 560, maxHeight: '90dvh',
+      overflow: 'auto', border: '1px solid var(--fm-border)',
+    } as React.CSSProperties,
+    header: {
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '12px 16px', borderBottom: '1px solid var(--fm-border)',
+    } as React.CSSProperties,
+    body: { padding: 16 } as React.CSSProperties,
+    row: { marginBottom: 14 } as React.CSSProperties,
+    label: {
+      display: 'block', fontSize: 12, fontWeight: 600,
+      color: 'var(--fm-text-sub)', marginBottom: 4,
+    } as React.CSSProperties,
+    input: {
+      width: '100%', padding: '8px 10px', borderRadius: 6,
+      border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)',
+      color: 'var(--fm-text)', fontSize: 13, boxSizing: 'border-box',
+    } as React.CSSProperties,
+    textarea: {
+      width: '100%', padding: '8px 10px', borderRadius: 6,
+      border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)',
+      color: 'var(--fm-text)', fontSize: 13, minHeight: 80, resize: 'vertical',
+      fontFamily: 'inherit', boxSizing: 'border-box',
+    } as React.CSSProperties,
+    btn: {
+      padding: '10px 20px', borderRadius: 8, border: 'none',
+      background: 'var(--fm-accent)', color: '#fff',
+      fontSize: 13, fontWeight: 600, cursor: 'pointer',
+    } as React.CSSProperties,
+    btnGhost: {
+      padding: '10px 20px', borderRadius: 8, border: '1px solid var(--fm-border)',
+      background: 'transparent', color: 'var(--fm-text-sub)',
+      fontSize: 13, cursor: 'pointer',
+    } as React.CSSProperties,
+  }
+
+  return (
+    <div style={s.overlay} onClick={onClose}>
+      <div style={s.modal} onClick={e => e.stopPropagation()}>
+        <div style={s.header}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>ユーザー登録作品を編集</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--fm-text-sub)', fontSize: 22, cursor: 'pointer' }}>×</button>
+        </div>
+        <div style={s.body}>
+          <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 12 }}>
+            ID: {String(work.id)} / 投稿者: {String(work.created_by || '').slice(0, 8)}…
+          </div>
+
+          <div style={s.row}>
+            <label style={s.label}>タイトル *</label>
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} style={s.input} />
+          </div>
+
+          <div style={s.row}>
+            <label style={s.label}>原題</label>
+            <input type="text" value={originalTitle} onChange={e => setOriginalTitle(e.target.value)} style={s.input} />
+          </div>
+
+          <div style={s.row}>
+            <label style={s.label}>種別</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {(['movie', 'tv', 'anime'] as const).map(v => (
+                <button key={v} onClick={() => setMediaType(v)}
+                  style={{
+                    padding: '6px 14px', borderRadius: 16, border: 'none',
+                    background: mediaType === v ? 'var(--fm-accent)' : 'var(--fm-bg-hover)',
+                    color: mediaType === v ? '#fff' : 'var(--fm-text-sub)',
+                    fontSize: 12, cursor: 'pointer',
+                  }}>
+                  {v === 'movie' ? '映画' : v === 'anime' ? 'アニメ' : 'ドラマ'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={s.row}>
+            <label style={s.label}>公開日 (YYYY-MM-DD)</label>
+            <input type="date" value={releaseDate ? releaseDate.slice(0, 10) : ''} onChange={e => setReleaseDate(e.target.value)} style={s.input} />
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--fm-text-sub)', marginTop: 6, cursor: 'pointer' }}>
+              <input type="checkbox" checked={yearOnly} onChange={e => setYearOnly(e.target.checked)} />
+              年のみ判明 (詳細画面で日付を隠す)
+            </label>
+          </div>
+
+          <div style={s.row}>
+            <label style={s.label}>公式サイト</label>
+            <input type="url" value={homepage} onChange={e => setHomepage(e.target.value)} placeholder="https://..." style={s.input} />
+          </div>
+
+          <div style={s.row}>
+            <label style={s.label}>ポスター URL / パス</label>
+            <input type="text" value={posterPath} onChange={e => setPosterPath(e.target.value)} placeholder="https://... or /xxxxxx.jpg" style={s.input} />
+          </div>
+
+          <div style={s.row}>
+            <label style={s.label}>あらすじ</label>
+            <textarea value={overview} onChange={e => setOverview(e.target.value)} style={s.textarea} />
+          </div>
+
+          <div style={s.row}>
+            <label style={s.label}>統合先 movie ID (重複作品を吸収させる場合)</label>
+            <input
+              type="text"
+              value={mergedInto}
+              onChange={e => setMergedInto(e.target.value)}
+              placeholder="空欄=統合なし / 例: 12345 または -2"
+              style={s.input}
+            />
+            <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 4 }}>
+              統合先 ID を入れるとこの行は重複扱いになり、検索や一覧から消えます。
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+            <button onClick={onClose} style={s.btnGhost} disabled={saving}>キャンセル</button>
+            <button onClick={handleSave} style={{ ...s.btn, opacity: saving || !title.trim() ? 0.5 : 1 }} disabled={saving || !title.trim()}>
+              {saving ? '保存中…' : '保存'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
