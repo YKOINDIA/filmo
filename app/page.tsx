@@ -437,6 +437,25 @@ export default function Page() {
                   <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
                 </div>
               </Link>
+              <Link
+                href="/games/crystal-blast"
+                style={{
+                  display: 'block', marginTop: 8, padding: 16, borderRadius: 14,
+                  background: 'linear-gradient(135deg, rgba(255,87,87,0.18), rgba(195,116,255,0.14))',
+                  border: '1px solid var(--fm-border)',
+                  textDecoration: 'none', color: 'inherit',
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ fontSize: 28 }}>💎</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700 }}>CRYSTAL BLAST</div>
+                    <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginTop: 2 }}>
+                      連鎖でぶっ飛ばせ！　ソロも対戦も
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
+                </div>
+              </Link>
               <Gamification userId={user.id} />
             </div>
           </div>
