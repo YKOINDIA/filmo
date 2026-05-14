@@ -632,6 +632,9 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [searchResults, setSearchResults] = useState<TMDBItem[]>([])
   const [peopleResults, setPeopleResults] = useState<TMDBPersonResult[]>([])
+  // ユーザー登録作品 (data_source='user'、負ID)。タブで絞り込まれず常に表示。
+  // searchResults とは独立して保持し、見つけてもらいやすくする。
+  const [localResults, setLocalResults] = useState<TMDBItem[]>([])
   const [searchPage, setSearchPage] = useState(1)
   const [searchTotalPages, setSearchTotalPages] = useState(1)
   const [searchLoading, setSearchLoading] = useState(false)
@@ -740,7 +743,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
   }, [activeTab, debouncedQuery, browse.mode, fetchSection])
 
   // Client-side search cache (query -> { results, people, total_pages })
-  const searchCacheRef = useRef<Map<string, { results: TMDBItem[]; people: TMDBPersonResult[]; total_pages: number }>>(new Map())
+  const searchCacheRef = useRef<Map<string, { results: TMDBItem[]; people: TMDBPersonResult[]; local: TMDBItem[]; total_pages: number }>>(new Map())
 
   // Debounced search (200ms for snappier feel)
   useEffect(() => {
@@ -749,6 +752,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
       setDebouncedQuery('')
       setSearchResults([])
       setPeopleResults([])
+      setLocalResults([])
       setSearchPage(1)
       setSearchTotalPages(1)
       return
@@ -768,6 +772,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
     if (cached) {
       setSearchResults(cached.results)
       setPeopleResults(cached.people)
+      setLocalResults(cached.local)
       setSearchTotalPages(cached.total_pages)
       setSearchPage(1)
       return
@@ -812,34 +817,33 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
           }
         }
 
-        // ユーザー登録作品 (data_source='user', 負ID) を結果の先頭にマージ。
-        // TMDB に同じ作品が無いことが多いユーザー投稿なので、見つけてもらいやすいよう
-        // 検索結果の上に出す。
+        // ユーザー登録作品 (data_source='user', 負ID) は独立した配列で保持。
+        // タブ (映画/ドラマ/アニメ) で絞り込まれず、検索結果の上にまとめて
+        // 別セクションとして表示する (見つけてもらいやすさ優先)。
+        const local: TMDBItem[] = []
         if (localData) {
-          const local = localData as {
+          const localRes = localData as {
             results?: {
               id: number; title: string; original_title?: string | null
               media_type: string; release_date: string | null
               poster_path: string | null; vote_average: number
             }[]
           }
-          const mapped: TMDBItem[] = (local.results || []).map(r => ({
-            id: r.id,
-            title: r.media_type === 'movie' ? r.title : undefined,
-            name: r.media_type !== 'movie' ? r.title : undefined,
-            poster_path: r.poster_path,
-            backdrop_path: null,
-            media_type: r.media_type,
-            release_date: r.media_type === 'movie' ? (r.release_date || undefined) : undefined,
-            first_air_date: r.media_type !== 'movie' ? (r.release_date || undefined) : undefined,
-            vote_average: r.vote_average || 0,
-            overview: '',
-            genre_ids: [],
-          }))
-          // 既に結果に同じ ID（負ID）があれば重複しないように
-          const existing = new Set(results.map(r => r.id))
-          const unique = mapped.filter(r => !existing.has(r.id))
-          results.unshift(...unique)
+          for (const r of localRes.results || []) {
+            local.push({
+              id: r.id,
+              title: r.media_type === 'movie' ? r.title : undefined,
+              name: r.media_type !== 'movie' ? r.title : undefined,
+              poster_path: r.poster_path,
+              backdrop_path: null,
+              media_type: r.media_type,
+              release_date: r.media_type === 'movie' ? (r.release_date || undefined) : undefined,
+              first_air_date: r.media_type !== 'movie' ? (r.release_date || undefined) : undefined,
+              vote_average: r.vote_average || 0,
+              overview: '',
+              genre_ids: [],
+            })
+          }
         }
 
         // Annict結果をマージ（TMDB IDと重複しないもののみ）
@@ -851,11 +855,12 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
         }
 
         const trimmedPeople = people.slice(0, 8)
-        searchCacheRef.current.set(debouncedQuery, { results, people: trimmedPeople, total_pages })
+        searchCacheRef.current.set(debouncedQuery, { results, people: trimmedPeople, local, total_pages })
         setSearchResults(results)
         setPeopleResults(trimmedPeople)
+        setLocalResults(local)
         setSearchTotalPages(total_pages)
-        const totalHits = results.length + trimmedPeople.length
+        const totalHits = results.length + trimmedPeople.length + local.length
         trackSearchPerformed(debouncedQuery, activeTab, totalHits)
         if (totalHits === 0) trackSearchNoResults(debouncedQuery, activeTab)
       })
@@ -1568,8 +1573,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
   const renderSearchView = () => {
     const baseFiltered = searchResults.filter(r => {
       const isAnnict = !!(r as unknown as Record<string, unknown>)._annict
-      const isUserRegistered = r.id < 0      // 負ID = data_source='user'。ポスター無しでも表示する
-      if (!r.poster_path && !isAnnict && !isUserRegistered) return false
+      if (!r.poster_path && !isAnnict) return false
       if (activeTab === 'movie') return r.media_type === 'movie'
       if (activeTab === 'drama') return r.media_type === 'tv' && !isAnnict
       if (activeTab === 'anime') return isAnnict || r.media_type === 'anime' || r.media_type === 'tv' || r.genre_ids?.includes(16)
@@ -1579,6 +1583,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
     const hidden = baseFiltered.length - filtered.length
 
     const showPeopleRow = peopleResults.length > 0 && !!onOpenPerson
+    const showLocalRow = localResults.length > 0
 
     return (
       <div>
@@ -1587,7 +1592,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
             視聴済み {hidden} 件を非表示中
           </div>
         )}
-        {searchLoading && searchResults.length === 0 && peopleResults.length === 0 ? renderSkeletonGrid() : (
+        {searchLoading && searchResults.length === 0 && peopleResults.length === 0 && localResults.length === 0 ? renderSkeletonGrid() : (
           <>
             {showPeopleRow && (
               <div style={{ padding: '0 16px 12px' }}>
@@ -1637,10 +1642,20 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
                 </div>
               </div>
             )}
+            {showLocalRow && (
+              <div style={{ padding: '0 16px 12px' }}>
+                <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 8, fontWeight: 600, letterSpacing: 0.5 }}>
+                  ユーザー登録作品
+                </div>
+                <div style={S.grid}>
+                  {localResults.map(item => renderPosterCard(item, true))}
+                </div>
+              </div>
+            )}
             <div style={S.grid}>
               {filtered.map(item => renderPosterCard(item, true))}
             </div>
-            {filtered.length === 0 && peopleResults.length === 0 && !searchLoading && (
+            {filtered.length === 0 && peopleResults.length === 0 && localResults.length === 0 && !searchLoading && (
               <div style={S.emptyState}>
                 <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
                 <div style={{ fontSize: 15 }}>「{debouncedQuery}」に一致する結果がありません</div>
@@ -1655,9 +1670,9 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
                 </div>
               </div>
             )}
-            {filtered.length === 0 && peopleResults.length > 0 && !searchLoading && (
+            {filtered.length === 0 && (peopleResults.length > 0 || localResults.length > 0) && !searchLoading && (
               <div style={{ padding: '8px 16px 24px', textAlign: 'center', color: 'var(--fm-text-muted)', fontSize: 12 }}>
-                {activeTab === 'movie' ? '映画' : activeTab === 'drama' ? 'ドラマ' : 'アニメ'}の作品結果はありません — 上の人物をタップしてフィルモグラフィを見る
+                {activeTab === 'movie' ? '映画' : activeTab === 'drama' ? 'ドラマ' : 'アニメ'}の TMDB 作品結果はありません
               </div>
             )}
             {searchPage < searchTotalPages && filtered.length > 0 && (
@@ -1888,7 +1903,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson
           {query && (
             <button
               style={S.clearBtn}
-              onClick={() => { setQuery(''); setSearchResults([]); setPeopleResults([]); setDebouncedQuery('') }}
+              onClick={() => { setQuery(''); setSearchResults([]); setPeopleResults([]); setLocalResults([]); setDebouncedQuery('') }}
             >
               ×
             </button>

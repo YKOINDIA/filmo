@@ -91,17 +91,36 @@ export async function GET(request: NextRequest) {
     switch (action) {
       // ローカルDB内のユーザー登録作品を検索
       case 'search_local': {
-        const query = searchParams.get('query') || ''
-        if (!query.trim()) return NextResponse.json({ results: [] })
+        const raw = searchParams.get('query') || ''
+        if (!raw.trim()) return NextResponse.json({ results: [] })
 
-        const { data } = await supabase
+        // .or() の filter 文字列は PostgREST に raw で渡るため、",", "(", ")",
+        // 既存のワイルドカード "*" / "%" 等を含むと構文を壊す。検索意図を保ったまま
+        // それらを除去する。
+        const q = raw
+          .trim()
+          .replace(/[(),*%"\\]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+        if (!q) return NextResponse.json({ results: [] })
+
+        // PostgREST のドキュメント推奨どおり ilike のワイルドカードは "*" を使う
+        // (URL エンコードで揉めにくい)。
+        const pattern = `*${q}*`
+
+        const { data, error } = await supabase
           .from('movies')
           .select('id, title, original_title, media_type, release_date, poster_path, vote_average, data_source, is_verified')
-          .or(`title.ilike.%${query}%,original_title.ilike.%${query}%`)
+          .or(`title.ilike.${pattern},original_title.ilike.${pattern}`)
           .eq('data_source', 'user')
           .is('merged_into', null)
           .order('created_at', { ascending: false })
           .limit(20)
+
+        if (error) {
+          console.error('search_local query failed:', error)
+          return NextResponse.json({ results: [], error: error.message }, { status: 500 })
+        }
 
         return NextResponse.json({ results: data || [] })
       }
