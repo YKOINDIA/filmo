@@ -16,6 +16,7 @@ import { addPoints, POINT_CONFIG, checkDailyLikeLimit, incrementDailyLikeCount }
 import { showToast } from '../lib/toast'
 import { trackPersonReviewPosted } from '../lib/analytics'
 import ReportModal from './ReportModal'
+import StarRating from './StarRating'
 
 interface PersonReview {
   id: string
@@ -253,7 +254,14 @@ export default function PersonReviewSection({ personId, personName, userId, onRe
         <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginBottom: 8 }}>
           {personName} について{myReview ? '(編集中)' : 'あなたのレビュー'}
         </div>
-        <StarPicker value={draft.score} onChange={s => setDraft(d => ({ ...d, score: s }))} disabled={!isAuthed} />
+        <StarRating
+          value={draft.score}
+          onChange={s => setDraft(d => ({ ...d, score: s }))}
+          onClear={() => setDraft(d => ({ ...d, score: null }))}
+          readonly={!isAuthed}
+          size={22}
+          showValue
+        />
         <textarea
           value={draft.body}
           onChange={e => setDraft(d => ({ ...d, body: e.target.value }))}
@@ -341,7 +349,10 @@ export default function PersonReviewSection({ personId, personName, userId, onRe
                   <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>{r.created_at.slice(0, 10)}</div>
                 </div>
                 {r.score != null && (
-                  <span style={{ fontSize: 13, color: 'var(--fm-star)', fontWeight: 700 }}>★ {r.score.toFixed(1)}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <StarRating value={r.score} size={14} readonly />
+                    <span style={{ fontSize: 12, color: 'var(--fm-star)', fontWeight: 700 }}>{r.score.toFixed(1)}</span>
+                  </span>
                 )}
                 <button
                   onClick={() => setReportTargetId(r.id)}
@@ -386,72 +397,6 @@ export default function PersonReviewSection({ personId, personName, userId, onRe
 }
 
 // ── small UI helpers ────────────────────────────────────────────────────────
-
-/**
- * 5星 + 半クリック (0.5 刻み) の星評価ピッカー。
- * 各星に「左半分=0.5 / 右半分=1.0」のクリック領域を重ねている。
- * WorkDetail.tsx の StarRating と同等ロジック (size と readonly 引数は省略)。
- */
-function StarPicker({
-  value, onChange, disabled,
-}: { value: number | null; onChange: (n: number | null) => void; disabled: boolean }) {
-  const [hover, setHover] = useState<number | null>(null)
-  const display = hover ?? value ?? 0
-  const size = 22
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center' }}>
-      <span
-        style={{ display: 'inline-flex', gap: 2, cursor: disabled ? 'default' : 'pointer' }}
-        onMouseLeave={() => !disabled && setHover(null)}
-      >
-        {[1, 2, 3, 4, 5].map(star => {
-          const full = display >= star
-          const half = !full && display >= star - 0.5
-          return (
-            <span
-              key={star}
-              style={{ position: 'relative', width: size, height: size, fontSize: size, lineHeight: 1 }}
-            >
-              {/* 背景 (常に表示。グレーの ★) */}
-              <span style={{ position: 'absolute', inset: 0, color: 'var(--fm-text-muted)' }}>★</span>
-              {/* 塗り (full or half) */}
-              {(full || half) && (
-                <span style={{
-                  position: 'absolute', left: 0, top: 0, height: '100%',
-                  width: full ? '100%' : '50%', overflow: 'hidden',
-                  color: 'var(--fm-star)',
-                }}>★</span>
-              )}
-              {/* クリック領域: 左半分 = 0.5刻み */}
-              {!disabled && (
-                <>
-                  <span
-                    style={{ position: 'absolute', left: 0, top: 0, width: '50%', height: '100%', zIndex: 2 }}
-                    onMouseEnter={() => setHover(star - 0.5)}
-                    onClick={() => onChange(value === star - 0.5 ? null : star - 0.5)}
-                    aria-label={`${star - 0.5}星`}
-                    role="button"
-                  />
-                  <span
-                    style={{ position: 'absolute', left: '50%', top: 0, width: '50%', height: '100%', zIndex: 2 }}
-                    onMouseEnter={() => setHover(star)}
-                    onClick={() => onChange(value === star ? null : star)}
-                    aria-label={`${star}星`}
-                    role="button"
-                  />
-                </>
-              )}
-            </span>
-          )
-        })}
-      </span>
-      <span style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginLeft: 10 }}>
-        {value != null ? `${value.toFixed(1)}` : '---'}
-      </span>
-    </div>
-  )
-}
 
 function btnStyle(kind: 'primary' | 'ghost'): React.CSSProperties {
   if (kind === 'primary') {
