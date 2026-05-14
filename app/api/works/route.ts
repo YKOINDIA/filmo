@@ -90,39 +90,52 @@ export async function GET(request: NextRequest) {
   try {
     switch (action) {
       // ローカルDB内のユーザー登録作品を検索
+      // .or() フィルタ文字列のパース挙動が PostgREST のバージョンや特殊文字で
+      // ばらつくため、title と original_title それぞれを別クエリで .ilike() して
+      // 結果をマージする方式に統一する (確実かつ Supabase JS のドキュメント済 API)。
       case 'search_local': {
         const raw = searchParams.get('query') || ''
-        if (!raw.trim()) return NextResponse.json({ results: [] })
-
-        // .or() の filter 文字列は PostgREST に raw で渡るため、",", "(", ")",
-        // 既存のワイルドカード "*" / "%" 等を含むと構文を壊す。検索意図を保ったまま
-        // それらを除去する。
-        const q = raw
-          .trim()
-          .replace(/[(),*%"\\]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
+        const q = raw.trim()
         if (!q) return NextResponse.json({ results: [] })
 
-        // PostgREST のドキュメント推奨どおり ilike のワイルドカードは "*" を使う
-        // (URL エンコードで揉めにくい)。
-        const pattern = `*${q}*`
+        const cols = 'id, title, original_title, media_type, release_date, poster_path, vote_average, data_source, is_verified'
+        const pattern = `%${q}%`
 
-        const { data, error } = await supabase
-          .from('movies')
-          .select('id, title, original_title, media_type, release_date, poster_path, vote_average, data_source, is_verified')
-          .or(`title.ilike.${pattern},original_title.ilike.${pattern}`)
-          .eq('data_source', 'user')
-          .is('merged_into', null)
-          .order('created_at', { ascending: false })
-          .limit(20)
+        const [byTitle, byOriginal] = await Promise.all([
+          supabase
+            .from('movies')
+            .select(cols)
+            .ilike('title', pattern)
+            .eq('data_source', 'user')
+            .is('merged_into', null)
+            .order('created_at', { ascending: false })
+            .limit(20),
+          supabase
+            .from('movies')
+            .select(cols)
+            .ilike('original_title', pattern)
+            .eq('data_source', 'user')
+            .is('merged_into', null)
+            .order('created_at', { ascending: false })
+            .limit(20),
+        ])
 
-        if (error) {
-          console.error('search_local query failed:', error)
-          return NextResponse.json({ results: [], error: error.message }, { status: 500 })
+        if (byTitle.error) console.error('search_local title query failed:', byTitle.error)
+        if (byOriginal.error) console.error('search_local original_title query failed:', byOriginal.error)
+
+        type Row = NonNullable<typeof byTitle.data>[number]
+        const seen = new Set<number>()
+        const merged: Row[] = []
+        for (const row of [...(byTitle.data || []), ...(byOriginal.data || [])]) {
+          if (seen.has(row.id)) continue
+          seen.add(row.id)
+          merged.push(row)
         }
 
-        return NextResponse.json({ results: data || [] })
+        // 観測用ログ (本番でも残す: 0件報告が来た時にここで原因を切り分ける)
+        console.log(`search_local q="${q}" hits=${merged.length} (title=${byTitle.data?.length || 0}, original=${byOriginal.data?.length || 0})`)
+
+        return NextResponse.json({ results: merged.slice(0, 20) })
       }
 
       // ユーザーの作品リクエスト一覧
