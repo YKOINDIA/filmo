@@ -2,6 +2,9 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { supabase } from '../lib/supabase'
+import PersonRegisterModal from './PersonRegisterModal'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 
@@ -19,10 +22,28 @@ interface PersonSearchProps {
 }
 
 export default function PersonSearch({ placeholder, filterDepartment }: PersonSearchProps) {
+  const router = useRouter()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<PersonResult[]>([])
   const [loading, setLoading] = useState(false)
+  const [showRegister, setShowRegister] = useState(false)
+  const [authedUserId, setAuthedUserId] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setAuthedUserId(session?.user?.id ?? null)
+    })
+  }, [])
+
+  const openRegister = () => {
+    if (!authedUserId) {
+      // 未ログインならログインを促す (Filmo のグローバル LoginPrompt 連携はここでは最小化)
+      window.location.href = '/'
+      return
+    }
+    setShowRegister(true)
+  }
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -66,50 +87,90 @@ export default function PersonSearch({ placeholder, filterDepartment }: PersonSe
       )}
 
       {!loading && query.trim() && results.length === 0 && (
-        <div style={{ fontSize: 13, color: 'var(--fm-text-muted)', padding: 12 }}>
-          該当する人物が見つかりません
+        <div style={{
+          marginTop: 10, padding: 16, borderRadius: 10,
+          background: 'var(--fm-bg-card)', border: '1px dashed var(--fm-border)',
+          textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 13, color: 'var(--fm-text-muted)', marginBottom: 10 }}>
+            「{query}」に一致する人物が見つかりません
+          </div>
+          <button
+            onClick={openRegister}
+            style={{
+              padding: '8px 18px', borderRadius: 8, border: 'none',
+              background: 'var(--fm-accent)', color: '#fff',
+              fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            この人物を Filmo に登録する
+          </button>
         </div>
       )}
 
       {results.length > 0 && (
-        <div style={{
-          marginTop: 10,
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-          gap: 12,
-        }}>
-          {results.map(p => (
-            <Link key={p.id} href={`/people/${p.id}`} style={{
-              textDecoration: 'none', color: 'inherit',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-              padding: 10, borderRadius: 10,
-              background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
-            }}>
-              {p.profile_path ? (
-                <img src={`${TMDB_IMG}/w185${p.profile_path}`} alt={p.name}
-                  loading="lazy"
-                  style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover' }} />
-              ) : (
-                <div style={{
-                  width: 80, height: 80, borderRadius: '50%',
-                  background: 'var(--fm-bg-secondary)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 24, color: 'var(--fm-text-muted)',
-                }}>
-                  {p.name.charAt(0)}
+        <>
+          <div style={{
+            marginTop: 10,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+            gap: 12,
+          }}>
+            {results.map(p => (
+              <Link key={p.id} href={`/people/${p.id}`} style={{
+                textDecoration: 'none', color: 'inherit',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                padding: 10, borderRadius: 10,
+                background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
+              }}>
+                {p.profile_path ? (
+                  <img src={`${TMDB_IMG}/w185${p.profile_path}`} alt={p.name}
+                    loading="lazy"
+                    style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{
+                    width: 80, height: 80, borderRadius: '50%',
+                    background: 'var(--fm-bg-secondary)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 24, color: 'var(--fm-text-muted)',
+                  }}>
+                    {p.name.charAt(0)}
+                  </div>
+                )}
+                <div style={{ fontSize: 13, fontWeight: 600, textAlign: 'center' }}>
+                  {p.name}
                 </div>
-              )}
-              <div style={{ fontSize: 13, fontWeight: 600, textAlign: 'center' }}>
-                {p.name}
-              </div>
-              {p.known_for_department && (
-                <div style={{ fontSize: 10, color: 'var(--fm-text-muted)' }}>
-                  {p.known_for_department}
-                </div>
-              )}
-            </Link>
-          ))}
-        </div>
+                {p.known_for_department && (
+                  <div style={{ fontSize: 10, color: 'var(--fm-text-muted)' }}>
+                    {p.known_for_department}
+                  </div>
+                )}
+              </Link>
+            ))}
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 14 }}>
+            <button
+              onClick={openRegister}
+              style={{
+                background: 'none', border: 'none', color: 'var(--fm-accent)',
+                fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              該当の人物が見つからない場合は登録できます
+            </button>
+          </div>
+        </>
+      )}
+
+      {showRegister && authedUserId && (
+        <PersonRegisterModal
+          userId={authedUserId}
+          initialQuery={query}
+          suggestedDepartment={filterDepartment}
+          onClose={() => setShowRegister(false)}
+          onOpenPerson={(id) => router.push(`/people/${id}`)}
+        />
       )}
     </div>
   )

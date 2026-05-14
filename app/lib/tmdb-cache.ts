@@ -114,7 +114,45 @@ export async function getUserWorkDetail(movieId: number) {
 
 // --- 人物詳細キャッシュ ---
 
+/**
+ * ユーザー登録人物の詳細を取得 (TMDB にフォールバックしない)。
+ * 負ID = ユーザー登録のセンチネル。movies の getUserWorkDetail と同パターン。
+ * 戻り値は TMDB 形式に整形して PersonDetail / PublicPersonView から透過利用できるようにする。
+ */
+export async function getUserPersonDetail(personId: number) {
+  const supabase = getSupabaseAdmin()
+  const { data } = await supabase
+    .from('persons')
+    .select('*')
+    .eq('id', personId)
+    .single()
+  if (!data) return null
+  return {
+    id: data.id,
+    name: data.name,
+    original_name: data.original_name || null,
+    profile_path: data.profile_path,
+    biography: data.biography || '',
+    birthday: data.birthday || null,
+    deathday: null,
+    place_of_birth: data.place_of_birth || null,
+    homepage: data.homepage || null,
+    known_for_department: Array.isArray(data.known_for) && data.known_for.length > 0
+      ? data.known_for[0]
+      : null,
+    also_known_as: [],
+    combined_credits: { cast: [], crew: [] },
+    external_ids: {},
+    data_source: data.data_source || 'user',
+  }
+}
+
 export async function getPersonDetailCached(id: number, language?: string) {
+  // 負ID はユーザー登録人物 → TMDB に問い合わせず DB から返す
+  if (id < 0) {
+    return getUserPersonDetail(id)
+  }
+
   // Non-default language: fetch directly from TMDB
   if (language && language !== 'ja-JP') {
     return tmdbFetchRaw(`/person/${id}`, {

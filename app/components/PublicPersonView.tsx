@@ -132,7 +132,7 @@ function buildExternalLinks(ext: TmdbExternalIds | undefined, homepage: string |
 
 export async function fetchPublicPerson(rawId: string): Promise<PublicPersonData | null> {
   const id = Number(rawId)
-  if (!Number.isFinite(id) || id <= 0) return null
+  if (!Number.isFinite(id) || id === 0) return null
 
   try {
     const data = (await getPersonDetailCached(id)) as TmdbPerson | null
