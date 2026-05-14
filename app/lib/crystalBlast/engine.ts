@@ -239,11 +239,14 @@ function groupBonus(size: number): number {
   return 10
 }
 
+/** 連鎖中に消えたセル 1 個分の情報 (r, c, color)。color が負数なら garbage */
+export type PopCell = { r: number; c: number; color: number }
+
 export interface ChainStep {
   popped: number
   colors: number
   score: number
-  cells: [number, number][]
+  cells: PopCell[]
 }
 
 /** 一度の重力後にあるグループから popping を行う。chain が起きる限り繰り返す */
@@ -264,6 +267,7 @@ export function resolveChain(initial: Board): {
     if (popping.length === 0) break
 
     const poppedCells = new Set<string>()
+    const popCells: PopCell[] = []
     const colorsPopped = new Set<Color>()
     let groupBonusSum = 0
     let poppedCount = 0
@@ -271,7 +275,10 @@ export function resolveChain(initial: Board): {
       colorsPopped.add(g.color)
       groupBonusSum += groupBonus(g.cells.length)
       poppedCount += g.cells.length
-      for (const [r, c] of g.cells) poppedCells.add(`${r},${c}`)
+      for (const [r, c] of g.cells) {
+        poppedCells.add(`${r},${c}`)
+        popCells.push({ r, c, color: g.color })
+      }
     }
 
     // 隣接ガベージも一緒に消す
@@ -284,6 +291,10 @@ export function resolveChain(initial: Board): {
           garbageToPop.add(`${nr},${nc}`)
         }
       }
+    }
+    for (const key of garbageToPop) {
+      const [r, c] = key.split(',').map(Number)
+      popCells.push({ r, c, color: -1 })
     }
 
     // スコア計算 (ぷよぷよ式)
@@ -298,7 +309,7 @@ export function resolveChain(initial: Board): {
       popped: poppedCount,
       colors: colorsPopped.size,
       score: stepScore,
-      cells: [...poppedCells].map(s => s.split(',').map(Number) as [number, number]),
+      cells: popCells,
     })
 
     // 盤面更新

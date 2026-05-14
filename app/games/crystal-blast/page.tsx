@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { addPoints, POINT_CONFIG } from '../../lib/points'
@@ -9,6 +9,7 @@ import { useMultiplayer } from '../../lib/crystalBlast/useMultiplayer'
 import {
   type Board as EngineBoard,
   type Piece,
+  type PopCell,
   pieceCells,
   COLS,
   ROWS,
@@ -85,32 +86,46 @@ function BoardView({
   board,
   piece,
   cellSize = 32,
-  flashCells = [],
+  popping = null,
   label,
   score,
   chain,
   pendingGarbage,
   highlight,
+  shakeKey = 0,
+  scorePopups = [],
+  chainBanner = null,
 }: {
   board: EngineBoard
   piece?: Piece | null
   cellSize?: number
-  flashCells?: [number, number][]
+  /** 直近で消えたセル群。指定があるとオーバーレイで pop アニメーションを再生 */
+  popping?: { id: number; cells: PopCell[] } | null
   label?: string
   score?: number
   chain?: number
   pendingGarbage?: number
   highlight?: boolean
+  /** 値が変わるたびに盤面シェイクを再生 */
+  shakeKey?: number
+  scorePopups?: ScorePopup[]
+  chainBanner?: { id: number; chain: number } | null
 }) {
   const cells = renderBoardCells(board, piece ?? null)
-  const flash = new Set(flashCells.map(([r, c]) => `${r},${c}`))
 
   // 受信お邪魔予告 (1 行 = 6 個)
   const pendingRows = pendingGarbage ? Math.floor(pendingGarbage / COLS) : 0
   const pendingExtra = pendingGarbage ? pendingGarbage % COLS : 0
 
+  // pop アニメーション (オーバーレイ): 該当セルの色を覚えておき、絶対配置で再描画
+  const popOverlay = popping?.cells ?? []
+  // 盤面全体のシェイク強度: shakeKey が偶奇で交互、強度は chain によって調整
+  const shakeClass = shakeKey > 0
+    ? (chain && chain >= 3 ? 'cb-shake-hard' : 'cb-shake-soft')
+    : ''
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, position: 'relative' }}>
       {label && (
         <div style={{
           fontSize: 12, fontWeight: 700, color: 'var(--fm-text-sub)',
@@ -131,19 +146,23 @@ function BoardView({
         <div style={{
           display: 'flex', gap: 2, alignSelf: 'flex-start',
           paddingLeft: 4, fontSize: 10, color: 'var(--fm-warning, #ff8c00)',
+          fontWeight: 700,
         }}>
           ⚠️ {pendingGarbage} 個落下予告
         </div>
       )}
 
-      <div style={{
-        position: 'relative',
-        padding: 4,
-        borderRadius: 10,
-        background: 'rgba(0,0,0,0.35)',
-        border: highlight ? '2px solid var(--fm-accent)' : '1px solid var(--fm-border)',
-        boxShadow: highlight ? '0 0 14px rgba(0,192,48,0.35)' : undefined,
-      }}>
+      <div
+        key={shakeKey}
+        className={shakeClass}
+        style={{
+          position: 'relative',
+          padding: 4,
+          borderRadius: 10,
+          background: 'rgba(0,0,0,0.35)',
+          border: highlight ? '2px solid var(--fm-accent)' : '1px solid var(--fm-border)',
+          boxShadow: highlight ? '0 0 14px rgba(0,192,48,0.35)' : undefined,
+        }}>
         <div style={{
           display: 'grid',
           gridTemplateColumns: `repeat(${COLS}, ${cellSize}px)`,
@@ -152,34 +171,106 @@ function BoardView({
           background: 'rgba(255,255,255,0.04)',
         }}>
           {cells.flatMap((row, r) =>
-            row.map((v, c) => {
-              const isFlash = flash.has(`${r},${c}`)
-              return (
-                <div
-                  key={`${r}-${c}`}
-                  style={{
-                    width: cellSize, height: cellSize,
-                    background: 'rgba(255,255,255,0.02)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: 'inset 0 0 1px rgba(255,255,255,0.04)',
-                  }}>
-                  {v !== 0 && (
-                    <div style={{
-                      width: cellSize - 6,
-                      height: cellSize - 6,
-                      borderRadius: v === -1 ? 4 : '50%',
-                      background: v === -1 ? GARBAGE_COLOR : CRYSTAL_COLORS[v],
-                      boxShadow: isFlash
-                        ? '0 0 12px rgba(255,255,255,0.9), inset 0 0 4px rgba(255,255,255,0.8)'
-                        : 'inset 0 -2px 4px rgba(0,0,0,0.35), inset 0 2px 3px rgba(255,255,255,0.35)',
-                      transition: 'box-shadow 0.15s',
-                    }} />
-                  )}
-                </div>
-              )
-            }),
+            row.map((v, c) => (
+              <div
+                key={`${r}-${c}`}
+                style={{
+                  width: cellSize, height: cellSize,
+                  background: 'rgba(255,255,255,0.02)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: 'inset 0 0 1px rgba(255,255,255,0.04)',
+                }}>
+                {v !== 0 && (
+                  <div className="cb-crystal-idle" style={{
+                    width: cellSize - 6,
+                    height: cellSize - 6,
+                    borderRadius: v === -1 ? 4 : '50%',
+                    background: v === -1 ? GARBAGE_COLOR : CRYSTAL_COLORS[v],
+                    boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.35), inset 0 2px 3px rgba(255,255,255,0.35)',
+                    transition: 'box-shadow 0.15s',
+                  }} />
+                )}
+              </div>
+            )),
           )}
         </div>
+
+        {/* Pop アニメーション オーバーレイ */}
+        {popping && popOverlay.map((p, i) => {
+          // セル位置を pixel に変換 (padding=4 + gap=1)
+          const x = 4 + p.c * (cellSize + 1) + (cellSize - 6) / 2 + 3
+          const y = 4 + p.r * (cellSize + 1) + (cellSize - 6) / 2 + 3
+          return (
+            <div
+              key={`pop-${popping.id}-${i}`}
+              className="cb-crystal-pop"
+              style={{
+                position: 'absolute',
+                left: x - (cellSize - 6) / 2,
+                top: y - (cellSize - 6) / 2,
+                width: cellSize - 6,
+                height: cellSize - 6,
+                borderRadius: p.color === -1 ? 4 : '50%',
+                background: p.color === -1 ? GARBAGE_COLOR : CRYSTAL_COLORS[p.color],
+                pointerEvents: 'none',
+              }}
+            />
+          )
+        })}
+
+        {/* Chain banner (中央) */}
+        {chainBanner && chainBanner.chain >= 2 && (
+          <div
+            key={`banner-${chainBanner.id}`}
+            className="cb-banner-pop"
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '38%',
+              padding: '6px 14px',
+              borderRadius: 12,
+              background: chainBanner.chain >= 5
+                ? 'linear-gradient(135deg, #ffd24a, #ff5757, #c374ff)'
+                : chainBanner.chain >= 3
+                  ? 'linear-gradient(135deg, #ff5757, #ffd24a)'
+                  : 'linear-gradient(135deg, var(--fm-accent), var(--fm-accent-light))',
+              color: '#fff',
+              fontSize: chainBanner.chain >= 5 ? 28 : chainBanner.chain >= 3 ? 22 : 18,
+              fontWeight: 900,
+              letterSpacing: 2,
+              textShadow: '0 2px 6px rgba(0,0,0,0.5)',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+              pointerEvents: 'none',
+              whiteSpace: 'nowrap',
+            }}>
+            {chainBanner.chain >= 7 ? '🔥 INSANE!' :
+             chainBanner.chain >= 5 ? '💥 AMAZING!' :
+             chainBanner.chain >= 4 ? '⚡ FANTASTIC!' :
+             chainBanner.chain >= 3 ? '✨ NICE CHAIN!' :
+             '⭐ DOUBLE!'}{' '}
+            <span style={{ fontSize: '0.8em' }}>{chainBanner.chain}連鎖</span>
+          </div>
+        )}
+
+        {/* Floating score popups */}
+        {scorePopups.map(p => (
+          <div
+            key={p.id}
+            className="cb-float-up"
+            style={{
+              position: 'absolute',
+              left: `${(p.col / COLS) * 100}%`,
+              top: `${(p.row / ROWS) * 100}%`,
+              fontSize: p.chain >= 3 ? 22 : 16,
+              fontWeight: 900,
+              color: p.chain >= 3 ? '#ffd24a' : '#ffffff',
+              textShadow: '0 2px 6px rgba(0,0,0,0.6), 0 0 12px rgba(255,255,255,0.5)',
+              pointerEvents: 'none',
+              whiteSpace: 'nowrap',
+            }}>
+            +{p.delta.toLocaleString()}
+          </div>
+        ))}
       </div>
 
       {typeof score === 'number' && (
@@ -189,6 +280,14 @@ function BoardView({
       )}
     </div>
   )
+}
+
+interface ScorePopup {
+  id: number
+  delta: number
+  row: number
+  col: number
+  chain: number
 }
 
 // ====================================================
@@ -273,6 +372,12 @@ export default function CrystalBlastPage() {
   // 結果
   const [matchOutcome, setMatchOutcome] = useState<'win' | 'lose' | 'draw' | null>(null)
   const [pointsAwarded, setPointsAwarded] = useState(0)
+
+  // 演出用 (ソロ / 対戦どちらでも使う)
+  const [popOverlay, setPopOverlay] = useState<{ id: number; cells: PopCell[] } | null>(null)
+  const [scorePopups, setScorePopups] = useState<ScorePopup[]>([])
+  const [chainBanner, setChainBanner] = useState<{ id: number; chain: number } | null>(null)
+  const [shakeKey, setShakeKey] = useState(0)
 
   // ====================================================
   // Auth + initial stats
@@ -393,6 +498,60 @@ export default function CrystalBlastPage() {
       },
     },
   })
+
+  // ====================================================
+  // チェインイベント → 演出 (pop アニメ / バナー / スコアポップ / シェイク)
+  // ====================================================
+  const activeChainEvent =
+    phase === 'solo-playing' ? soloGame.state.chainEvent :
+    phase === 'versus-playing' ? versusGame.state.chainEvent :
+    null
+  const lastChainIdRef = useRef<number>(0)
+
+  useEffect(() => {
+    if (!activeChainEvent || activeChainEvent.id === lastChainIdRef.current) return
+    lastChainIdRef.current = activeChainEvent.id
+    const ev = activeChainEvent
+
+    // 1) pop アニメーション
+    setPopOverlay({ id: ev.id, cells: ev.cells })
+    const popTimer = setTimeout(() => {
+      setPopOverlay(p => (p && p.id === ev.id ? null : p))
+    }, 650)
+
+    // 2) スコアポップ (中央セル付近)
+    const popup: ScorePopup = {
+      id: ev.id,
+      delta: ev.score,
+      row: ev.centerRow,
+      col: ev.centerCol,
+      chain: ev.chain,
+    }
+    setScorePopups(prev => [...prev, popup])
+    const popupTimer = setTimeout(() => {
+      setScorePopups(prev => prev.filter(p => p.id !== ev.id))
+    }, 1400)
+
+    // 3) チェインバナー (2 連鎖以上)
+    let bannerTimer: ReturnType<typeof setTimeout> | null = null
+    if (ev.chain >= 2) {
+      setChainBanner({ id: ev.id, chain: ev.chain })
+      bannerTimer = setTimeout(() => {
+        setChainBanner(b => (b && b.id === ev.id ? null : b))
+      }, 1500)
+    }
+
+    // 4) シェイク (chain >= 2 で発火、chain >= 3 で強)
+    if (ev.chain >= 2) {
+      setShakeKey(k => k + 1)
+    }
+
+    return () => {
+      clearTimeout(popTimer)
+      clearTimeout(popupTimer)
+      if (bannerTimer) clearTimeout(bannerTimer)
+    }
+  }, [activeChainEvent])
 
   const multiplayer = useMultiplayer({
     roomCode: phase === 'versus-waiting' || phase === 'versus-playing' ? roomCode : null,
@@ -634,14 +793,40 @@ export default function CrystalBlastPage() {
       <PageShell>
         <HeaderBar title="💎 CRYSTAL BLAST" />
         <div style={{ padding: 16, maxWidth: 640, margin: '0 auto' }}>
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(108,92,231,0.20), rgba(255,80,80,0.10))',
-            borderRadius: 16, padding: 24, marginBottom: 16,
-            border: '1px solid var(--fm-border)', textAlign: 'center',
-          }}>
-            <div style={{ fontSize: 44, letterSpacing: 6, marginBottom: 6 }}>💎🔵🟢🟡🟣</div>
-            <p style={{ fontSize: 14, color: 'var(--fm-text-sub)', lineHeight: 1.7, margin: 0 }}>
-              同じ色のクリスタルを <b>4 つ以上つなげて爆破</b>！<br />
+          <div
+            className="cb-bg-flow"
+            style={{
+              background: 'linear-gradient(135deg, #6c5ce7 0%, #ff5757 35%, #ffd24a 65%, #00c030 100%)',
+              borderRadius: 18, padding: '28px 20px 22px', marginBottom: 16,
+              textAlign: 'center', position: 'relative', overflow: 'hidden',
+              boxShadow: '0 12px 36px rgba(108,92,231,0.25)',
+            }}>
+            <div style={{
+              fontSize: 11, fontWeight: 800, letterSpacing: 4,
+              color: 'rgba(255,255,255,0.85)', marginBottom: 6,
+            }}>FILMO MINI-GAME</div>
+            <div style={{
+              fontSize: 28, fontWeight: 900, letterSpacing: 4,
+              color: '#fff', textShadow: '0 4px 14px rgba(0,0,0,0.35)',
+              marginBottom: 8,
+            }}>
+              💎 CRYSTAL BLAST 💎
+            </div>
+            <div style={{
+              fontSize: 32, letterSpacing: 6, marginBottom: 8,
+            }}>
+              <span className="cb-bounce" style={{ display: 'inline-block', animationDelay: '0s' }}>🔴</span>
+              <span className="cb-bounce" style={{ display: 'inline-block', animationDelay: '0.15s' }}>🟢</span>
+              <span className="cb-bounce" style={{ display: 'inline-block', animationDelay: '0.30s' }}>🔵</span>
+              <span className="cb-bounce" style={{ display: 'inline-block', animationDelay: '0.45s' }}>🟡</span>
+              <span className="cb-bounce" style={{ display: 'inline-block', animationDelay: '0.60s' }}>🟣</span>
+            </div>
+            <p style={{
+              fontSize: 13, color: 'rgba(255,255,255,0.95)',
+              lineHeight: 1.7, margin: 0, fontWeight: 500,
+              textShadow: '0 2px 6px rgba(0,0,0,0.25)',
+            }}>
+              同じ色のクリスタルを <b>4つ以上つなげて爆破</b>！<br />
               連鎖でスコアを稼ぎ、対戦相手にお邪魔ブロックを叩き込もう。
             </p>
           </div>
@@ -943,8 +1128,13 @@ export default function CrystalBlastPage() {
               board={soloGame.state.board}
               piece={soloGame.state.current}
               cellSize={36}
-              flashCells={soloGame.state.flashCells}
+              popping={popOverlay}
+              chain={soloGame.state.chain}
+              chainBanner={chainBanner}
+              scorePopups={scorePopups}
+              shakeKey={shakeKey}
               score={soloGame.state.score}
+              highlight={soloGame.state.chain >= 2}
             />
           </div>
           <GameControls
@@ -982,7 +1172,10 @@ export default function CrystalBlastPage() {
               board={versusGame.state.board}
               piece={versusGame.state.current}
               cellSize={26}
-              flashCells={versusGame.state.flashCells}
+              popping={popOverlay}
+              chainBanner={chainBanner}
+              scorePopups={scorePopups}
+              shakeKey={shakeKey}
               score={versusGame.state.score}
               chain={versusGame.state.chain}
               pendingGarbage={versusGame.state.pendingGarbage}
@@ -1023,28 +1216,170 @@ export default function CrystalBlastPage() {
   // Results
   // ────────────────────────────────────────
   if (phase === 'solo-result') {
+    const finalScore = soloGame.state.score
+    const finalMaxChain = soloGame.state.maxChain
+    const finalPops = soloGame.state.totalPops
+    // 自己ベスト更新判定: stats.best_score は古い値かもしれないので念のため判定
+    const isNewBest = soloStats ? finalScore > 0 && finalScore >= soloStats.best_score : false
+    const isHighScore = finalScore >= 5000
+    // 自分のランキング順位 (リーダーボード内なら順位、なければ null)
+    const myRankInBoard = leaderboard.findIndex(e => e.user_id === userId)
     return (
       <PageShell>
         <HeaderBar title="🏁 結果" />
-        <div style={{ padding: 16, maxWidth: 520, margin: '0 auto' }}>
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(108,92,231,0.18), rgba(0,192,48,0.10))',
-            borderRadius: 16, padding: 24, textAlign: 'center', marginBottom: 16,
-            border: '1px solid var(--fm-border)',
-          }}>
-            <div style={{ fontSize: 56, fontWeight: 900, color: 'var(--fm-accent)' }}>
-              {soloGame.state.score.toLocaleString()}
+        {isHighScore && <ConfettiShower seed={finalScore} />}
+        <div style={{ padding: 16, maxWidth: 560, margin: '0 auto' }}>
+          {/* スコアヒーロー */}
+          <div
+            className="cb-bg-flow"
+            style={{
+              background: isNewBest
+                ? 'linear-gradient(135deg, #ffd24a, #ff5757, #c374ff, #4ea6ff)'
+                : 'linear-gradient(135deg, rgba(108,92,231,0.18), rgba(0,192,48,0.10))',
+              borderRadius: 18, padding: '28px 20px', textAlign: 'center', marginBottom: 16,
+              border: isNewBest ? 'none' : '1px solid var(--fm-border)',
+              boxShadow: isNewBest ? '0 12px 40px rgba(255,80,80,0.25)' : undefined,
+              position: 'relative', overflow: 'hidden',
+            }}>
+            {isNewBest && (
+              <div style={{
+                position: 'absolute', top: 12, right: 12,
+                padding: '4px 10px', borderRadius: 999,
+                background: 'rgba(0,0,0,0.45)', color: '#fff',
+                fontSize: 11, fontWeight: 800, letterSpacing: 1,
+              }}>🆕 NEW BEST!</div>
+            )}
+            <div className="cb-bounce" style={{ fontSize: 36, marginBottom: 8 }}>
+              {isNewBest ? '🏆' : isHighScore ? '🎉' : '💎'}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--fm-text-sub)' }}>スコア</div>
+            <AnimatedScore
+              value={finalScore}
+              className="cb-result-zoom"
+              style={{
+                fontSize: 64, fontWeight: 900,
+                color: isNewBest ? '#fff' : 'var(--fm-accent)',
+                lineHeight: 1, letterSpacing: -2,
+                textShadow: isNewBest ? '0 4px 16px rgba(0,0,0,0.4)' : undefined,
+              }}
+            />
+            <div style={{
+              fontSize: 12, color: isNewBest ? 'rgba(255,255,255,0.85)' : 'var(--fm-text-sub)',
+              marginTop: 6, fontWeight: 600, letterSpacing: 2,
+            }}>SCORE</div>
+            {(userName && userId) && (
+              <div style={{
+                marginTop: 14,
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '6px 12px', borderRadius: 999,
+                background: 'rgba(0,0,0,0.25)',
+                color: '#fff',
+              }}>
+                {userAvatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={userAvatar} alt="" style={{
+                    width: 24, height: 24, borderRadius: '50%', objectFit: 'cover',
+                  }} />
+                ) : (
+                  <div style={{
+                    width: 24, height: 24, borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.2)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 12, fontWeight: 700,
+                  }}>{userName[0]}</div>
+                )}
+                <span style={{ fontSize: 13, fontWeight: 700 }}>{userName}</span>
+              </div>
+            )}
           </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 16 }}>
-            <StatCard label="最大連鎖" value={soloGame.state.maxChain} />
-            <StatCard label="爆破数" value={soloGame.state.totalPops} />
+            <StatCard label="最大連鎖" value={finalMaxChain} />
+            <StatCard label="爆破数" value={finalPops} />
             <StatCard label="獲得pt" value={`+${pointsAwarded}`} />
           </div>
+
+          {/* ランキング (TOP 20) */}
+          <div style={{
+            marginBottom: 16, background: 'var(--fm-bg-card)', borderRadius: 12,
+            padding: 16, border: '1px solid var(--fm-border)',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: 12,
+            }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>
+                🏆 ランキング
+              </h3>
+              {myRankInBoard >= 0 && (
+                <span style={{
+                  fontSize: 11, fontWeight: 800,
+                  padding: '4px 10px', borderRadius: 999,
+                  background: 'rgba(0,192,48,0.18)', color: 'var(--fm-accent)',
+                }}>
+                  あなたは {myRankInBoard + 1} 位
+                </span>
+              )}
+            </div>
+            {leaderboard.length === 0 ? (
+              <div style={{ padding: 20, textAlign: 'center', color: 'var(--fm-text-sub)', fontSize: 13 }}>
+                まだランキングがありません
+              </div>
+            ) : (
+              <LeaderboardList entries={leaderboard} currentUserId={userId} />
+            )}
+            {/* 自分が圏外の場合は下に自分の行を追加 */}
+            {userId && myRankInBoard < 0 && soloStats && (
+              <div style={{
+                marginTop: 8, padding: '10px 8px',
+                background: 'rgba(0,192,48,0.10)', borderRadius: 8,
+                display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                <span style={{ minWidth: 28, fontSize: 12, color: 'var(--fm-text-muted)', textAlign: 'center' }}>—</span>
+                {userAvatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={userAvatar} alt="" style={{
+                    width: 32, height: 32, borderRadius: '50%', objectFit: 'cover',
+                  }} />
+                ) : (
+                  <div style={{
+                    width: 32, height: 32, borderRadius: '50%',
+                    background: 'var(--fm-bg-secondary)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 14, color: 'var(--fm-text-muted)',
+                  }}>{userName[0]}</div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-accent)' }}>
+                    {userName} (あなた)
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
+                    自己ベスト {soloStats.best_score.toLocaleString()}
+                  </div>
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--fm-text-sub)' }}>圏外</div>
+              </div>
+            )}
+          </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <button
+              onClick={() => {
+                openTwitterShareSolo(finalScore, finalMaxChain)
+              }}
+              style={{
+                width: '100%', padding: '14px 0', borderRadius: 12, border: 'none',
+                background: '#000', color: '#fff', fontSize: 14, fontWeight: 700,
+                cursor: 'pointer', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', gap: 8,
+              }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+              </svg>
+              X でシェア
+            </button>
+            <button
               onClick={() => { setPointsAwarded(0); setPhase('solo-playing') }}
+              className="pulse-glow"
               style={{
                 width: '100%', padding: '14px 0', borderRadius: 12, border: 'none',
                 background: 'linear-gradient(135deg, var(--fm-accent), var(--fm-accent-light))',
@@ -1078,13 +1413,21 @@ export default function CrystalBlastPage() {
     return (
       <PageShell>
         <HeaderBar title="🏁 対戦結果" />
+        {matchOutcome === 'win' && <ConfettiShower seed={myScore + 1} />}
         <div style={{ padding: 16, maxWidth: 520, margin: '0 auto' }}>
-          <div style={{
-            background: banner.color,
-            borderRadius: 16, padding: 24, textAlign: 'center', marginBottom: 16,
-          }}>
-            <div style={{ fontSize: 56 }}>{banner.emoji}</div>
-            <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: 4 }}>{banner.text}</div>
+          <div
+            className={matchOutcome === 'win' ? 'cb-bg-flow' : ''}
+            style={{
+              background: banner.color,
+              borderRadius: 18, padding: '28px 16px',
+              textAlign: 'center', marginBottom: 16,
+              boxShadow: matchOutcome === 'win' ? '0 16px 40px rgba(255,80,80,0.25)' : undefined,
+            }}>
+            <div className="cb-bounce" style={{ fontSize: 64, marginBottom: 4 }}>{banner.emoji}</div>
+            <div className="cb-result-zoom" style={{
+              fontSize: 36, fontWeight: 900, color: '#fff', letterSpacing: 6,
+              textShadow: '0 4px 12px rgba(0,0,0,0.4)',
+            }}>{banner.text}</div>
           </div>
           <div style={{
             display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16,
@@ -1187,60 +1530,193 @@ function SoloLeaderboard({
       <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>
         🏆 ソロランキング (TOP {entries.length})
       </h3>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {entries.map((e, i) => {
-          const rank = i + 1
-          const isSelf = currentUserId === e.user_id
-          const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : ''
-          return (
-            <Link
-              key={e.user_id}
-              href={`/u/${e.user_id}`}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 8px',
-                borderBottom: i < entries.length - 1 ? '1px solid var(--fm-border)' : 'none',
-                textDecoration: 'none', color: 'inherit',
-                background: isSelf ? 'rgba(0,192,48,0.10)' : 'transparent',
-                borderRadius: isSelf ? 8 : 0,
-              }}>
-              <span style={{
-                minWidth: 28, fontSize: medal ? 18 : 13, fontWeight: 700,
-                color: medal ? undefined : 'var(--fm-text-muted)', textAlign: 'center',
-              }}>{medal || rank}</span>
-              {e.user_avatar ? (
-                <img src={e.user_avatar} alt="" style={{
-                  width: 32, height: 32, borderRadius: '50%', objectFit: 'cover',
-                  background: 'var(--fm-bg-secondary)',
-                }} />
-              ) : (
-                <div style={{
-                  width: 32, height: 32, borderRadius: '50%',
-                  background: 'var(--fm-bg-secondary)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 14, color: 'var(--fm-text-muted)',
-                }}>{e.user_name?.[0] || '?'}</div>
-              )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontSize: 13, fontWeight: 600,
-                  color: isSelf ? 'var(--fm-accent)' : 'var(--fm-text)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                  {e.user_name || '名無し'}{isSelf && ' (あなた)'}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
-                  最大 {e.max_chain} 連鎖
-                </div>
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--fm-accent)' }}>
-                {e.best_score.toLocaleString()}
-              </div>
-            </Link>
-          )
-        })}
-      </div>
+      <LeaderboardList entries={entries} currentUserId={currentUserId} />
     </div>
   )
+}
+
+function LeaderboardList({
+  entries,
+  currentUserId,
+}: {
+  entries: LeaderboardEntry[]
+  currentUserId: string | null
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {entries.map((e, i) => {
+        const rank = i + 1
+        const isSelf = currentUserId === e.user_id
+        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : ''
+        const rankBg = rank === 1
+          ? 'linear-gradient(135deg, rgba(255,215,0,0.18), rgba(255,150,0,0.06))'
+          : rank === 2
+            ? 'linear-gradient(135deg, rgba(192,192,192,0.14), rgba(140,140,140,0.04))'
+            : rank === 3
+              ? 'linear-gradient(135deg, rgba(205,127,50,0.14), rgba(150,90,40,0.04))'
+              : 'transparent'
+        return (
+          <Link
+            key={e.user_id}
+            href={`/u/${e.user_id}`}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 8px',
+              borderBottom: i < entries.length - 1 ? '1px solid var(--fm-border)' : 'none',
+              textDecoration: 'none', color: 'inherit',
+              background: isSelf
+                ? 'linear-gradient(90deg, rgba(0,192,48,0.18), rgba(0,192,48,0.05))'
+                : rankBg,
+              borderRadius: (isSelf || rank <= 3) ? 8 : 0,
+              transition: 'transform 0.15s ease',
+            }}>
+            <span style={{
+              minWidth: 28, fontSize: medal ? 20 : 13, fontWeight: 800,
+              color: medal ? undefined : 'var(--fm-text-muted)', textAlign: 'center',
+            }}>{medal || rank}</span>
+            {e.user_avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={e.user_avatar} alt="" style={{
+                width: 32, height: 32, borderRadius: '50%', objectFit: 'cover',
+                background: 'var(--fm-bg-secondary)',
+                border: rank === 1 ? '2px solid #ffd700'
+                  : rank === 2 ? '2px solid #c0c0c0'
+                  : rank === 3 ? '2px solid #cd7f32'
+                  : 'none',
+              }} />
+            ) : (
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%',
+                background: 'var(--fm-bg-secondary)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 14, color: 'var(--fm-text-muted)',
+                border: rank === 1 ? '2px solid #ffd700'
+                  : rank === 2 ? '2px solid #c0c0c0'
+                  : rank === 3 ? '2px solid #cd7f32'
+                  : 'none',
+              }}>{e.user_name?.[0] || '?'}</div>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 13, fontWeight: 700,
+                color: isSelf ? 'var(--fm-accent)' : 'var(--fm-text)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {e.user_name || '名無し'}{isSelf && ' (あなた)'}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
+                最大 {e.max_chain} 連鎖
+              </div>
+            </div>
+            <div style={{
+              fontSize: 15, fontWeight: 800,
+              color: rank === 1 ? '#ffd700' : 'var(--fm-accent)',
+            }}>
+              {e.best_score.toLocaleString()}
+            </div>
+          </Link>
+        )
+      })}
+    </div>
+  )
+}
+
+// ====================================================
+// Animated score counter (0 → target)
+// ====================================================
+function AnimatedScore({
+  value,
+  className,
+  style,
+  durationMs = 1100,
+}: {
+  value: number
+  className?: string
+  style?: React.CSSProperties
+  durationMs?: number
+}) {
+  const [display, setDisplay] = useState(0)
+  const startRef = useRef<number | null>(null)
+  const valueRef = useRef(value)
+  useEffect(() => {
+    valueRef.current = value
+    startRef.current = null
+    let raf = 0
+    const step = (ts: number) => {
+      if (startRef.current == null) {
+        startRef.current = ts
+        setDisplay(0)
+      }
+      const elapsed = ts - (startRef.current ?? ts)
+      const t = Math.min(1, elapsed / durationMs)
+      // easeOutCubic
+      const eased = 1 - Math.pow(1 - t, 3)
+      setDisplay(Math.round(valueRef.current * eased))
+      if (t < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [value, durationMs])
+  return (
+    <div className={className} style={style}>
+      {display.toLocaleString()}
+    </div>
+  )
+}
+
+// ====================================================
+// Confetti shower (CSS-only emoji)
+// ====================================================
+function ConfettiShower({ seed }: { seed: number }) {
+  // seed をもとに位置と絵文字を決定論的に決める
+  const pieces = useMemo(() => {
+    const rand = (n: number) => {
+      const x = (seed + n * 9301 + 49297) % 233280
+      return x / 233280
+    }
+    const emojis = ['💎', '✨', '⭐', '🎉', '🔥', '💥', '🌟', '🎊']
+    return Array.from({ length: 32 }, (_, i) => ({
+      left: rand(i * 3) * 100,
+      delay: rand(i * 3 + 1) * 0.8,
+      duration: 2.2 + rand(i * 3 + 2) * 1.4,
+      emoji: emojis[Math.floor(rand(i * 7) * emojis.length)],
+      size: 14 + rand(i * 11) * 16,
+    }))
+  }, [seed])
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+      pointerEvents: 'none', zIndex: 50, overflow: 'hidden',
+    }}>
+      {pieces.map((p, i) => (
+        <div
+          key={i}
+          className="cb-confetti"
+          style={{
+            left: `${p.left}%`,
+            animationDelay: `${p.delay}s`,
+            animationDuration: `${p.duration}s`,
+            fontSize: p.size,
+            width: 'auto', height: 'auto',
+          }}>
+          {p.emoji}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ====================================================
+// X (Twitter) share helper
+// ====================================================
+function openTwitterShareSolo(score: number, maxChain: number) {
+  const text =
+    score >= 20000
+      ? `💎 CRYSTAL BLAST で ${score.toLocaleString()} 点（最大 ${maxChain} 連鎖）！\nあなたも挑戦してみて👇`
+      : score >= 5000
+        ? `💎 CRYSTAL BLAST で ${score.toLocaleString()} 点 (${maxChain} 連鎖)。\n対戦もできるよ👇`
+        : `💎 CRYSTAL BLAST で ${score.toLocaleString()} 点。次はもっといける気がする…\n挑戦してみて👇`
+  const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text + '\n\n#Filmo #CRYSTAL_BLAST')}&url=${encodeURIComponent('https://filmo.me/games/crystal-blast')}`
+  if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 // ====================================================
