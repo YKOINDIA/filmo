@@ -407,7 +407,7 @@ const s = {
     minHeight: 32,
   }),
   creditsGrid: {
-    display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12,
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12,
   },
   creditCard: {
     cursor: 'pointer', borderRadius: 8, overflow: 'hidden',
