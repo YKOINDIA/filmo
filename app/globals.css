@@ -218,6 +218,111 @@ button, a, input, select, textarea {
   margin: 24px 0;
 }
 
+/* ==========================================
+ * CRYSTAL BLAST — game animations
+ * ========================================== */
+@keyframes cb-crystal-pop {
+  0%   { transform: scale(1);   filter: brightness(1)   drop-shadow(0 0 0 rgba(255,255,255,0)); opacity: 1; }
+  40%  { transform: scale(1.45); filter: brightness(2.2) drop-shadow(0 0 18px rgba(255,255,255,0.95)); opacity: 1; }
+  100% { transform: scale(0.4); filter: brightness(2.4) drop-shadow(0 0 8px rgba(255,255,255,0.4));   opacity: 0; }
+}
+.cb-crystal-pop { animation: cb-crystal-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+@keyframes cb-crystal-idle {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.15); }
+}
+.cb-crystal-idle { animation: cb-crystal-idle 3s ease-in-out infinite; }
+
+@keyframes cb-shake-soft {
+  0%, 100% { transform: translate(0, 0); }
+  20%      { transform: translate(-3px, -2px) rotate(-0.3deg); }
+  40%      { transform: translate(3px, 1px)  rotate(0.3deg); }
+  60%      { transform: translate(-2px, 2px) rotate(-0.2deg); }
+  80%      { transform: translate(2px, -1px) rotate(0.2deg); }
+}
+.cb-shake-soft { animation: cb-shake-soft 0.35s ease-out; }
+
+@keyframes cb-shake-hard {
+  0%, 100% { transform: translate(0, 0); }
+  10%      { transform: translate(-6px, -4px) rotate(-0.8deg); }
+  25%      { transform: translate(7px, 3px)   rotate(0.8deg); }
+  40%      { transform: translate(-7px, 4px)  rotate(-0.6deg); }
+  55%      { transform: translate(6px, -5px)  rotate(0.7deg); }
+  70%      { transform: translate(-4px, 3px)  rotate(-0.4deg); }
+  85%      { transform: translate(3px, -2px)  rotate(0.3deg); }
+}
+.cb-shake-hard { animation: cb-shake-hard 0.6s ease-out; }
+
+@keyframes cb-banner-pop {
+  0%   { opacity: 0; transform: translate(-50%, -10px) scale(0.5) rotate(-8deg); }
+  35%  { opacity: 1; transform: translate(-50%, 0)    scale(1.18) rotate(2deg); }
+  65%  { opacity: 1; transform: translate(-50%, 0)    scale(1.0)  rotate(0deg); }
+  100% { opacity: 0; transform: translate(-50%, -16px) scale(0.95) rotate(0deg); }
+}
+.cb-banner-pop { animation: cb-banner-pop 1.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+@keyframes cb-float-up {
+  0%   { opacity: 0; transform: translate(-50%, 14px) scale(0.7); }
+  15%  { opacity: 1; transform: translate(-50%, 0)    scale(1.2); }
+  60%  { opacity: 1; transform: translate(-50%, -36px) scale(1.0); }
+  100% { opacity: 0; transform: translate(-50%, -64px) scale(0.85); }
+}
+.cb-float-up { animation: cb-float-up 1.3s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+@keyframes cb-bg-flow {
+  0%   { background-position:   0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position:   0% 50%; }
+}
+.cb-bg-flow {
+  background-size: 220% 220%;
+  animation: cb-bg-flow 14s ease-in-out infinite;
+}
+
+@keyframes cb-result-zoom {
+  0%   { opacity: 0; transform: scale(0.2) rotate(-12deg); filter: blur(8px); }
+  60%  { opacity: 1; transform: scale(1.18) rotate(2deg);  filter: blur(0); }
+  100% { opacity: 1; transform: scale(1)    rotate(0);     filter: blur(0); }
+}
+.cb-result-zoom { animation: cb-result-zoom 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+@keyframes cb-bounce {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-12px); }
+}
+.cb-bounce { animation: cb-bounce 1.4s ease-in-out infinite; }
+
+@keyframes cb-spin-slow {
+  to { transform: rotate(360deg); }
+}
+.cb-spin-slow { animation: cb-spin-slow 8s linear infinite; }
+
+@keyframes cb-confetti-fall {
+  0%   { opacity: 1; transform: translateY(-100vh) rotate(0deg) scale(0.8); }
+  100% { opacity: 0; transform: translateY(100vh)  rotate(720deg) scale(1.1); }
+}
+.cb-confetti {
+  position: absolute; top: 0; left: 0;
+  width: 12px; height: 12px;
+  pointer-events: none;
+  animation: cb-confetti-fall 2.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes cb-pulse-strong {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 192, 48, 0.0); }
+  50%      { box-shadow: 0 0 28px 8px rgba(0, 192, 48, 0.55); }
+}
+.cb-pulse-strong { animation: cb-pulse-strong 1.2s ease-in-out infinite; }
+
+@keyframes cb-gameover-zoom {
+  0%   { opacity: 0; transform: scale(2.4) rotate(-15deg); }
+  50%  { opacity: 1; transform: scale(0.9) rotate(2deg); }
+  70%  { opacity: 1; transform: scale(1.06) rotate(-1deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+.cb-gameover-zoom { animation: cb-gameover-zoom 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
 /* Clean pill button style */
 .pill-btn {
   display: inline-flex;

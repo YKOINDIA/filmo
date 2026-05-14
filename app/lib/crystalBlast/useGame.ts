@@ -18,7 +18,22 @@ import {
   mulberry32,
   type Board,
   type Piece,
+  type PopCell,
 } from './engine'
+
+export type { PopCell } from './engine'
+
+/** チャート画面側で扱う「直近のチェイン演出」イベント */
+export interface ChainEvent {
+  id: number
+  chain: number
+  score: number
+  popped: number
+  cells: PopCell[]
+  /** 演出表示用のセル中央 (row, col の平均) */
+  centerRow: number
+  centerCol: number
+}
 
 export interface GameState {
   board: Board
@@ -29,7 +44,9 @@ export interface GameState {
   maxChain: number   // セッション中の最大連鎖
   totalPops: number
   pendingGarbage: number // 相手から送られて未着の garbage
-  flashCells: [number, number][] // 最後に消えたセル (アニメーション用)
+  flashCells: PopCell[] // 最後に消えたセル (アニメーション用、色情報付き)
+  /** 単調増加するチェインイベント ID。値が変わるたびに新しい演出を発火させる */
+  chainEvent: ChainEvent | null
   gameOver: boolean
   startedAt: number
   level: number      // 落下速度の段階
@@ -63,6 +80,7 @@ function initialState(seed: number): GameState {
     totalPops: 0,
     pendingGarbage: 0,
     flashCells: [],
+    chainEvent: null,
     gameOver: false,
     startedAt: Date.now(),
     level: 1,
@@ -123,7 +141,24 @@ export function useGame(options: UseGameOptions = {}) {
     const nextCurrent = s.next ?? newPiece(randRef.current)
     const nextNext = newPiece(randRef.current)
     const over = isTopOut(board)
-    const flashCells = chains.length > 0 ? chains[chains.length - 1].cells : []
+    const lastStep = chains.length > 0 ? chains[chains.length - 1] : null
+    const flashCells = lastStep?.cells ?? []
+
+    // チェインイベント (画面演出用)
+    let chainEvent: ChainEvent | null = s.chainEvent
+    if (chainLen > 0 && lastStep) {
+      const rs = lastStep.cells.reduce((a, p) => a + p.r, 0) / lastStep.cells.length
+      const cs = lastStep.cells.reduce((a, p) => a + p.c, 0) / lastStep.cells.length
+      chainEvent = {
+        id: (s.chainEvent?.id ?? 0) + 1,
+        chain: chainLen,
+        score: totalScore,
+        popped: totalPops,
+        cells: lastStep.cells,
+        centerRow: rs,
+        centerCol: cs,
+      }
+    }
 
     const newScore = s.score + totalScore
     const newMaxChain = Math.max(s.maxChain, chainLen)
@@ -141,6 +176,7 @@ export function useGame(options: UseGameOptions = {}) {
       totalPops: newPops,
       pendingGarbage: pendingG,
       flashCells,
+      chainEvent,
       gameOver: over,
       level: nextLevel,
     }
