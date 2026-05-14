@@ -25,6 +25,24 @@ interface TMDBItem {
   genre_ids: number[]
 }
 
+interface TMDBPersonResult {
+  id: number
+  name: string
+  profile_path: string | null
+  known_for_department?: string
+}
+
+const DEPT_LABEL_JA: Record<string, string> = {
+  Acting: '俳優',
+  Directing: '監督',
+  Writing: '脚本',
+  Production: '製作',
+  Sound: '音楽',
+  Camera: '撮影',
+  Editing: '編集',
+  Art: '美術',
+}
+
 interface SectionData {
   title: string
   items: TMDBItem[]
@@ -595,9 +613,10 @@ const S = {
   } as React.CSSProperties,
 } as const
 
-export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenreBrowse, onGenreBrowseConsumed }: {
+export default function Search({ userId, onOpenWork: onOpenWorkRaw, onOpenPerson, initialGenreBrowse, onGenreBrowseConsumed }: {
   userId: string
   onOpenWork: (id: number, type?: 'movie' | 'tv') => void
+  onOpenPerson?: (id: number) => void
   initialGenreBrowse?: { id: number; label: string } | null
   onGenreBrowseConsumed?: () => void
 }) {
@@ -612,6 +631,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [searchResults, setSearchResults] = useState<TMDBItem[]>([])
+  const [peopleResults, setPeopleResults] = useState<TMDBPersonResult[]>([])
   const [searchPage, setSearchPage] = useState(1)
   const [searchTotalPages, setSearchTotalPages] = useState(1)
   const [searchLoading, setSearchLoading] = useState(false)
@@ -719,8 +739,8 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
     }
   }, [activeTab, debouncedQuery, browse.mode, fetchSection])
 
-  // Client-side search cache (query -> { results, total_pages })
-  const searchCacheRef = useRef<Map<string, { results: TMDBItem[]; total_pages: number }>>(new Map())
+  // Client-side search cache (query -> { results, people, total_pages })
+  const searchCacheRef = useRef<Map<string, { results: TMDBItem[]; people: TMDBPersonResult[]; total_pages: number }>>(new Map())
 
   // Debounced search (200ms for snappier feel)
   useEffect(() => {
@@ -728,6 +748,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
     if (!query.trim()) {
       setDebouncedQuery('')
       setSearchResults([])
+      setPeopleResults([])
       setSearchPage(1)
       setSearchTotalPages(1)
       return
@@ -746,6 +767,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
     const cached = searchCacheRef.current.get(debouncedQuery)
     if (cached) {
       setSearchResults(cached.results)
+      setPeopleResults(cached.people)
       setSearchTotalPages(cached.total_pages)
       setSearchPage(1)
       return
@@ -766,9 +788,27 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
 
     Promise.all(fetches)
       .then(([tmdbData, annictData]: unknown[]) => {
-        const tmdb = tmdbData as { results?: TMDBItem[]; total_pages?: number }
-        const results = tmdb.results || []
+        const tmdb = tmdbData as { results?: (TMDBItem & { profile_path?: string | null; known_for_department?: string })[]; total_pages?: number }
+        const raw = tmdb.results || []
         const total_pages = tmdb.total_pages || 1
+
+        // /search/multi は movie / tv / person を混在で返すので分離する。
+        // 人物結果はタブ (映画/ドラマ/アニメ) に関係なく検索結果に含めたいので、
+        // ここでは tab フィルタを適用しない (描画側でフィルタしない)。
+        const results: TMDBItem[] = []
+        const people: TMDBPersonResult[] = []
+        for (const r of raw) {
+          if (r.media_type === 'person') {
+            people.push({
+              id: r.id,
+              name: r.name || '',
+              profile_path: r.profile_path ?? null,
+              known_for_department: r.known_for_department,
+            })
+          } else {
+            results.push(r)
+          }
+        }
 
         // Annict結果をマージ（TMDB IDと重複しないもののみ）
         if (annictData) {
@@ -778,11 +818,14 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
           results.push(...annictUnique)
         }
 
-        searchCacheRef.current.set(debouncedQuery, { results, total_pages })
+        const trimmedPeople = people.slice(0, 8)
+        searchCacheRef.current.set(debouncedQuery, { results, people: trimmedPeople, total_pages })
         setSearchResults(results)
+        setPeopleResults(trimmedPeople)
         setSearchTotalPages(total_pages)
-        trackSearchPerformed(debouncedQuery, activeTab, results.length)
-        if (results.length === 0) trackSearchNoResults(debouncedQuery, activeTab)
+        const totalHits = results.length + trimmedPeople.length
+        trackSearchPerformed(debouncedQuery, activeTab, totalHits)
+        if (totalHits === 0) trackSearchNoResults(debouncedQuery, activeTab)
       })
       .catch(() => {})
       .finally(() => setSearchLoading(false))
@@ -794,7 +837,8 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
     try {
       const res = await tmdbFetch(`/api/tmdb?action=search&query=${encodeURIComponent(debouncedQuery)}&page=${nextPage}`)
       const data = await res.json()
-      setSearchResults(prev => [...prev, ...(data.results || [])])
+      const more = ((data.results || []) as TMDBItem[]).filter(r => r.media_type !== 'person')
+      setSearchResults(prev => [...prev, ...more])
       setSearchPage(nextPage)
       setSearchTotalPages(data.total_pages || 1)
     } catch { /* ignore */ }
@@ -1496,6 +1540,8 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
     const filtered = filterWatched(baseFiltered)
     const hidden = baseFiltered.length - filtered.length
 
+    const showPeopleRow = peopleResults.length > 0 && !!onOpenPerson
+
     return (
       <div>
         {hideWatched && hidden > 0 && (
@@ -1503,12 +1549,60 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
             視聴済み {hidden} 件を非表示中
           </div>
         )}
-        {searchLoading && searchResults.length === 0 ? renderSkeletonGrid() : (
+        {searchLoading && searchResults.length === 0 && peopleResults.length === 0 ? renderSkeletonGrid() : (
           <>
+            {showPeopleRow && (
+              <div style={{ padding: '0 16px 12px' }}>
+                <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginBottom: 8, fontWeight: 600, letterSpacing: 0.5 }}>
+                  人物
+                </div>
+                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
+                  {peopleResults.map(p => {
+                    const dept = p.known_for_department ? (DEPT_LABEL_JA[p.known_for_department] || p.known_for_department) : ''
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => onOpenPerson?.(p.id)}
+                        style={{
+                          flexShrink: 0, width: 84, display: 'flex', flexDirection: 'column',
+                          alignItems: 'center', gap: 6, background: 'none', border: 'none',
+                          cursor: 'pointer', padding: 0,
+                        }}
+                      >
+                        {p.profile_path ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={`${TMDB_IMG}/w185${p.profile_path}`} alt={p.name}
+                            style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', objectPosition: 'top' }} />
+                        ) : (
+                          <div style={{
+                            width: 64, height: 64, borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#fff', fontSize: 22, fontWeight: 700,
+                          }}>
+                            {p.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div style={{
+                          fontSize: 11, color: 'var(--fm-text)', textAlign: 'center', lineHeight: 1.2,
+                          overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',
+                          WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                        }}>
+                          {p.name}
+                        </div>
+                        {dept && (
+                          <div style={{ fontSize: 10, color: 'var(--fm-text-muted)' }}>{dept}</div>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             <div style={S.grid}>
               {filtered.map(item => renderPosterCard(item, true))}
             </div>
-            {filtered.length === 0 && !searchLoading && (
+            {filtered.length === 0 && peopleResults.length === 0 && !searchLoading && (
               <div style={S.emptyState}>
                 <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
                 <div style={{ fontSize: 15 }}>「{debouncedQuery}」に一致する結果がありません</div>
@@ -1521,6 +1615,11 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
                 <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginTop: 8 }}>
                   見つからない作品を登録して記録を始めましょう
                 </div>
+              </div>
+            )}
+            {filtered.length === 0 && peopleResults.length > 0 && !searchLoading && (
+              <div style={{ padding: '8px 16px 24px', textAlign: 'center', color: 'var(--fm-text-muted)', fontSize: 12 }}>
+                {activeTab === 'movie' ? '映画' : activeTab === 'drama' ? 'ドラマ' : 'アニメ'}の作品結果はありません — 上の人物をタップしてフィルモグラフィを見る
               </div>
             )}
             {searchPage < searchTotalPages && filtered.length > 0 && (
@@ -1737,7 +1836,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="作品名・キャスト・キーワードで検索"
+            placeholder="作品名・俳優・監督・脚本家で検索"
             style={S.searchInput}
             onFocus={e => {
               e.currentTarget.style.borderColor = '#6c5ce7'
@@ -1751,7 +1850,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
           {query && (
             <button
               style={S.clearBtn}
-              onClick={() => { setQuery(''); setSearchResults([]); setDebouncedQuery('') }}
+              onClick={() => { setQuery(''); setSearchResults([]); setPeopleResults([]); setDebouncedQuery('') }}
             >
               ×
             </button>
