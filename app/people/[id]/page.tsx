@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import {
   fetchPublicPerson,
+  fetchPersonReviews,
   buildPersonTitle,
   buildPersonDescription,
   buildPersonUrl,
@@ -10,8 +11,9 @@ import {
   PublicPersonView,
 } from '@/app/components/PublicPersonView'
 
-// 人物データはあまり頻繁に変わらないので 48h(キャッシュTTLと一致)
-export const revalidate = 172800
+// TMDB プロフィールは 48h、レビューは投稿で動く可能性があるので 1h で再生成。
+// 短い方を採用。
+export const revalidate = 3600
 
 type Props = { params: Promise<{ id: string }> }
 
@@ -52,14 +54,15 @@ export default async function PersonPage({ params }: Props) {
   const person = await fetchPublicPerson(id)
   if (!person) notFound()
 
-  const jsonLd = buildPersonJsonLd(person)
+  const { reviews, stats } = await fetchPersonReviews(person.id)
+  const jsonLd = buildPersonJsonLd(person, stats, reviews)
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
       />
-      <PublicPersonView person={person} />
+      <PublicPersonView person={person} reviews={reviews} reviewStats={stats} />
     </>
   )
 }

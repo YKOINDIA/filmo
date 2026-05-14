@@ -7,6 +7,7 @@
  */
 import Link from 'next/link'
 import { getPersonDetailCached } from '@/app/lib/tmdb-cache'
+import { getSupabaseAdmin } from '@/app/lib/supabase-admin'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://filmo.me'
@@ -50,6 +51,22 @@ export interface PublicPersonData {
   crew: CombinedCredit[]
   director_works: CombinedCredit[]
   writer_works: CombinedCredit[]
+}
+
+export interface PublicPersonReview {
+  id: string
+  user_id: string
+  user_name: string
+  user_avatar: string | null
+  score: number | null
+  body: string | null
+  likes_count: number
+  created_at: string
+}
+
+export interface PersonReviewStats {
+  count: number
+  avg: number | null
 }
 
 interface TmdbExternalIds {
@@ -157,6 +174,61 @@ function releaseYear(c: CombinedCredit): number {
   return d ? parseInt(d.slice(0, 4), 10) || 0 : 0
 }
 
+/**
+ * SSR で公開レビューを取得 (上位 N 件 + 集計)。
+ * 認証なしでクローラ・未ログインユーザーに見える内容を返す。
+ * 隠し / 下書きは出さない。
+ */
+export async function fetchPersonReviews(
+  personId: number,
+  limit = 12,
+): Promise<{ reviews: PublicPersonReview[]; stats: PersonReviewStats }> {
+  const admin = getSupabaseAdmin()
+  try {
+    const [{ data: rows }, { data: statsRows }] = await Promise.all([
+      admin
+        .from('person_reviews')
+        .select('id, user_id, score, body, likes_count, created_at, users:user_id(name, avatar_url)')
+        .eq('person_id', personId)
+        .eq('is_hidden', false)
+        .eq('is_draft', false)
+        .order('likes_count', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(limit),
+      admin.rpc('get_person_review_stats', { p_person_id: personId }),
+    ])
+
+    type Row = {
+      id: string
+      user_id: string
+      score: number | null
+      body: string | null
+      likes_count: number
+      created_at: string
+      users: { name: string | null; avatar_url: string | null } | null
+    }
+    const reviews: PublicPersonReview[] = ((rows || []) as unknown as Row[]).map(r => ({
+      id: r.id,
+      user_id: r.user_id,
+      user_name: r.users?.name || 'User',
+      user_avatar: r.users?.avatar_url || null,
+      score: r.score,
+      body: r.body,
+      likes_count: r.likes_count || 0,
+      created_at: r.created_at,
+    }))
+
+    const stat = (statsRows as { review_count: number; avg_score: number | null }[] | null)?.[0]
+    const stats: PersonReviewStats = {
+      count: stat ? Number(stat.review_count) || 0 : 0,
+      avg: stat?.avg_score != null ? Number(stat.avg_score) : null,
+    }
+    return { reviews, stats }
+  } catch {
+    return { reviews: [], stats: { count: 0, avg: null } }
+  }
+}
+
 // ── Metadata helpers ────────────────────────────────────────────────────────
 
 const DEPARTMENT_JA: Record<string, string> = {
@@ -212,7 +284,11 @@ export function buildPersonImageUrl(profilePath: string | null, size: 'w185' | '
 
 // ── JSON-LD (Person schema) ─────────────────────────────────────────────────
 
-export function buildPersonJsonLd(p: PublicPersonData): Record<string, unknown> {
+export function buildPersonJsonLd(
+  p: PublicPersonData,
+  reviewStats?: PersonReviewStats,
+  reviews?: PublicPersonReview[],
+): Record<string, unknown> {
   const image = buildPersonImageUrl(p.profile_path, 'h632')
   const url = buildPersonUrl(p)
   const jsonLd: Record<string, unknown> = {
@@ -248,12 +324,52 @@ export function buildPersonJsonLd(p: PublicPersonData): Record<string, unknown> 
       url: `${APP_URL}/${w.media_type === 'tv' ? 'tv' : 'movies'}/${w.id}`,
     }))
   }
+
+  // Filmo ユーザーの星評価集計と個別レビューを Person schema にぶら下げる。
+  // Google のリッチリザルト要件: aggregateRating には review か itemReviewed が
+  // 必要なので、最小要件として review を 1 件以上含める。
+  if (reviewStats && reviewStats.count > 0 && reviewStats.avg != null) {
+    jsonLd.aggregateRating = {
+      '@type': 'AggregateRating',
+      ratingValue: reviewStats.avg.toFixed(1),
+      bestRating: 5,
+      worstRating: 0.5,
+      ratingCount: reviewStats.count,
+    }
+  }
+  if (reviews && reviews.length > 0) {
+    jsonLd.review = reviews
+      .filter(r => r.body && r.body.trim().length > 0)
+      .slice(0, 5)
+      .map(r => ({
+        '@type': 'Review',
+        author: { '@type': 'Person', name: r.user_name },
+        datePublished: r.created_at,
+        reviewBody: (r.body || '').slice(0, 500),
+        ...(r.score != null && {
+          reviewRating: {
+            '@type': 'Rating',
+            ratingValue: r.score,
+            bestRating: 5,
+            worstRating: 0.5,
+          },
+        }),
+      }))
+  }
   return jsonLd
 }
 
 // ── View ────────────────────────────────────────────────────────────────────
 
-export function PublicPersonView({ person }: { person: PublicPersonData }) {
+export function PublicPersonView({
+  person,
+  reviews = [],
+  reviewStats = { count: 0, avg: null },
+}: {
+  person: PublicPersonData
+  reviews?: PublicPersonReview[]
+  reviewStats?: PersonReviewStats
+}) {
   const profile = buildPersonImageUrl(person.profile_path, 'h632')
   const role = person.known_for_department
     ? DEPARTMENT_JA[person.known_for_department] || person.known_for_department
@@ -316,6 +432,14 @@ export function PublicPersonView({ person }: { person: PublicPersonData }) {
                   {person.cast.length > 0 && <span>出演 {person.cast.length}作品</span>}
                 </div>
               )}
+              {reviewStats.count > 0 && reviewStats.avg != null && (
+                <div style={{ marginTop: 8, fontSize: 13 }}>
+                  <span style={{ color: 'var(--fm-star)', fontWeight: 700 }}>★ {reviewStats.avg.toFixed(1)}</span>
+                  <span style={{ color: 'var(--fm-text-muted)', marginLeft: 6 }}>
+                    （Filmo {reviewStats.count}人の評価）
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -365,6 +489,12 @@ export function PublicPersonView({ person }: { person: PublicPersonData }) {
           <CreditSection title="出演作品" works={person.cast.slice(0, 24)} />
         )}
 
+        <PersonReviewsSection
+          personName={person.name}
+          reviews={reviews}
+          stats={reviewStats}
+        />
+
         <section style={{
           marginTop: 32, padding: 24, borderRadius: 12,
           background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
@@ -412,6 +542,89 @@ function ExternalIcon({ type }: { type: string }) {
     }}>
       {ch}
     </span>
+  )
+}
+
+function PersonReviewsSection({
+  personName,
+  reviews,
+  stats,
+}: {
+  personName: string
+  reviews: PublicPersonReview[]
+  stats: PersonReviewStats
+}) {
+  const hasReviews = reviews.length > 0
+  return (
+    <section style={{ marginTop: 36, marginBottom: 28 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>
+          {personName} へのレビュー
+          {stats.count > 0 && (
+            <span style={{ marginLeft: 8, fontSize: 13, color: 'var(--fm-text-muted)', fontWeight: 500 }}>
+              {stats.count}件
+            </span>
+          )}
+        </h2>
+        {stats.count > 0 && stats.avg != null && (
+          <span style={{ fontSize: 14, color: 'var(--fm-star)', fontWeight: 700 }}>
+            ★ {stats.avg.toFixed(1)}
+          </span>
+        )}
+      </div>
+
+      {!hasReviews ? (
+        <div style={{
+          padding: 24, borderRadius: 10,
+          background: 'var(--fm-bg-card)', border: '1px dashed var(--fm-border)',
+          textAlign: 'center', color: 'var(--fm-text-muted)', fontSize: 13,
+        }}>
+          まだレビューはありません。<br />
+          ログインすると、あなたが最初のレビュアーになれます。
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {reviews.map(r => (
+            <article key={r.id} style={{
+              padding: 14, borderRadius: 10,
+              background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
+            }}>
+              <header style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                {r.user_avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={r.user_avatar} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--fm-bg-secondary)' }} />
+                )}
+                <div style={{ flex: 1 }}>
+                  <Link href={`/u/${r.user_id}`} style={{ color: 'var(--fm-text)', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+                    {r.user_name}
+                  </Link>
+                  <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 1 }}>
+                    {r.created_at.slice(0, 10)}
+                  </div>
+                </div>
+                {r.score != null && (
+                  <span style={{ fontSize: 13, color: 'var(--fm-star)', fontWeight: 700 }}>
+                    ★ {r.score.toFixed(1)}
+                  </span>
+                )}
+              </header>
+              {r.body && (
+                <p style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--fm-text-sub)', margin: 0, whiteSpace: 'pre-wrap' }}>
+                  {r.body}
+                </p>
+              )}
+              {r.likes_count > 0 && (
+                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--fm-text-muted)' }}>
+                  ♥ {r.likes_count}
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 

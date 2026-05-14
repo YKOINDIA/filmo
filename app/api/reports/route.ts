@@ -11,7 +11,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase-admin'
  * 認証必須 (Bearer token)。RLS は auth.uid() = reporter_id でチェックされる。
  */
 
-const VALID_TARGET_TYPES = new Set(['review', 'list', 'user'])
+const VALID_TARGET_TYPES = new Set(['review', 'list', 'user', 'person_review'])
 const VALID_REASONS = new Set(['spam', 'harassment', 'inappropriate', 'copyright', 'other'])
 
 interface Body {
