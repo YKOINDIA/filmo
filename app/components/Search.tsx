@@ -977,19 +977,29 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
     const type = getType(item)
     const score = item.vote_average > 0 ? formatScore(item.vote_average) : null
     const style = inGrid ? S.gridCard : S.posterCard
+    // SEO: 公開 URL を href として持たせる(クローラと右クリック→新規タブ用)。
+    // クリック時は e.preventDefault してアプリ内モーダルを開く既存挙動を維持。
+    const publicHref = `/${type === 'movie' ? 'movies' : 'tv'}/${item.id}`
 
     return (
-      <div
+      <Link
         key={`${item.media_type || 'item'}-${item.id}`}
-        style={style}
-        onClick={() => onOpenWork(item.id, type)}
+        href={publicHref}
+        prefetch={false}
+        style={{ ...style, textDecoration: 'none', color: 'inherit', display: 'block' }}
+        onClick={e => {
+          // Cmd / Ctrl / 中ボタンクリックは新規タブを開く既定挙動を尊重。
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return
+          e.preventDefault()
+          onOpenWork(item.id, type)
+        }}
         onMouseEnter={e => {
-          (e.currentTarget as HTMLDivElement).style.transform = 'scale(1.04)'
-          ;(e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 24px rgba(108,92,231,0.3)'
+          (e.currentTarget as HTMLAnchorElement).style.transform = 'scale(1.04)'
+          ;(e.currentTarget as HTMLAnchorElement).style.boxShadow = '0 8px 24px rgba(108,92,231,0.3)'
         }}
         onMouseLeave={e => {
-          (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)'
-          ;(e.currentTarget as HTMLDivElement).style.boxShadow = 'none'
+          (e.currentTarget as HTMLAnchorElement).style.transform = 'scale(1)'
+          ;(e.currentTarget as HTMLAnchorElement).style.boxShadow = 'none'
         }}
       >
         <div style={{ position: 'relative', aspectRatio: '2/3' }}>
@@ -1014,7 +1024,7 @@ export default function Search({ userId, onOpenWork: onOpenWorkRaw, initialGenre
           <div style={S.cardTitle}>{getTitle(item)}</div>
           <div style={S.cardSub}>{getYear(item)}</div>
         </div>
-      </div>
+      </Link>
     )
   }
 

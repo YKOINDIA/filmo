@@ -1,0 +1,336 @@
+/**
+ * Public, server-rendered person detail page used by /people/[id].
+ *
+ * Renders a crawlable HTML page with Person JSON-LD so directors / writers /
+ * actors can rank on Google. The in-app modal (PersonDetail.tsx) continues to
+ * handle the authenticated UX.
+ */
+import Link from 'next/link'
+import { getPersonDetailCached } from '@/app/lib/tmdb-cache'
+
+const TMDB_IMG = 'https://image.tmdb.org/t/p'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://filmo.me'
+
+interface CombinedCredit {
+  id: number
+  title?: string
+  name?: string
+  media_type?: 'movie' | 'tv'
+  poster_path: string | null
+  release_date?: string
+  first_air_date?: string
+  vote_average?: number
+  character?: string
+  job?: string
+  department?: string
+}
+
+export interface PublicPersonData {
+  id: number
+  name: string
+  also_known_as: string[]
+  biography: string
+  birthday: string | null
+  deathday: string | null
+  place_of_birth: string | null
+  profile_path: string | null
+  known_for_department: string | null
+  cast: CombinedCredit[]
+  crew: CombinedCredit[]
+  director_works: CombinedCredit[]
+  writer_works: CombinedCredit[]
+}
+
+interface TmdbPerson {
+  id: number
+  name?: string
+  also_known_as?: string[]
+  biography?: string
+  birthday?: string | null
+  deathday?: string | null
+  place_of_birth?: string | null
+  profile_path?: string | null
+  known_for_department?: string | null
+  combined_credits?: {
+    cast?: CombinedCredit[]
+    crew?: CombinedCredit[]
+  }
+}
+
+export async function fetchPublicPerson(rawId: string): Promise<PublicPersonData | null> {
+  const id = Number(rawId)
+  if (!Number.isFinite(id) || id <= 0) return null
+
+  try {
+    const data = (await getPersonDetailCached(id)) as TmdbPerson | null
+    if (!data || !data.name) return null
+
+    const cast = (data.combined_credits?.cast || [])
+      .filter(c => c.poster_path)
+      .sort((a, b) => releaseYear(b) - releaseYear(a))
+    const crew = (data.combined_credits?.crew || [])
+      .filter(c => c.poster_path)
+      .sort((a, b) => releaseYear(b) - releaseYear(a))
+    const director_works = crew.filter(c => c.job === 'Director')
+    const writer_works = crew.filter(c => c.department === 'Writing')
+
+    return {
+      id: data.id,
+      name: data.name,
+      also_known_as: data.also_known_as || [],
+      biography: data.biography || '',
+      birthday: data.birthday || null,
+      deathday: data.deathday || null,
+      place_of_birth: data.place_of_birth || null,
+      profile_path: data.profile_path || null,
+      known_for_department: data.known_for_department || null,
+      cast,
+      crew,
+      director_works,
+      writer_works,
+    }
+  } catch {
+    return null
+  }
+}
+
+function releaseYear(c: CombinedCredit): number {
+  const d = c.release_date || c.first_air_date || ''
+  return d ? parseInt(d.slice(0, 4), 10) || 0 : 0
+}
+
+// ── Metadata helpers ────────────────────────────────────────────────────────
+
+const DEPARTMENT_JA: Record<string, string> = {
+  Directing: '監督',
+  Writing: '脚本家',
+  Acting: '俳優',
+  Production: 'プロデューサー',
+  Camera: '撮影',
+  Editing: '編集',
+  Sound: '音響',
+  Art: '美術',
+}
+
+export function buildPersonTitle(p: PublicPersonData): string {
+  const role = p.known_for_department ? DEPARTMENT_JA[p.known_for_department] || p.known_for_department : null
+  // 兼業の場合(監督 兼 脚本)は監督と脚本のフィルム数で補強
+  const extras: string[] = []
+  if (p.director_works.length > 0 && p.known_for_department !== 'Directing') extras.push('監督')
+  if (p.writer_works.length > 0 && p.known_for_department !== 'Writing') extras.push('脚本家')
+  const combined = [role, ...extras].filter(Boolean).join('・')
+  return combined ? `${p.name}（${combined}）` : p.name
+}
+
+export function buildPersonDescription(p: PublicPersonData): string {
+  const parts: string[] = []
+  if (p.known_for_department) {
+    const role = DEPARTMENT_JA[p.known_for_department] || p.known_for_department
+    parts.push(`${role}`)
+  }
+  if (p.birthday) parts.push(`${p.birthday.slice(0, 4)}年生まれ`)
+  if (p.place_of_birth) parts.push(`出身: ${p.place_of_birth}`)
+  if (p.director_works.length > 0) {
+    const titles = p.director_works.slice(0, 3).map(c => c.title || c.name).filter(Boolean).join('・')
+    parts.push(`監督作品: ${titles}`)
+  } else if (p.cast.length > 0) {
+    const titles = p.cast.slice(0, 3).map(c => c.title || c.name).filter(Boolean).join('・')
+    parts.push(`出演作品: ${titles}`)
+  }
+  const head = parts.join(' / ')
+  const tail = p.biography ? ` ${p.biography.replace(/\s+/g, ' ').trim()}` : ''
+  const desc = `${head}${tail}`.trim()
+  return desc.length > 155 ? `${desc.slice(0, 152)}…` : desc
+}
+
+export function buildPersonUrl(p: PublicPersonData): string {
+  return `${APP_URL}/people/${p.id}`
+}
+
+export function buildPersonImageUrl(profilePath: string | null, size: 'w185' | 'w300' | 'h632' | 'original' = 'h632'): string | null {
+  if (!profilePath) return null
+  return `${TMDB_IMG}/${size}${profilePath}`
+}
+
+// ── JSON-LD (Person schema) ─────────────────────────────────────────────────
+
+export function buildPersonJsonLd(p: PublicPersonData): Record<string, unknown> {
+  const image = buildPersonImageUrl(p.profile_path, 'h632')
+  const url = buildPersonUrl(p)
+  const jsonLd: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    name: p.name,
+    url,
+  }
+  if (p.also_known_as.length > 0) jsonLd.alternateName = p.also_known_as
+  if (image) jsonLd.image = image
+  if (p.biography) jsonLd.description = p.biography
+  if (p.birthday) jsonLd.birthDate = p.birthday
+  if (p.deathday) jsonLd.deathDate = p.deathday
+  if (p.place_of_birth) {
+    jsonLd.birthPlace = { '@type': 'Place', name: p.place_of_birth }
+  }
+  if (p.known_for_department) {
+    jsonLd.jobTitle = DEPARTMENT_JA[p.known_for_department] || p.known_for_department
+  }
+  // 監督作品を knowsAbout/worksFor 風に並べると過剰なので、知名度の高い作品だけ alumniOf 替わりに付ける
+  const topWorks = [...p.director_works.slice(0, 5), ...p.cast.slice(0, 5)]
+    .filter((w, i, arr) => arr.findIndex(x => x.id === w.id) === i)
+    .slice(0, 8)
+  if (topWorks.length > 0) {
+    jsonLd.subjectOf = topWorks.map(w => ({
+      '@type': w.media_type === 'tv' ? 'TVSeries' : 'Movie',
+      name: w.title || w.name,
+      url: `${APP_URL}/${w.media_type === 'tv' ? 'tv' : 'movies'}/${w.id}`,
+    }))
+  }
+  return jsonLd
+}
+
+// ── View ────────────────────────────────────────────────────────────────────
+
+export function PublicPersonView({ person }: { person: PublicPersonData }) {
+  const profile = buildPersonImageUrl(person.profile_path, 'h632')
+  const role = person.known_for_department
+    ? DEPARTMENT_JA[person.known_for_department] || person.known_for_department
+    : null
+
+  return (
+    <div style={{ minHeight: '100dvh', background: 'var(--fm-bg)', color: 'var(--fm-text)' }}>
+      <header style={{
+        borderBottom: '1px solid var(--fm-border)', padding: '12px 16px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <Link href="/" style={{ textDecoration: 'none' }}>
+          <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: 1.5, color: 'var(--fm-text)', textTransform: 'uppercase' }}>
+            Filmo
+          </span>
+        </Link>
+        <Link href="/" style={{
+          padding: '6px 16px', borderRadius: 6,
+          background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
+          textDecoration: 'none',
+        }}>
+          無料で記録を始める
+        </Link>
+      </header>
+
+      <div style={{ maxWidth: 880, margin: '0 auto', padding: '24px 16px 60px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 20, marginBottom: 24 }}>
+          {profile ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={profile} alt={person.name}
+              style={{ width: 160, height: 240, objectFit: 'cover', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}
+            />
+          ) : (
+            <div style={{ width: 160, height: 240, borderRadius: 8, background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 56, fontWeight: 700 }}>
+              {person.name.charAt(0)}
+            </div>
+          )}
+
+          <div>
+            <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 6px', lineHeight: 1.3 }}>
+              {person.name}
+            </h1>
+            {role && (
+              <div style={{ fontSize: 14, color: 'var(--fm-accent)', fontWeight: 600, marginBottom: 8 }}>
+                {role}
+              </div>
+            )}
+            {person.also_known_as.length > 0 && (
+              <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 8 }}>
+                別名: {person.also_known_as.slice(0, 3).join(' / ')}
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, color: 'var(--fm-text-sub)' }}>
+              {person.birthday && <div>生年月日: {person.birthday}{person.deathday ? ` 〜 ${person.deathday}` : ''}</div>}
+              {person.place_of_birth && <div>出身地: {person.place_of_birth}</div>}
+              {(person.director_works.length > 0 || person.writer_works.length > 0 || person.cast.length > 0) && (
+                <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {person.director_works.length > 0 && <span>監督 {person.director_works.length}作品</span>}
+                  {person.writer_works.length > 0 && <span>脚本 {person.writer_works.length}作品</span>}
+                  {person.cast.length > 0 && <span>出演 {person.cast.length}作品</span>}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {person.biography && (
+          <section style={{ marginBottom: 28 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 8px' }}>プロフィール</h2>
+            <p style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--fm-text-sub)', margin: 0, whiteSpace: 'pre-wrap' }}>
+              {person.biography}
+            </p>
+          </section>
+        )}
+
+        {person.director_works.length > 0 && (
+          <CreditSection title="監督作品" works={person.director_works} />
+        )}
+        {person.writer_works.length > 0 && (
+          <CreditSection title="脚本作品" works={person.writer_works} />
+        )}
+        {person.cast.length > 0 && (
+          <CreditSection title="出演作品" works={person.cast.slice(0, 24)} />
+        )}
+
+        <section style={{
+          marginTop: 32, padding: 24, borderRadius: 12,
+          background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
+          textAlign: 'center',
+        }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px' }}>
+            {person.name}の作品を Filmo で記録しよう
+          </h3>
+          <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', margin: '0 0 16px' }}>
+            星評価・レビュー・配信情報をまとめて管理。完全無料。
+          </p>
+          <Link href="/" style={{
+            display: 'inline-block', padding: '10px 28px', borderRadius: 8,
+            background: 'var(--fm-accent)', color: '#fff', fontSize: 14, fontWeight: 600,
+            textDecoration: 'none',
+          }}>
+            無料で始める
+          </Link>
+        </section>
+      </div>
+    </div>
+  )
+}
+
+function CreditSection({ title, works }: { title: string; works: CombinedCredit[] }) {
+  return (
+    <section style={{ marginBottom: 28 }}>
+      <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px' }}>{title}</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 12 }}>
+        {works.map(w => {
+          const path = w.media_type === 'tv' ? 'tv' : 'movies'
+          const year = (w.release_date || w.first_air_date || '').slice(0, 4)
+          const titleText = w.title || w.name || ''
+          return (
+            <Link
+              key={`${w.media_type}-${w.id}`}
+              href={`/${path}/${w.id}`}
+              style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
+            >
+              {w.poster_path ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={`${TMDB_IMG}/w300${w.poster_path}`} alt={titleText}
+                  loading="lazy"
+                  style={{ width: '100%', aspectRatio: '2/3', objectFit: 'cover', borderRadius: 6 }} />
+              ) : (
+                <div style={{ width: '100%', aspectRatio: '2/3', background: 'var(--fm-bg-secondary)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🎬</div>
+              )}
+              <div style={{ fontSize: 12, fontWeight: 600, marginTop: 6, lineHeight: 1.3 }}>{titleText}</div>
+              <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 2 }}>
+                {year}{w.character ? ` ・ ${w.character}` : ''}{w.job && w.job !== 'Director' && w.department !== 'Acting' ? ` ・ ${w.job}` : ''}
+              </div>
+            </Link>
+          )
+        })}
+      </div>
+    </section>
+  )
+}

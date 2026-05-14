@@ -79,7 +79,7 @@ export default function PersonSearch({ placeholder, filterDepartment }: PersonSe
           gap: 12,
         }}>
           {results.map(p => (
-            <Link key={p.id} href={`/?person=${p.id}`} style={{
+            <Link key={p.id} href={`/people/${p.id}`} style={{
               textDecoration: 'none', color: 'inherit',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
               padding: 10, borderRadius: 10,
