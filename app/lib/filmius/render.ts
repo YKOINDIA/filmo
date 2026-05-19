@@ -14,11 +14,9 @@ import {
   OPTION_TRAIL_GAP,
   PLAYER_H,
   PLAYER_W,
+  SHIPS,
 } from './engine'
 import { STAGES } from './stages'
-
-const COLOR_PLAYER = '#6cf2ff'
-const COLOR_PLAYER_TRIM = '#fff'
 const COLOR_OPTION = '#ffd24a'
 
 export function render(ctx: CanvasRenderingContext2D, s: State, viewW: number, viewH: number, dpr: number) {
@@ -100,7 +98,8 @@ function drawPlayer(ctx: CanvasRenderingContext2D, s: State) {
   if (blink) {
     ctx.globalAlpha = 0.35
   }
-  drawShip(ctx, s.player.x, s.player.y, COLOR_PLAYER, COLOR_PLAYER_TRIM)
+  const ship = SHIPS[s.ship]
+  drawShip(ctx, s.player.x, s.player.y, ship.color, ship.trim)
   ctx.globalAlpha = 1
 }
 

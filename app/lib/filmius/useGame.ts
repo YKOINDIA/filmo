@@ -5,6 +5,7 @@ import {
   type Difficulty,
   type Input,
   type Mode,
+  type ShipType,
   type State,
   LOGICAL_H,
   LOGICAL_W,
@@ -22,6 +23,7 @@ export interface FilmiusResult {
   enemiesKilled: number
   durationMs: number
   difficulty: Difficulty
+  ship: ShipType
 }
 
 interface UseFilmiusOpts {
@@ -109,12 +111,13 @@ export function useFilmius(
       enemiesKilled: s.enemiesKilled,
       durationMs: Math.round(s.totalTimeMs),
       difficulty: s.difficulty,
+      ship: s.ship,
     }
     onEndRef.current?.(result)
   }, [])
 
-  const start = useCallback((difficulty: Difficulty = 'normal') => {
-    stateRef.current = initialState(difficulty)
+  const start = useCallback((difficulty: Difficulty = 'normal', ship: ShipType = 'standard') => {
+    stateRef.current = initialState(difficulty, ship)
     stageRuntimeRef.current = makeStageRuntime()
     stageRuntimeRef.current.onStageStart(stateRef.current)
     inputRef.current = {
