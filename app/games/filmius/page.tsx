@@ -260,7 +260,7 @@ export default function FilmiusPage() {
           margin: '0 auto',
           padding: '0 12px',
         }}>
-          {/* Canvas */}
+          {/* Canvas — 横向きで縦が短い場合はビューポート高さで幅を制限してアスペクト維持 */}
           <div style={{
             position: 'relative',
             background: '#000',
@@ -269,6 +269,8 @@ export default function FilmiusPage() {
             overflow: 'hidden',
             aspectRatio: `${LOGICAL_W} / ${LOGICAL_H}`,
             touchAction: 'none',
+            width: `min(100%, calc((100dvh - 100px) * ${LOGICAL_W} / ${LOGICAL_H}))`,
+            margin: '0 auto',
           }}>
             <canvas
               ref={canvasRef}
