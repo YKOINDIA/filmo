@@ -239,6 +239,39 @@ export default function LoginPrompt({ title, subtitle, onAuthenticated }: LoginP
           )}
         </div>
 
+        {/* うらにゃん。 (未ログインでも試せる) */}
+        <div style={{ marginTop: 24 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            marginBottom: 10, color: 'var(--fm-text-sub)',
+            fontSize: 12, fontWeight: 600, letterSpacing: 0.5,
+          }}>
+            <span style={{ fontSize: 16 }}>🔮</span>
+            <span>うらにゃん。占い</span>
+          </div>
+          <Link
+            href="/games/uranyan"
+            style={{
+              display: 'block', padding: 16, borderRadius: 14,
+              background: 'linear-gradient(135deg, rgba(255,122,174,0.25), rgba(195,116,255,0.18))',
+              border: '1px solid rgba(255,122,174,0.35)',
+              textDecoration: 'none', color: 'inherit',
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 30 }}>🐱🐶</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>
+                  毒舌な猫とおちゃめな犬の占い
+                </div>
+                <div style={{ fontSize: 11, color: '#ddd', marginTop: 4, lineHeight: 1.4 }}>
+                  算命学で性格、宿曜で相性。ログイン不要で試せる
+                </div>
+              </div>
+              <div style={{ fontSize: 18, color: '#FFD24A' }}>→</div>
+            </div>
+          </Link>
+        </div>
+
         {/* Filmo ゲーム (未ログインでも遊べる) */}
         <div style={{ marginTop: 24 }}>
           <div style={{

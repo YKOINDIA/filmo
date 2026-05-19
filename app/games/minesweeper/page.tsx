@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { addPoints, POINT_CONFIG } from '../../lib/points'
 import { trackMinigameShared } from '../../lib/analytics'
+import { shareToLine } from '../../lib/share'
 
 // ====================================================
 // Difficulty config
@@ -463,14 +464,21 @@ export default function MinesweeperPage() {
     }
   }
 
-  // ── X シェア ────────────────────────────────
-  function openShare() {
-    const text = phase === 'won'
+  // ── シェア ────────────────────────────────
+  function buildShareText(): string {
+    return phase === 'won'
       ? `💣 Minesweeper [${diffConfig.label}] クリア！ タイム ${fmtTime(elapsedMs)}\nあなたも挑戦してみて👇\n\n#Filmo #マインスイーパ`
       : `💥 Minesweeper [${diffConfig.label}] 爆死…リベンジしたい\n\n#Filmo #マインスイーパ`
+  }
+  function openShareX() {
+    const text = buildShareText()
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(SHARE_URL)}`
     if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer')
     trackMinigameShared('twitter', phase === 'won' ? 1 : 0, Math.floor(elapsedMs / 1000))
+  }
+  function openShareLine() {
+    shareToLine(buildShareText(), SHARE_URL)
+    trackMinigameShared('line', phase === 'won' ? 1 : 0, Math.floor(elapsedMs / 1000))
   }
 
   // ====================================================
@@ -701,19 +709,30 @@ export default function MinesweeperPage() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
-              <button
-                onClick={openShare}
-                style={{
-                  width: '100%', padding: '12px 0', borderRadius: 10, border: 'none',
-                  background: '#000', color: '#fff', fontSize: 14, fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                </svg>
-                Xでシェア
-              </button>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <button
+                  onClick={openShareLine}
+                  style={{
+                    padding: '12px 0', borderRadius: 10, border: 'none',
+                    background: '#06C755', color: '#fff', fontSize: 14, fontWeight: 700,
+                    cursor: 'pointer',
+                  }}>
+                  💬 LINEでシェア
+                </button>
+                <button
+                  onClick={openShareX}
+                  style={{
+                    padding: '12px 0', borderRadius: 10, border: 'none',
+                    background: '#000', color: '#fff', fontSize: 14, fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                  </svg>
+                  Xでシェア
+                </button>
+              </div>
               <button
                 onClick={restart}
                 style={{

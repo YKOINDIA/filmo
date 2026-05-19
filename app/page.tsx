@@ -423,6 +423,25 @@ export default function Page() {
             <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px' }}>
               <Statistics userId={user.id} onOpenWork={openWork} />
               <Link
+                href="/games/uranyan"
+                style={{
+                  display: 'block', marginTop: 16, padding: 18, borderRadius: 16,
+                  background: 'linear-gradient(135deg, rgba(255,122,174,0.25), rgba(195,116,255,0.18))',
+                  border: '1px solid rgba(255,122,174,0.35)',
+                  textDecoration: 'none', color: 'inherit',
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div style={{ fontSize: 32 }}>🔮</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>うらにゃん。占い</div>
+                    <div style={{ fontSize: 12, color: '#ddd', marginTop: 4, lineHeight: 1.5 }}>
+                      算命学 × 宿曜。毒舌な猫とおちゃめな犬が性格と相性をぶっちゃける
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 20, color: '#FFD24A' }}>→</div>
+                </div>
+              </Link>
+              <Link
                 href="/games/emoji"
                 style={{
                   display: 'block', marginTop: 16, padding: 16, borderRadius: 14,
