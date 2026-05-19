@@ -19,8 +19,9 @@ import {
   CAT_BREEDS, DOG_BREEDS, getCatBreed, getDogBreed,
   DEFAULT_CAT_BREED, DEFAULT_DOG_BREED,
   RELATIONSHIPS, RELATIONSHIP_LABELS,
-  type Relationship,
+  type BreedOption, type Relationship,
 } from '../../lib/uranyan/characters'
+import { DogIcon, CatIcon } from '../../lib/uranyan/breedIcons'
 
 // ====================================================
 // 型
@@ -718,8 +719,8 @@ function MenuView(p: {
     <div style={{ padding: '8px 20px 40px' }}>
       <div style={heroStyle}>
         <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 8 }}>
-          <div style={heroAvatar}>{cat.emoji}</div>
-          <div style={heroAvatar}>{dog.emoji}</div>
+          <div style={heroAvatar}><CatIcon breed={cat} size={48} title={cat.label} /></div>
+          <div style={heroAvatar}><DogIcon breed={dog} size={48} title={dog.label} /></div>
         </div>
         <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', textAlign: 'center' }}>
           ニャンじろう & ポチ の
@@ -1186,7 +1187,7 @@ function CharacterView(p: {
     <div style={{ padding: '8px 20px 40px' }}>
       <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', marginBottom: 4 }}>あんたのニャンポチ</div>
       <div style={{ fontSize: 12, color: '#888', marginBottom: 16 }}>占いに出てくる猫と犬の見た目を選べるよ</div>
-      <div style={fieldLabel}>ニャンじろう (猫)</div>
+      <div style={fieldLabel}>ニャンじろう (猫) — {CAT_BREEDS.length} 種</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 8 }}>
         {CAT_BREEDS.map(b => (
           <button key={b.id} type="button" onClick={() => p.setCatBreed(b.id)} style={{
@@ -1194,12 +1195,12 @@ function CharacterView(p: {
             borderColor: p.catBreed === b.id ? '#FF7AAE' : 'var(--fm-border)',
             background: p.catBreed === b.id ? 'rgba(255,122,174,0.18)' : 'rgba(255,255,255,0.03)',
           }}>
-            <div style={{ fontSize: 26 }}>{b.emoji}</div>
+            <CatIcon breed={b} size={44} title={b.label} />
             <div style={{ fontSize: 11, color: '#ddd', marginTop: 4 }}>{b.label}</div>
           </button>
         ))}
       </div>
-      <div style={fieldLabel}>ポチ (犬)</div>
+      <div style={fieldLabel}>ポチ (犬) — {DOG_BREEDS.length} 種</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 8 }}>
         {DOG_BREEDS.map(b => (
           <button key={b.id} type="button" onClick={() => p.setDogBreed(b.id)} style={{
@@ -1207,7 +1208,7 @@ function CharacterView(p: {
             borderColor: p.dogBreed === b.id ? '#FFD24A' : 'var(--fm-border)',
             background: p.dogBreed === b.id ? 'rgba(255,210,74,0.18)' : 'rgba(255,255,255,0.03)',
           }}>
-            <div style={{ fontSize: 26 }}>{b.emoji}</div>
+            <DogIcon breed={b} size={44} title={b.label} />
             <div style={{ fontSize: 11, color: '#ddd', marginTop: 4 }}>{b.label}</div>
           </button>
         ))}
@@ -1287,8 +1288,8 @@ function LifeResultView(p: ResultActionProps & {
 
 function PillarBlock(p: {
   part: ReturnType<typeof buildLifeReading>['outer']
-  cat: { emoji: string }
-  dog: { emoji: string }
+  cat: BreedOption
+  dog: BreedOption
   accent: string
   highlight?: boolean
 }) {
@@ -1309,14 +1310,14 @@ function PillarBlock(p: {
         — {p.part.starHeadline}
       </div>
       <div style={dialogRow}>
-        <div style={{ fontSize: 22 }}>{p.cat.emoji}</div>
+        <CatIcon breed={p.cat} size={32} />
         <div style={bubbleNyan}>
           <div style={bubbleSpeaker}>ニャンじろう</div>
           {p.part.main.nyan}
         </div>
       </div>
       <div style={{ ...dialogRow, marginTop: 8 }}>
-        <div style={{ fontSize: 22 }}>{p.dog.emoji}</div>
+        <DogIcon breed={p.dog} size={32} />
         <div style={bubblePochi}>
           <div style={bubbleSpeaker}>ポチ</div>
           {p.part.main.pochi}
@@ -1422,15 +1423,15 @@ function CompatResultView(p: ResultActionProps & {
           </div>
         </div>
 
-        <div style={dialogRow}>
-          <div style={{ fontSize: 22, marginTop: 16 }}>{cat.emoji}</div>
-          <div style={{ ...bubbleNyan, marginTop: 16 }}>
+        <div style={{ ...dialogRow, marginTop: 16 }}>
+          <CatIcon breed={cat} size={32} />
+          <div style={bubbleNyan}>
             <div style={bubbleSpeaker}>ニャンじろう</div>
             {compat.template.nyan}
           </div>
         </div>
         <div style={{ ...dialogRow, marginTop: 8 }}>
-          <div style={{ fontSize: 22 }}>{dog.emoji}</div>
+          <DogIcon breed={dog} size={32} />
           <div style={bubblePochi}>
             <div style={bubbleSpeaker}>ポチ</div>
             {compat.template.pochi}
