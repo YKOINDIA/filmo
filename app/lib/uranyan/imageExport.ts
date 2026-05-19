@@ -11,17 +11,14 @@ import { toBlob } from 'html-to-image'
 const PNG_OPTIONS = {
   cacheBust: true,
   pixelRatio: 2,                          // Retina 用に 2x で書き出し
-  backgroundColor: '#0a0612',             // 背景透明だと SNS で白枠になるので明示
-  fetchRequestInit: { mode: 'no-cors' as RequestMode }, // 外部画像の CORS 失敗で出力空になる対策
+  backgroundColor: '#0a0612',             // 透明背景による SNS 白枠を回避
+  fetchRequestInit: { mode: 'no-cors' as RequestMode },
 }
 
-/**
- * 要素を PNG Blob 化する。エラー時は null。
- */
+/** 要素を PNG Blob 化。エラー時は null。 */
 export async function captureElementToBlob(el: HTMLElement): Promise<Blob | null> {
   try {
-    const blob = await toBlob(el, PNG_OPTIONS)
-    return blob
+    return await toBlob(el, PNG_OPTIONS)
   } catch (e) {
     console.warn('[imageExport] toBlob failed:', e)
     return null
@@ -31,14 +28,11 @@ export async function captureElementToBlob(el: HTMLElement): Promise<Blob | null
 /**
  * iOS/Android: Web Share API でファイル添付シェア (シェアシート起動)
  * 未対応: ローカルダウンロード
- *
- * 返り値: 'shared' | 'downloaded' | 'failed'
  */
 export async function shareOrDownloadImage(el: HTMLElement, fileName: string): Promise<'shared' | 'downloaded' | 'failed'> {
   const blob = await captureElementToBlob(el)
   if (!blob) return 'failed'
 
-  // Web Share API (files 対応) を試す
   if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
     try {
       const file = new File([blob], fileName, { type: 'image/png' })
@@ -52,12 +46,11 @@ export async function shareOrDownloadImage(el: HTMLElement, fileName: string): P
         return 'shared'
       }
     } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return 'shared' // ユーザーキャンセル扱い
+      if ((e as Error)?.name === 'AbortError') return 'shared'
       console.warn('[imageExport] navigator.share failed:', e)
     }
   }
 
-  // フォールバック: <a download> でダウンロード
   try {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -74,9 +67,6 @@ export async function shareOrDownloadImage(el: HTMLElement, fileName: string): P
   }
 }
 
-/**
- * 占い種別 + 日付 でファイル名を作る
- */
 export function buildImageFileName(menu: string, label?: string): string {
   const now = new Date()
   const y = now.getFullYear()
