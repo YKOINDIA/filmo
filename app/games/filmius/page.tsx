@@ -293,6 +293,51 @@ export default function FilmiusPage() {
                 EQUIP
               </button>
             )}
+            {/* ゲーム終了オーバーレイ: 即タップできる位置にリトライ/メニューを表示 */}
+            {phase === 'result' && result && (
+              <div style={{
+                position: 'absolute', inset: 0,
+                background: 'rgba(0,0,8,0.78)',
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                gap: 14, padding: '8% 6%',
+              }}>
+                <div style={{
+                  fontFamily: 'monospace', fontWeight: 900,
+                  fontSize: 'clamp(20px, 5vw, 32px)',
+                  letterSpacing: 3, textAlign: 'center',
+                  color: result.cleared ? '#ffd24a' : '#ff6188',
+                  textShadow: result.cleared
+                    ? '0 0 18px rgba(255,210,74,0.6)'
+                    : '0 0 14px rgba(255,97,136,0.5)',
+                }}>
+                  {result.cleared ? '★ ALL CLEARED ★' : 'GAME OVER'}
+                </div>
+                <div style={{
+                  fontFamily: 'monospace', fontWeight: 800,
+                  fontSize: 'clamp(14px, 3vw, 18px)',
+                  color: '#fff', letterSpacing: 2,
+                }}>
+                  SCORE {fmtScore(result.score)}
+                </div>
+                <div style={{
+                  display: 'flex', gap: 10, width: '100%',
+                  maxWidth: 360, marginTop: 4,
+                }}>
+                  <button onClick={startGame} style={overlayPrimaryBtn}>
+                    ▶ もう一度
+                  </button>
+                  <button onClick={backToMenu} style={overlaySecondaryBtn}>
+                    メニュー
+                  </button>
+                </div>
+                <div style={{
+                  fontSize: 10, color: '#aaa', marginTop: 6, textAlign: 'center',
+                }}>
+                  ↓ 下に詳細スコア・シェアボタンがあります
+                </div>
+              </div>
+            )}
           </div>
 
           {phase === 'playing' && (
@@ -628,4 +673,21 @@ const secondaryBtn: React.CSSProperties = {
   color: '#fff', background: 'rgba(255,255,255,0.08)',
   border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12,
   cursor: 'pointer', fontFamily: 'monospace',
+}
+const overlayPrimaryBtn: React.CSSProperties = {
+  flex: 1, padding: '14px 12px',
+  fontSize: 'clamp(13px, 3vw, 16px)', fontWeight: 900,
+  color: '#000', background: 'linear-gradient(135deg, #ffd24a, #ff7a3f)',
+  border: 'none', borderRadius: 12, cursor: 'pointer',
+  fontFamily: 'monospace', letterSpacing: 2,
+  boxShadow: '0 4px 18px rgba(255,210,74,0.45)',
+  touchAction: 'manipulation',
+}
+const overlaySecondaryBtn: React.CSSProperties = {
+  flex: 1, padding: '14px 12px',
+  fontSize: 'clamp(13px, 3vw, 16px)', fontWeight: 800,
+  color: '#fff', background: 'rgba(255,255,255,0.12)',
+  border: '1px solid rgba(255,255,255,0.25)', borderRadius: 12,
+  cursor: 'pointer', fontFamily: 'monospace',
+  touchAction: 'manipulation',
 }
