@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import {
-  trackUranyanShared, trackUranyanSaved, trackUranyanReviewed,
+  trackUranyanShared, trackUranyanSaved, trackUranyanReviewed, trackUranyanAppShared,
 } from '../../lib/analytics'
 import { shareToLine, shareToTwitter, copyToClipboard } from '../../lib/share'
 import { buildLifeReading } from '../../lib/uranyan/templates'
@@ -778,6 +778,73 @@ function MenuView(p: {
           <div style={{ fontSize: 22, color: '#5EE2C8' }}>→</div>
         </button>
       </div>
+
+      <AppShareSection />
+    </div>
+  )
+}
+
+// ====================================================
+// 部品: 「友達に教える」共有セクション (メニュー画面下部)
+// ====================================================
+function AppShareSection() {
+  const [copied, setCopied] = useState(false)
+  const text =
+    `🔮 #うらにゃん  毒舌な猫とおちゃめな犬の占い、めっちゃ当たるよ\n` +
+    `算命学で性格、宿曜で相性。友達やグループでも占える 🐱🐶`
+
+  const onLine = useCallback(() => {
+    shareToLine(text, SHARE_URL)
+    trackUranyanAppShared('line')
+  }, [text])
+  const onX = useCallback(() => {
+    shareToTwitter(text, SHARE_URL)
+    trackUranyanAppShared('twitter')
+  }, [text])
+  const onCopy = useCallback(async () => {
+    const ok = await copyToClipboard(`${text}\n${SHARE_URL}`)
+    if (ok) {
+      setCopied(true)
+      trackUranyanAppShared('copy_link')
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }, [text])
+
+  return (
+    <div style={{
+      marginTop: 24, padding: '16px 16px 14px', borderRadius: 16,
+      background: 'linear-gradient(135deg, rgba(6,199,85,0.10), rgba(255,210,74,0.08))',
+      border: '1px solid rgba(6,199,85,0.25)',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        fontSize: 13, fontWeight: 800, color: '#fff', marginBottom: 4,
+      }}>
+        <span style={{ fontSize: 18 }}>📣</span>
+        友達にうらにゃん。を教える
+      </div>
+      <div style={{ fontSize: 11, color: '#bbb', marginBottom: 12 }}>
+        LINEグループに送ると、みんなで占い合えるよ
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <button type="button" onClick={onLine} style={{
+          padding: '12px 0', borderRadius: 12, border: 'none',
+          background: '#06C755', color: '#fff', fontSize: 14, fontWeight: 800,
+          cursor: 'pointer',
+        }}>💬 LINEでシェア</button>
+        <button type="button" onClick={onX} style={{
+          padding: '12px 0', borderRadius: 12, border: 'none',
+          background: '#000', color: '#fff', fontSize: 14, fontWeight: 800,
+          cursor: 'pointer',
+        }}>🐦 Xでシェア</button>
+      </div>
+      <button type="button" onClick={onCopy} style={{
+        width: '100%', marginTop: 8, padding: '10px 0', borderRadius: 10,
+        border: '1px solid var(--fm-border)', background: 'rgba(255,255,255,0.04)',
+        color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+      }}>
+        {copied ? '✅ コピー完了' : '🔗 リンクをコピー'}
+      </button>
     </div>
   )
 }
