@@ -239,17 +239,38 @@ export function getDogBreed(id: string | null | undefined): BreedOption {
 // ============================================================
 // 関係性ラベル (uranyan_targets.relationship)
 // ============================================================
-export type Relationship = 'self' | 'friend' | 'family' | 'crush' | 'partner' | 'idol' | 'other'
+// 順序: 自分 → 家族系 → 学校/職場系 → 恋系 → その他
+export type Relationship =
+  | 'self'
+  | 'parent' | 'child' | 'sibling' | 'family' | 'relative'
+  | 'friend' | 'classmate' | 'senior' | 'coworker'
+  | 'crush' | 'partner' | 'idol'
+  | 'other'
 
 export const RELATIONSHIP_LABELS: Record<Relationship, { label: string; emoji: string }> = {
-  self:    { label: '自分',     emoji: '🪞' },
-  friend:  { label: '友達',     emoji: '🤝' },
-  family:  { label: '家族',     emoji: '🏠' },
-  crush:   { label: '気になる人', emoji: '💘' },
-  partner: { label: '恋人',     emoji: '💞' },
-  idol:    { label: '推し',     emoji: '⭐' },
-  other:   { label: 'その他',   emoji: '✨' },
+  self:      { label: '自分',         emoji: '🪞' },
+  // 家族系
+  parent:    { label: '親',           emoji: '👨‍👩‍👧' },
+  child:     { label: '子供',         emoji: '🧒' },
+  sibling:   { label: 'きょうだい',   emoji: '👫' },
+  family:    { label: '家族 (その他)', emoji: '🏠' },
+  relative:  { label: '親戚',         emoji: '🌳' },
+  // 学校・職場系
+  friend:    { label: '友達',         emoji: '🤝' },
+  classmate: { label: 'クラスメイト', emoji: '🎒' },
+  senior:    { label: '先輩',         emoji: '🌟' },
+  coworker:  { label: '同僚',         emoji: '💼' },
+  // 恋系
+  crush:     { label: '気になる人',   emoji: '💘' },
+  partner:   { label: '恋人',         emoji: '💞' },
+  idol:      { label: '推し',         emoji: '⭐' },
+  other:     { label: 'その他',       emoji: '✨' },
 }
 
-export const RELATIONSHIPS: readonly Relationship[] =
-  ['self','friend','family','crush','partner','idol','other'] as const
+export const RELATIONSHIPS: readonly Relationship[] = [
+  'self',
+  'parent', 'child', 'sibling', 'family', 'relative',
+  'friend', 'classmate', 'senior', 'coworker',
+  'crush', 'partner', 'idol',
+  'other',
+] as const
