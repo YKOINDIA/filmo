@@ -1487,20 +1487,34 @@ function LifeResultView(p: ResultActionProps & {
 
   return (
     <div style={{ padding: '8px 16px 40px' }}>
-      <div ref={cardRef} style={resultCardStyle}>
-        <div style={{ textAlign: 'center', fontSize: 11, color: '#A29BFE', letterSpacing: 2, marginBottom: 4 }}>
+      <div ref={cardRef} style={resultCardStyleLarge}>
+        <div style={cardHeaderTagStyle}>
           うらにゃん。 / 天命トリセツ (算命学)
         </div>
-        <div style={{ textAlign: 'center', fontSize: 22, fontWeight: 900, color: '#fff', marginBottom: 2 }}>
+        <div style={{ textAlign: 'center', fontSize: 28, fontWeight: 900, color: '#fff', marginTop: 8 }}>
           {p.target.name}
         </div>
-        <div style={{ textAlign: 'center', fontSize: 11, color: '#888', marginBottom: 16 }}>
-          {p.target.birth_year}/{String(p.target.birth_month).padStart(2,'0')}/{String(p.target.birth_day).padStart(2,'0')}
+        <div style={{ textAlign: 'center', fontSize: 13, color: '#888', marginBottom: 18 }}>
+          {p.target.birth_year}年{p.target.birth_month}月{p.target.birth_day}日 生まれ
         </div>
+
+        {/* 説明 */}
+        <div style={{
+          padding: '12px 14px', borderRadius: 12, marginBottom: 16,
+          background: 'rgba(162,155,254,0.10)', border: '1px solid rgba(162,155,254,0.25)',
+          fontSize: 13, color: '#ddd', lineHeight: 1.6,
+        }}>
+          算命学で、あなたの<strong style={{ color: '#fff' }}>3つのキャラ</strong>を見ます。
+          外で見せる顔 (外キャラ) / 親しい人前の素顔 (中キャラ) / 自分でも気付かない本性 (裏キャラ)。
+        </div>
+
         <BucchakeMeter level={reading.bucchakeLevel} />
-        <PillarBlock part={reading.outer} cat={cat} dog={dog} accent="#FFD24A" />
-        <PillarBlock part={reading.middle} cat={cat} dog={dog} accent="#5EE2C8" />
-        <PillarBlock part={reading.inner} cat={cat} dog={dog} accent="#FF7AAE" highlight />
+        <PillarBlock part={reading.outer} cat={cat} dog={dog} accent="#FFD24A"
+          pillarHint="学校・職場で見せる第一印象の顔" />
+        <PillarBlock part={reading.middle} cat={cat} dog={dog} accent="#5EE2C8"
+          pillarHint="親しい友達・家族の前で出る素顔" />
+        <PillarBlock part={reading.inner} cat={cat} dog={dog} accent="#FF7AAE" highlight
+          pillarHint="一番近しい人にしか見せない本性" />
         <LuckyColorBlock color={reading.luckyColor} />
         <ShareFooter />
       </div>
@@ -1530,34 +1544,44 @@ function PillarBlock(p: {
   dog: BreedOption
   accent: string
   highlight?: boolean
+  pillarHint?: string
 }) {
   return (
     <div style={{
-      marginTop: 16, padding: '14px 14px 12px', borderRadius: 14,
-      background: p.highlight ? 'rgba(255,122,174,0.10)' : 'rgba(255,255,255,0.04)',
-      border: `1px solid ${p.highlight ? 'rgba(255,122,174,0.30)' : 'rgba(255,255,255,0.06)'}`,
+      marginTop: 18, padding: '18px 18px 16px', borderRadius: 16,
+      background: p.highlight ? 'rgba(255,122,174,0.12)' : 'rgba(255,255,255,0.05)',
+      border: `1px solid ${p.highlight ? 'rgba(255,122,174,0.35)' : 'rgba(255,255,255,0.08)'}`,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
         <span style={{
-          fontSize: 10, padding: '2px 8px', borderRadius: 10,
-          background: p.accent, color: '#1a1030', fontWeight: 800, letterSpacing: 1,
+          fontSize: 13, padding: '4px 12px', borderRadius: 12,
+          background: p.accent, color: '#1a1030', fontWeight: 900, letterSpacing: 1,
         }}>{p.part.label}</span>
-        <span style={{ fontSize: 11, color: '#888' }}>{p.part.star}</span>
+        <span style={{
+          fontSize: 13, padding: '4px 10px', borderRadius: 10,
+          background: 'rgba(255,255,255,0.06)', color: '#fff', fontWeight: 700,
+          border: '1px solid rgba(255,255,255,0.12)',
+        }}>{p.part.star}</span>
       </div>
-      <div style={{ fontSize: 12, color: '#bbb', fontStyle: 'italic', marginBottom: 10 }}>
-        — {p.part.starHeadline}
+      {p.pillarHint && (
+        <div style={{ fontSize: 12, color: '#999', marginBottom: 6 }}>
+          ✦ {p.pillarHint}
+        </div>
+      )}
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 14 }}>
+        💫 {p.part.starHeadline}
       </div>
       <div style={dialogRow}>
-        <CatIcon breed={p.cat} size={32} />
-        <div style={bubbleNyan}>
-          <div style={bubbleSpeaker}>ニャンじろう</div>
+        <CatIcon breed={p.cat} size={40} />
+        <div style={bubbleNyanBig}>
+          <div style={bubbleSpeakerBig}>ニャンじろう</div>
           {p.part.main.nyan}
         </div>
       </div>
-      <div style={{ ...dialogRow, marginTop: 8 }}>
-        <DogIcon breed={p.dog} size={32} />
-        <div style={bubblePochi}>
-          <div style={bubbleSpeaker}>ポチ</div>
+      <div style={{ ...dialogRow, marginTop: 10 }}>
+        <DogIcon breed={p.dog} size={40} />
+        <div style={bubblePochiBig}>
+          <div style={bubbleSpeakerBig}>ポチ</div>
           {p.part.main.pochi}
         </div>
       </div>
@@ -1568,18 +1592,20 @@ function PillarBlock(p: {
 function LuckyColorBlock(p: { color: { name: string; hex: string } }) {
   return (
     <div style={{
-      marginTop: 14, padding: '12px 14px', borderRadius: 14,
-      display: 'flex', alignItems: 'center', gap: 12,
+      marginTop: 16, padding: '16px 18px', borderRadius: 14,
+      display: 'flex', alignItems: 'center', gap: 14,
       background: `linear-gradient(135deg, ${hex2rgba(p.color.hex, 0.20)}, rgba(255,255,255,0.03))`,
       border: `1px solid ${hex2rgba(p.color.hex, 0.40)}`,
     }}>
       <div style={{
-        width: 40, height: 40, borderRadius: '50%',
-        background: p.color.hex, border: '2px solid rgba(255,255,255,0.5)',
+        width: 56, height: 56, borderRadius: '50%',
+        background: p.color.hex, border: '3px solid rgba(255,255,255,0.5)',
+        boxShadow: `0 0 20px ${hex2rgba(p.color.hex, 0.40)}`,
       }}/>
       <div>
-        <div style={{ fontSize: 10, color: '#888', letterSpacing: 1, fontWeight: 700 }}>LUCKY COLOR</div>
-        <div style={{ fontSize: 14, color: '#fff', fontWeight: 800, marginTop: 2 }}>{p.color.name}</div>
+        <div style={{ fontSize: 12, color: '#888', letterSpacing: 1, fontWeight: 800 }}>LUCKY COLOR</div>
+        <div style={{ fontSize: 20, color: '#fff', fontWeight: 900, marginTop: 4 }}>{p.color.name}</div>
+        <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>身に着けると運が上向く色</div>
       </div>
     </div>
   )
@@ -1588,14 +1614,15 @@ function LuckyColorBlock(p: { color: { name: string; hex: string } }) {
 function BucchakeMeter({ level }: { level: number }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-      padding: '6px 10px', marginBottom: 8,
-      background: 'rgba(255,122,174,0.10)', borderRadius: 10,
-      border: '1px solid rgba(255,122,174,0.25)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+      padding: '10px 16px', marginBottom: 10,
+      background: 'rgba(255,122,174,0.12)', borderRadius: 12,
+      border: '1px solid rgba(255,122,174,0.30)',
     }}>
-      <span style={{ fontSize: 10, color: '#FF7AAE', fontWeight: 800, letterSpacing: 1 }}>ぶっちゃけ度</span>
-      <span style={{ fontSize: 14, letterSpacing: 1 }}>
-        {'★'.repeat(level)}<span style={{ color: '#444' }}>{'☆'.repeat(5 - level)}</span>
+      <span style={{ fontSize: 12, color: '#FF7AAE', fontWeight: 900, letterSpacing: 1 }}>ぶっちゃけ度</span>
+      <span style={{ fontSize: 20, letterSpacing: 2 }}>
+        <span style={{ color: '#FFD24A' }}>{'★'.repeat(level)}</span>
+        <span style={{ color: '#444' }}>{'☆'.repeat(5 - level)}</span>
       </span>
     </div>
   )
@@ -1630,61 +1657,61 @@ function CompatResultView(p: ResultActionProps & {
   const cardRef = useRef<HTMLDivElement>(null)
   return (
     <div style={{ padding: '8px 16px 40px' }}>
-      <div ref={cardRef} style={resultCardStyle}>
-        <div style={{ textAlign: 'center', fontSize: 11, color: '#A29BFE', letterSpacing: 2, marginBottom: 4 }}>
+      <div ref={cardRef} style={resultCardStyleLarge}>
+        <div style={cardHeaderTagStyle}>
           うらにゃん。 / 相性診断 (宿曜)
         </div>
 
         {/* 二人 + 関係見出し */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 14 }}>
           <PersonChip name={p.a.name} mansion={compat.selfMansion} emoji={p.a.emoji ?? '🪞'} />
           <div style={{
-            padding: '4px 10px', borderRadius: 999,
-            background: tone.bg, color: tone.fg, fontWeight: 900, fontSize: 13,
-            border: `1px solid ${tone.fg}55`,
+            padding: '10px 18px', borderRadius: 999,
+            background: tone.bg, color: tone.fg, fontWeight: 900, fontSize: 24,
+            border: `2px solid ${tone.fg}88`,
           }}>{compat.relation}</div>
           <PersonChip name={p.b.name} mansion={compat.targetMansion} emoji={p.b.emoji ?? '✨'} />
         </div>
 
         <div style={{
-          marginTop: 14, padding: '14px 14px',
-          borderRadius: 14, background: tone.bg, border: `1px solid ${tone.fg}55`,
+          marginTop: 18, padding: '20px 18px',
+          borderRadius: 16, background: tone.bg, border: `2px solid ${tone.fg}66`,
         }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: 18, fontWeight: 900, color: '#fff' }}>{compat.template.headline}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 22, fontWeight: 900, color: '#fff' }}>{compat.template.headline}</span>
             <span style={{
-              fontSize: 10, padding: '2px 8px', borderRadius: 8, color: tone.fg,
-              border: `1px solid ${tone.fg}`, fontWeight: 800, letterSpacing: 1,
+              fontSize: 13, padding: '3px 12px', borderRadius: 10, color: '#1a1030',
+              background: tone.fg, fontWeight: 900, letterSpacing: 1,
             }}>{compat.template.fortune}</span>
           </div>
-          <div style={{ fontSize: 13, color: '#ddd', lineHeight: 1.6 }}>
+          <div style={{ fontSize: 15, color: '#eee', lineHeight: 1.7 }}>
             {compat.template.blurb}
           </div>
         </div>
 
-        <div style={{ ...dialogRow, marginTop: 16 }}>
-          <CatIcon breed={cat} size={32} />
-          <div style={bubbleNyan}>
-            <div style={bubbleSpeaker}>ニャンじろう</div>
+        <div style={{ ...dialogRow, marginTop: 18 }}>
+          <CatIcon breed={cat} size={40} />
+          <div style={bubbleNyanBig}>
+            <div style={bubbleSpeakerBig}>ニャンじろう</div>
             {compat.template.nyan}
           </div>
         </div>
-        <div style={{ ...dialogRow, marginTop: 8 }}>
-          <DogIcon breed={dog} size={32} />
-          <div style={bubblePochi}>
-            <div style={bubbleSpeaker}>ポチ</div>
+        <div style={{ ...dialogRow, marginTop: 10 }}>
+          <DogIcon breed={dog} size={40} />
+          <div style={bubblePochiBig}>
+            <div style={bubbleSpeakerBig}>ポチ</div>
             {compat.template.pochi}
           </div>
         </div>
 
         <div style={{
-          marginTop: 14, padding: '12px 14px', borderRadius: 14,
-          background: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          fontSize: 13, color: '#eee', lineHeight: 1.6,
+          marginTop: 18, padding: '16px 18px', borderRadius: 14,
+          background: 'rgba(94,226,200,0.10)',
+          border: '1px solid rgba(94,226,200,0.30)',
+          fontSize: 15, color: '#fff', lineHeight: 1.7,
         }}>
-          <div style={{ fontSize: 10, color: '#A29BFE', fontWeight: 800, letterSpacing: 1, marginBottom: 4 }}>
-            ADVICE
+          <div style={{ fontSize: 11, color: '#5EE2C8', fontWeight: 900, letterSpacing: 1, marginBottom: 6 }}>
+            💡 アドバイス
           </div>
           {compat.template.advice}
         </div>
@@ -1714,16 +1741,16 @@ function CompatResultView(p: ResultActionProps & {
 function PersonChip({ name, mansion, emoji }: { name: string; mansion: string; emoji: string }) {
   return (
     <div style={{
-      flex: 1, minWidth: 0, padding: '8px 10px', borderRadius: 12,
-      background: 'rgba(255,255,255,0.06)',
-      border: '1px solid rgba(255,255,255,0.08)',
+      flex: 1, minWidth: 0, padding: '12px 12px', borderRadius: 14,
+      background: 'rgba(255,255,255,0.08)',
+      border: '1px solid rgba(255,255,255,0.12)',
       textAlign: 'center',
     }}>
-      <div style={{ fontSize: 22 }}>{emoji}</div>
-      <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div style={{ fontSize: 32 }}>{emoji}</div>
+      <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {name}
       </div>
-      <div style={{ fontSize: 10, color: '#A29BFE', marginTop: 2 }}>{mansion}宿</div>
+      <div style={{ fontSize: 12, color: '#A29BFE', marginTop: 4, fontWeight: 700 }}>{mansion}宿</div>
     </div>
   )
 }
@@ -1760,25 +1787,27 @@ function ResultActions(p: ResultActionProps & {
   }, [p.shareText, p.menu, p.resultSummary])
 
   return (
-    <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
+    <div style={{ display: 'grid', gap: 10, marginTop: 20 }}>
+      {/* 一番目立たせる: 画像化シェア (新規メイン CTA) */}
+      {p.cardRef && (
+        <ImageSaveButton cardRef={p.cardRef} fileNameBase={p.fileNameBase ?? p.menu}
+          primary />
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         <button type="button" onClick={onShareLINE} style={{
-          ...primaryBtn, background: '#06C755',
-        }}>💬 LINE</button>
+          ...primaryBtnBig, background: '#06C755',
+        }}>💬 LINEに送る</button>
         <button type="button" onClick={onShareX} style={{
-          ...primaryBtn, background: '#000',
-        }}>🐦 X</button>
+          ...primaryBtnBig, background: '#000',
+        }}>🐦 Xに投稿</button>
       </div>
-      {p.cardRef && (
-        <ImageSaveButton cardRef={p.cardRef} fileNameBase={p.fileNameBase ?? p.menu} />
-      )}
-      <button type="button" onClick={onCopy} style={{ ...secondaryBtn, width: '100%' }}>
-        {copied ? '✅ コピー完了' : '🔗 結果テキストをコピー'}
+      <button type="button" onClick={onCopy} style={{ ...secondaryBtnBig, width: '100%' }}>
+        {copied ? '✅ コピーできた' : '🔗 結果テキストをコピー'}
       </button>
       {p.loggedIn && (
         p.savedReadingId ? (
           <div style={{
-            ...secondaryBtn, width: '100%', textAlign: 'center',
+            ...secondaryBtnBig, width: '100%', textAlign: 'center',
             background: 'rgba(94,226,200,0.10)', borderColor: '#5EE2C8', color: '#5EE2C8',
             cursor: 'default',
           }}>
@@ -1786,12 +1815,12 @@ function ResultActions(p: ResultActionProps & {
           </div>
         ) : (
           <button type="button" onClick={() => p.setSavePromptOpen(true)} style={{
-            ...secondaryBtn, width: '100%',
+            ...secondaryBtnBig, width: '100%',
             background: 'rgba(255,210,74,0.10)', borderColor: 'rgba(255,210,74,0.40)', color: '#FFD24A',
           }}>📝 履歴に残す (後でレビュー可)</button>
         )
       )}
-      <button type="button" onClick={p.onBack} style={{ ...secondaryBtn, width: '100%', background: 'transparent' }}>
+      <button type="button" onClick={p.onBack} style={{ ...secondaryBtnBig, width: '100%', background: 'transparent' }}>
         {p.backLabel}
       </button>
       {p.savePromptOpen && (
@@ -1808,39 +1837,49 @@ function ResultActions(p: ResultActionProps & {
 // ====================================================
 // 部品: 結果カードを PNG 画像化してシェア/保存
 // ====================================================
-function ImageSaveButton({ cardRef, fileNameBase }: {
+function ImageSaveButton({ cardRef, fileNameBase, primary }: {
   cardRef: React.RefObject<HTMLDivElement | null>
   fileNameBase: string
+  primary?: boolean
 }) {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<null | 'shared' | 'downloaded' | 'failed'>(null)
   const onTap = useCallback(async () => {
     if (!cardRef.current) return
-    setBusy(true)
-    setStatus(null)
+    setBusy(true); setStatus(null)
     const r = await shareOrDownloadImage(cardRef.current, buildImageFileName('uranyan', fileNameBase))
-    setStatus(r)
-    setBusy(false)
+    setStatus(r); setBusy(false)
     setTimeout(() => setStatus(null), 3000)
   }, [cardRef, fileNameBase])
 
   const label =
-    busy ? '生成中…' :
-    status === 'shared' ? '✅ シェア完了' :
+    busy ? '画像を作ってる…' :
+    status === 'shared' ? '✅ シェアできた' :
     status === 'downloaded' ? '✅ 画像を保存しました' :
-    status === 'failed' ? '❌ 画像化に失敗 (再試行してね)' :
-    '📸 画像で保存・シェア'
+    status === 'failed' ? '❌ 失敗 (もう一度試して)' :
+    '📸 画像にしてシェア (Instagram・LINE)'
+
+  const baseStyle: React.CSSProperties = primary ? {
+    padding: '16px 16px', borderRadius: 14, border: 'none',
+    background: status === 'failed' ? 'rgba(255,107,107,0.10)' :
+                status ? 'rgba(94,226,200,0.18)' :
+                'linear-gradient(90deg, #C374FF, #FF7AAE)',
+    color: status === 'failed' ? '#FF6B6B' : '#fff',
+    fontSize: 16, fontWeight: 900, cursor: busy ? 'wait' : 'pointer',
+    width: '100%',
+    boxShadow: status ? 'none' : '0 4px 14px rgba(195,116,255,0.30)',
+  } : {
+    ...secondaryBtnBig, width: '100%',
+    background: status === 'failed' ? 'rgba(255,107,107,0.10)' :
+                status ? 'rgba(94,226,200,0.10)' : 'rgba(255,255,255,0.04)',
+    borderColor: status === 'failed' ? 'rgba(255,107,107,0.40)' :
+                 status ? '#5EE2C8' : 'var(--fm-border)',
+    color: status === 'failed' ? '#FF6B6B' : status ? '#5EE2C8' : '#fff',
+    cursor: busy ? 'wait' : 'pointer',
+  }
 
   return (
-    <button type="button" onClick={onTap} disabled={busy} style={{
-      ...secondaryBtn, width: '100%',
-      background: status === 'failed' ? 'rgba(255,107,107,0.10)' :
-                  status ? 'rgba(94,226,200,0.10)' : 'rgba(255,255,255,0.04)',
-      borderColor: status === 'failed' ? 'rgba(255,107,107,0.40)' :
-                   status ? '#5EE2C8' : 'var(--fm-border)',
-      color: status === 'failed' ? '#FF6B6B' : status ? '#5EE2C8' : '#fff',
-      cursor: busy ? 'wait' : 'pointer',
-    }}>{label}</button>
+    <button type="button" onClick={onTap} disabled={busy} style={baseStyle}>{label}</button>
   )
 }
 
@@ -1980,63 +2019,62 @@ function TodayResultView(p: {
 
   return (
     <div style={{ padding: '8px 16px 40px' }}>
-      <div ref={cardRef} style={resultCardStyle}>
-        <div style={{ textAlign: 'center', fontSize: 11, color: '#A29BFE', letterSpacing: 2, marginBottom: 4 }}>
+      <div ref={cardRef} style={resultCardStyleLarge}>
+        <div style={cardHeaderTagStyle}>
           うらにゃん。 / 今日の運勢
         </div>
-        <div style={{ textAlign: 'center', fontSize: 12, color: '#888', marginBottom: 14 }}>
-          {t.todayDateStr} · {p.userName}
+        <div style={{ textAlign: 'center', fontSize: 14, color: '#ddd', marginBottom: 16, fontWeight: 700 }}>
+          {t.todayDateStr} · {p.userName} さん
         </div>
 
         {/* 大きなランク表示 */}
         <div style={{
-          textAlign: 'center', padding: '14px 0 18px',
-          borderRadius: 16, marginBottom: 14,
-          background: `radial-gradient(circle at 50% 0%, ${hex2rgba(t.luckyColor.hex, 0.30)}, transparent 70%)`,
+          textAlign: 'center', padding: '20px 0 24px',
+          borderRadius: 18, marginBottom: 18,
+          background: `radial-gradient(circle at 50% 0%, ${hex2rgba(t.luckyColor.hex, 0.35)}, transparent 70%)`,
         }}>
-          <div style={{ fontSize: 56, lineHeight: 1, marginBottom: 6 }}>{t.rankEmoji}</div>
-          <div style={{ fontSize: 24, fontWeight: 900, color: '#fff' }}>{t.rankLabel}</div>
-          <div style={{ fontSize: 20, marginTop: 4, letterSpacing: 2 }}>
+          <div style={{ fontSize: 80, lineHeight: 1, marginBottom: 10 }}>{t.rankEmoji}</div>
+          <div style={{ fontSize: 32, fontWeight: 900, color: '#fff' }}>{t.rankLabel}</div>
+          <div style={{ fontSize: 28, marginTop: 8, letterSpacing: 3 }}>
             <span style={{ color: '#FFD24A' }}>{'★'.repeat(t.rank)}</span>
             <span style={{ color: '#444' }}>{'☆'.repeat(5 - t.rank)}</span>
           </div>
-          <div style={{ fontSize: 13, color: '#ddd', marginTop: 8, fontWeight: 700 }}>
+          <div style={{ fontSize: 16, color: '#fff', marginTop: 12, fontWeight: 700 }}>
             {t.oneLineSummary}
           </div>
         </div>
 
         {/* 掛け合い */}
         <div style={dialogRow}>
-          <CatIcon breed={cat} size={32} />
-          <div style={bubbleNyan}>
-            <div style={bubbleSpeaker}>ニャンじろう</div>
+          <CatIcon breed={cat} size={40} />
+          <div style={bubbleNyanBig}>
+            <div style={bubbleSpeakerBig}>ニャンじろう</div>
             {t.nyanLine}
           </div>
         </div>
-        <div style={{ ...dialogRow, marginTop: 8 }}>
-          <DogIcon breed={dog} size={32} />
-          <div style={bubblePochi}>
-            <div style={bubbleSpeaker}>ポチ</div>
+        <div style={{ ...dialogRow, marginTop: 10 }}>
+          <DogIcon breed={dog} size={40} />
+          <div style={bubblePochiBig}>
+            <div style={bubbleSpeakerBig}>ポチ</div>
             {t.pochiLine}
           </div>
         </div>
 
-        {/* ラッキー行動 */}
-        <ActionBox icon="✨" label="ラッキー行動" tone="good" text={t.luckyAction} />
-        {/* NG 行動 */}
-        <ActionBox icon="🙅" label="NG 行動" tone="bad" text={t.ngAction} />
+        {/* ラッキー / NG 行動 */}
+        <ActionBox icon="✨" label="今日やるといいこと" tone="good" text={t.luckyAction} />
+        <ActionBox icon="🙅" label="今日は避けて" tone="bad" text={t.ngAction} />
 
         {/* カラー 2 種 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 16 }}>
           <ColorChip label="ラッキーカラー" color={t.luckyColor} />
-          <ColorChip label="ガチ病み回避" color={t.escapeColor} small />
+          <ColorChip label="病み回避カラー" color={t.escapeColor} small />
         </div>
 
-        {/* 詳細メタ (折りたたみ風) */}
+        {/* 詳細メタ */}
         <div style={{
-          marginTop: 14, padding: '10px 12px', borderRadius: 10,
+          marginTop: 16, padding: '12px 14px', borderRadius: 10,
           background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
-          fontSize: 11, color: '#888', lineHeight: 1.6,
+          fontSize: 12, color: '#aaa', lineHeight: 1.7,
         }}>
           <span style={{ color: '#A29BFE', fontWeight: 700 }}>算命学:</span> {t.userDayStem}日生まれ vs 今日 {t.todayDayStem}{t.todayDayBranch} ({t.sanmeiRelation})
           <br />
@@ -2046,16 +2084,16 @@ function TodayResultView(p: {
         <ShareFooter />
       </div>
 
-      <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
+      <div style={{ display: 'grid', gap: 10, marginTop: 20 }}>
+        <ImageSaveButton cardRef={cardRef} fileNameBase={`today_${t.todayDateStr}`} primary />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <button type="button" onClick={onShareLine} style={{ ...primaryBtn, background: '#06C755' }}>💬 LINE</button>
-          <button type="button" onClick={onShareX} style={{ ...primaryBtn, background: '#000' }}>🐦 X</button>
+          <button type="button" onClick={onShareLine} style={{ ...primaryBtnBig, background: '#06C755' }}>💬 LINEに送る</button>
+          <button type="button" onClick={onShareX} style={{ ...primaryBtnBig, background: '#000' }}>🐦 Xに投稿</button>
         </div>
-        <ImageSaveButton cardRef={cardRef} fileNameBase={`today_${t.todayDateStr}`} />
-        <button type="button" onClick={onCopy} style={{ ...secondaryBtn, width: '100%' }}>
-          {copied ? '✅ コピー完了' : '🔗 結果テキストをコピー'}
+        <button type="button" onClick={onCopy} style={{ ...secondaryBtnBig, width: '100%' }}>
+          {copied ? '✅ コピーできた' : '🔗 結果テキストをコピー'}
         </button>
-        <button type="button" onClick={p.onBack} style={{ ...secondaryBtn, width: '100%', background: 'transparent' }}>
+        <button type="button" onClick={p.onBack} style={{ ...secondaryBtnBig, width: '100%', background: 'transparent' }}>
           メニューへ戻る
         </button>
       </div>
@@ -2067,17 +2105,17 @@ function ActionBox({ icon, label, tone, text }: {
   icon: string; label: string; tone: 'good' | 'bad'; text: string
 }) {
   const fg = tone === 'good' ? '#5EE2C8' : '#FF6B6B'
-  const bg = tone === 'good' ? 'rgba(94,226,200,0.10)' : 'rgba(255,107,107,0.10)'
+  const bg = tone === 'good' ? 'rgba(94,226,200,0.12)' : 'rgba(255,107,107,0.12)'
   return (
     <div style={{
-      marginTop: 12, padding: '12px 14px', borderRadius: 12,
-      background: bg, border: `1px solid ${fg}40`,
+      marginTop: 14, padding: '16px 18px', borderRadius: 14,
+      background: bg, border: `1px solid ${fg}55`,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-        <span style={{ fontSize: 16 }}>{icon}</span>
-        <span style={{ fontSize: 11, fontWeight: 800, color: fg, letterSpacing: 1 }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 22 }}>{icon}</span>
+        <span style={{ fontSize: 13, fontWeight: 900, color: fg, letterSpacing: 1 }}>{label}</span>
       </div>
-      <div style={{ fontSize: 13, color: '#eee', lineHeight: 1.55 }}>{text}</div>
+      <div style={{ fontSize: 15, color: '#fff', lineHeight: 1.7 }}>{text}</div>
     </div>
   )
 }
@@ -2089,18 +2127,19 @@ function ColorChip({ label, color, small }: {
 }) {
   return (
     <div style={{
-      padding: '10px 12px', borderRadius: 12,
-      display: 'flex', alignItems: 'center', gap: 10,
-      background: `linear-gradient(135deg, ${hex2rgba(color.hex, small ? 0.12 : 0.20)}, rgba(255,255,255,0.03))`,
-      border: `1px solid ${hex2rgba(color.hex, 0.40)}`,
+      padding: '14px 14px', borderRadius: 14,
+      display: 'flex', alignItems: 'center', gap: 12,
+      background: `linear-gradient(135deg, ${hex2rgba(color.hex, small ? 0.14 : 0.22)}, rgba(255,255,255,0.03))`,
+      border: `1px solid ${hex2rgba(color.hex, 0.45)}`,
     }}>
       <div style={{
-        width: small ? 28 : 36, height: small ? 28 : 36, borderRadius: '50%',
-        background: color.hex, border: '2px solid rgba(255,255,255,0.5)',
+        width: small ? 38 : 48, height: small ? 38 : 48, borderRadius: '50%',
+        background: color.hex, border: '3px solid rgba(255,255,255,0.5)',
+        boxShadow: `0 0 12px ${hex2rgba(color.hex, 0.35)}`,
       }} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 9, color: '#888', letterSpacing: 1, fontWeight: 700 }}>{label}</div>
-        <div style={{ fontSize: 12, color: '#fff', fontWeight: 800, marginTop: 2 }}>{color.name}</div>
+        <div style={{ fontSize: 11, color: '#888', letterSpacing: 1, fontWeight: 800 }}>{label}</div>
+        <div style={{ fontSize: 15, color: '#fff', fontWeight: 900, marginTop: 4 }}>{color.name}</div>
       </div>
     </div>
   )
@@ -2647,42 +2686,53 @@ function GroupResultView(p: ResultActionProps & {
   ), [p.members, reading])
   const cardRef = useRef<HTMLDivElement>(null)
 
+  // 期間中に出現した関係名だけの凡例 (全14種出すと混乱するので絞る)
+  const usedRelations = Array.from(new Set(reading.pairs.map(p => p.relation)))
+
   return (
     <div style={{ padding: '8px 16px 40px' }}>
-      <div ref={cardRef} style={resultCardStyle}>
-        <div style={{ textAlign: 'center', fontSize: 11, color: '#A29BFE', letterSpacing: 2, marginBottom: 4 }}>
+      <div ref={cardRef} style={resultCardStyleLarge}>
+        <div style={cardHeaderTagStyle}>
           うらにゃん。 / グループ相性 (宿曜)
         </div>
-        <div style={{ textAlign: 'center', fontSize: 22, fontWeight: 900, color: '#fff', marginTop: 4 }}>
-          調和度 {reading.harmonyScore.toFixed(1)} <span style={{ fontSize: 14, color: '#bbb' }}>/ 5.0</span>
+        <div style={{ textAlign: 'center', fontSize: 36, fontWeight: 900, color: '#fff', marginTop: 8 }}>
+          調和度 <span style={{ fontSize: 44, color: '#FFD24A' }}>{reading.harmonyScore.toFixed(1)}</span>
+          <span style={{ fontSize: 20, color: '#bbb' }}> / 5.0</span>
         </div>
-        <div style={{ textAlign: 'center', fontSize: 14, fontWeight: 800, color: '#FFD24A', marginTop: 2 }}>
+        <div style={{ textAlign: 'center', fontSize: 22, fontWeight: 900, color: '#FFD24A', marginTop: 6 }}>
           「{reading.harmonyLabel}」
+        </div>
+        <div style={{ textAlign: 'center', fontSize: 14, color: '#ddd', marginTop: 8, lineHeight: 1.6 }}>
+          {harmonyDescription(reading.harmonyScore, reading.members.length)}
         </div>
 
         {/* メンバーサマリ */}
-        <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: 11, color: '#A29BFE', fontWeight: 800, letterSpacing: 1, marginBottom: 6 }}>
-            メンバー ({reading.members.length})
-          </div>
-          <div style={{ display: 'grid', gap: 6 }}>
+        <div style={{ marginTop: 24 }}>
+          <SectionHeaderLarge emoji="👥" title={`メンバー (${reading.members.length}人)`}
+            sub="数字 = この人がグループ全員から平均どれくらい合うか (5に近いほど好相性)" />
+          <div style={{ display: 'grid', gap: 10 }}>
             {reading.memberSummaries.map(ms => (
               <div key={ms.index} style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '8px 12px', borderRadius: 10,
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.06)',
+                display: 'flex', alignItems: 'center', gap: 14,
+                padding: '14px 16px', borderRadius: 14,
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.10)',
               }}>
-                <div style={{ fontSize: 18 }}>{p.members[ms.index]?.emoji ?? '🪞'}</div>
+                <div style={{ fontSize: 30 }}>{p.members[ms.index]?.emoji ?? '🪞'}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {ms.name} <span style={{ fontSize: 10, color: '#888' }}>({ms.mansion}宿)</span>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {ms.name}
+                    <span style={{ fontSize: 12, color: '#888', fontWeight: 500, marginLeft: 8 }}>{ms.mansion}宿</span>
                   </div>
-                  <div style={{ fontSize: 11, color: '#FFD24A', marginTop: 2 }}>
-                    {ms.role}
+                  <div style={{ fontSize: 14, color: '#FFD24A', marginTop: 4, fontWeight: 700 }}>
+                    🎯 {ms.role}
                   </div>
                 </div>
-                <div style={{ fontSize: 12, color: '#bbb' }}>
+                <div style={{
+                  fontSize: 22, fontWeight: 900,
+                  color: ms.avgScore >= 4 ? '#5EE2C8' : ms.avgScore >= 3 ? '#FFD24A' : '#FF9F1C',
+                  minWidth: 50, textAlign: 'right',
+                }}>
                   {ms.avgScore.toFixed(1)}
                 </div>
               </div>
@@ -2692,37 +2742,64 @@ function GroupResultView(p: ResultActionProps & {
 
         {/* ベスト/ワースト */}
         {reading.bestPair && (
-          <PairHighlight title="ベストペア" tone="good" pair={reading.bestPair} />
+          <PairHighlight title="🏆 ベストペア" tone="good" pair={reading.bestPair} />
         )}
         {reading.worstPair && reading.worstPair !== reading.bestPair && (
-          <PairHighlight title="要注意ペア" tone="bad" pair={reading.worstPair} />
+          <PairHighlight title="⚠️ 要注意ペア" tone="bad" pair={reading.worstPair} />
         )}
 
-        {/* 全ペア行列 */}
-        <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: 11, color: '#A29BFE', fontWeight: 800, letterSpacing: 1, marginBottom: 6 }}>
-            全ペア ({reading.pairs.length})
-          </div>
-          <div style={{ display: 'grid', gap: 4 }}>
+        {/* 全ペア */}
+        <div style={{ marginTop: 24 }}>
+          <SectionHeaderLarge emoji="🔗" title={`全ペア (${reading.pairs.length}組)`}
+            sub="2人ずつ組み合わせた相性の一覧" />
+          <div style={{ display: 'grid', gap: 6 }}>
             {reading.pairs.map((pair, idx) => {
               const tone = fortuneColor(pair.template.fortune)
               return (
                 <div key={idx} style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '6px 10px', borderRadius: 8,
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.05)',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '12px 14px', borderRadius: 10,
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.07)',
                 }}>
-                  <div style={{ flex: 1, fontSize: 12, color: '#ddd', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ flex: 1, fontSize: 15, fontWeight: 700, color: '#fff',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {pair.aName} × {pair.bName}
                   </div>
                   <div style={{
-                    fontSize: 10, padding: '2px 6px', borderRadius: 6,
-                    background: tone.bg, color: tone.fg, fontWeight: 800,
-                    border: `1px solid ${tone.fg}66`,
+                    fontSize: 14, padding: '4px 12px', borderRadius: 8,
+                    background: tone.bg, color: tone.fg, fontWeight: 900,
+                    border: `1px solid ${tone.fg}88`,
                   }}>{pair.relation}</div>
-                  <div style={{ fontSize: 10, color: tone.fg, fontWeight: 700, minWidth: 24, textAlign: 'right' }}>
+                  <div style={{ fontSize: 13, color: tone.fg, fontWeight: 800, minWidth: 36, textAlign: 'right' }}>
                     {pair.template.fortune}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* 凡例: 出現した関係名の意味 */}
+        <div style={{ marginTop: 24 }}>
+          <SectionHeaderLarge emoji="📖" title="関係の見方"
+            sub="今回出てきた相性関係の意味" />
+          <div style={{ display: 'grid', gap: 6 }}>
+            {usedRelations.map(rel => {
+              const meaning = RELATION_MEANINGS[rel] ?? ''
+              return (
+                <div key={rel} style={{
+                  display: 'flex', alignItems: 'baseline', gap: 10,
+                  padding: '10px 12px', borderRadius: 8,
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                }}>
+                  <div style={{
+                    fontSize: 16, fontWeight: 900, color: '#A29BFE',
+                    minWidth: 28, textAlign: 'center',
+                  }}>{rel}</div>
+                  <div style={{ fontSize: 13, color: '#ddd', flex: 1, lineHeight: 1.5 }}>
+                    {meaning}
                   </div>
                 </div>
               )
@@ -2752,27 +2829,81 @@ function GroupResultView(p: ResultActionProps & {
   )
 }
 
+// 調和度スコアの説明文 (kids/elderly向け平易な日本語)
+function harmonyDescription(score: number, n: number): string {
+  if (score >= 4.5) return `${n}人グループは奇跡レベルで仲良し! ずっと続けたい関係です。`
+  if (score >= 4.0) return `${n}人グループは盛り上がる仲良しチーム! 一緒にいて楽しいタイプ。`
+  if (score >= 3.5) return `${n}人グループはまあまあ仲良し。お互いを認めればもっと深まります。`
+  if (score >= 3.0) return `${n}人グループは普通の関係。無理せずほどよい距離感がベスト。`
+  if (score >= 2.5) return `${n}人グループはちょっと相性に注意。違いを面白がる工夫が必要。`
+  return `${n}人グループは個性が強すぎてぶつかりがち。グループより少人数で会うのが吉。`
+}
+
+// 14 関係名の超平易な意味 (子供にもわかる短い説明)
+const RELATION_MEANINGS: Record<string, string> = {
+  '命': '同じ星。鏡みたいな似たもの同士',
+  '業': '腐れ縁。何度切れてもくっつく深い縁',
+  '栄': '一緒にいると2人とも輝く吉ペア',
+  '衰': '片方が消耗しがち。距離感に注意',
+  '安': '一緒にいると落ち着く穏やかペア',
+  '壊': '宿曜的にはワースト。すれ違いやすい',
+  '友': 'ずっと友達でいられる最高のペア',
+  '親': '家族みたいに深く信頼できる',
+  '危': '誤解されやすい。言葉で確認するのが大事',
+  '成': '一緒に何かを成し遂げる最強の相棒',
+  '業胎': '見えないところで繋がるご縁',
+  '栄胎': 'じんわり運が上向く優しい吉',
+  '衰胎': '時々モヤッとする、中くらいの関係',
+  '安胎': '可もなく不可もない平和なペア',
+}
+
+// セクション見出し (大きい・説明付き)
+function SectionHeaderLarge({ emoji, title, sub }: { emoji: string; title: string; sub?: string }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        fontSize: 16, fontWeight: 900, color: '#fff', marginBottom: 2,
+      }}>
+        <span style={{ fontSize: 20 }}>{emoji}</span>
+        <span>{title}</span>
+      </div>
+      {sub && (
+        <div style={{ fontSize: 12, color: '#999', marginLeft: 30, lineHeight: 1.5 }}>
+          {sub}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PairHighlight(p: {
   title: string
   tone: 'good' | 'bad'
   pair: import('../../lib/uranyan/groupCompat').PairResult
 }) {
   const fg = p.tone === 'good' ? '#5EE2C8' : '#FF6B6B'
-  const bg = p.tone === 'good' ? 'rgba(94,226,200,0.10)' : 'rgba(255,107,107,0.10)'
+  const bg = p.tone === 'good' ? 'rgba(94,226,200,0.12)' : 'rgba(255,107,107,0.12)'
   return (
     <div style={{
-      marginTop: 14, padding: '12px 14px', borderRadius: 12,
-      background: bg, border: `1px solid ${fg}55`,
+      marginTop: 18, padding: '18px 18px', borderRadius: 16,
+      background: bg, border: `2px solid ${fg}66`,
     }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-        <span style={{ fontSize: 11, fontWeight: 800, color: fg, letterSpacing: 1 }}>{p.title}</span>
-        <span style={{ fontSize: 10, color: '#888' }}>{p.pair.template.fortune}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <span style={{ fontSize: 16, fontWeight: 900, color: fg, letterSpacing: 1 }}>{p.title}</span>
+        <span style={{
+          fontSize: 12, padding: '3px 10px', borderRadius: 8,
+          background: fg, color: '#1a1030', fontWeight: 800,
+        }}>{p.pair.template.fortune}</span>
       </div>
-      <div style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>
-        {p.pair.aName} × {p.pair.bName} → 「{p.pair.relation}」
+      <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', lineHeight: 1.4 }}>
+        {p.pair.aName} × {p.pair.bName}
       </div>
-      <div style={{ fontSize: 12, color: '#ddd', marginTop: 4 }}>
-        {p.pair.template.headline}
+      <div style={{ fontSize: 16, fontWeight: 800, color: fg, marginTop: 6 }}>
+        → 「{p.pair.relation}」 {p.pair.template.headline}
+      </div>
+      <div style={{ fontSize: 13, color: '#ddd', marginTop: 8, lineHeight: 1.6 }}>
+        {p.pair.template.blurb}
       </div>
     </div>
   )
@@ -3163,6 +3294,18 @@ const secondaryBtn: React.CSSProperties = {
   color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
 }
 
+// 大きめバージョン (子供/高齢者向け readability)
+const primaryBtnBig: React.CSSProperties = {
+  padding: '15px 16px', borderRadius: 12, border: 'none',
+  background: 'linear-gradient(90deg, #C374FF, #FF7AAE)',
+  color: '#fff', fontWeight: 800, fontSize: 16, cursor: 'pointer',
+}
+const secondaryBtnBig: React.CSSProperties = {
+  padding: '14px 16px', borderRadius: 12,
+  border: '1px solid var(--fm-border)', background: 'rgba(255,255,255,0.04)',
+  color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer',
+}
+
 const smallChipBtn: React.CSSProperties = {
   padding: '6px 12px', borderRadius: 14,
   border: '1px solid rgba(255,255,255,0.18)',
@@ -3234,8 +3377,38 @@ const bubbleSpeaker: React.CSSProperties = {
   marginBottom: 4, letterSpacing: 0.5,
 }
 
+// 大きめバージョン (kids/elderly 向け)
+const bubbleNyanBig: React.CSSProperties = {
+  flex: 1, padding: '14px 16px', borderRadius: 14,
+  background: 'rgba(255,255,255,0.08)',
+  border: '1px solid rgba(255,255,255,0.12)',
+  fontSize: 15, color: '#fff', lineHeight: 1.7,
+}
+const bubblePochiBig: React.CSSProperties = {
+  flex: 1, padding: '14px 16px', borderRadius: 14,
+  background: 'rgba(255,210,74,0.10)',
+  border: '1px solid rgba(255,210,74,0.28)',
+  fontSize: 15, color: '#fff5d8', lineHeight: 1.7,
+}
+const bubbleSpeakerBig: React.CSSProperties = {
+  fontSize: 12, fontWeight: 800, color: '#bbb',
+  marginBottom: 6, letterSpacing: 0.5,
+}
+
 const resultCardStyle: React.CSSProperties = {
   background: 'linear-gradient(160deg, #20122E 0%, #1A1A2E 60%, #2A1535 100%)',
   borderRadius: 18, padding: '20px 18px',
   border: '1px solid rgba(255,255,255,0.08)',
+}
+
+// 大きめバージョン: 子供・高齢者にも見やすい大きなフォント前提
+const resultCardStyleLarge: React.CSSProperties = {
+  background: 'linear-gradient(160deg, #20122E 0%, #1A1A2E 60%, #2A1535 100%)',
+  borderRadius: 20, padding: '28px 22px',
+  border: '1px solid rgba(255,255,255,0.10)',
+}
+
+const cardHeaderTagStyle: React.CSSProperties = {
+  textAlign: 'center', fontSize: 13, color: '#A29BFE',
+  letterSpacing: 2, fontWeight: 700, marginBottom: 4,
 }
