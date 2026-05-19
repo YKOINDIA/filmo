@@ -5,6 +5,10 @@ import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import { useLocale } from '../lib/i18n'
 import { setUserContext, trackSignUp, trackAuthStarted, trackAuthFailed, trackSignIn } from '../lib/analytics'
+import {
+  isValidUsername, isReservedUsername, isValidPassword,
+  usernameToEmail, formatRecoveryCode,
+} from '../lib/idAuth'
 
 interface LoginPromptProps {
   /** 任意の見出し(タブ別の文言を渡せる)。例: "プロフィールを見るにはログインが必要です" */
@@ -29,14 +33,21 @@ interface LoginPromptProps {
  */
 export default function LoginPrompt({ title, subtitle, onAuthenticated }: LoginPromptProps) {
   const { t } = useLocale()
+  // 認証チャネル: email (従来) / id (新規・メール不要)
+  const [authChannel, setAuthChannel] = useState<'email' | 'id'>('email')
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
   const [authEmail, setAuthEmail] = useState('')
+  const [authUsername, setAuthUsername] = useState('')
   const [authPassword, setAuthPassword] = useState('')
   const [authName, setAuthName] = useState('')
   const [authError, setAuthError] = useState('')
   const [authSuccess, setAuthSuccess] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
   const [authAgreedToTerms, setAuthAgreedToTerms] = useState(false)
+  // 新規登録時に表示する復旧コード (1 回だけ)
+  const [recoveryCode, setRecoveryCode] = useState<string | null>(null)
+  // パスワード復旧モーダル
+  const [recoveryOpen, setRecoveryOpen] = useState(false)
 
   const handleAuth = async () => {
     setAuthError('')
@@ -49,51 +60,127 @@ export default function LoginPrompt({ title, subtitle, onAuthenticated }: LoginP
     }
     setAuthLoading(true)
     try {
-      if (authMode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({
-          email: authEmail,
-          password: authPassword,
-          options: {
-            data: { name: authName || authEmail.split('@')[0] },
-          },
-        })
-        if (error) throw error
-        if (data.user && !data.session) {
-          setAuthSuccess(t('auth.confirmEmail'))
-          setAuthLoading(false)
-          return
-        }
-        if (data.user) {
-          const { error: upsertError } = await supabase.from('users').upsert({
-            id: data.user.id,
-            email: authEmail,
-            name: authName || authEmail.split('@')[0],
-            level: 1,
-            points: 0,
-            login_streak: 0,
-            bio: '',
-          })
-          if (upsertError) console.error('User upsert failed:', upsertError)
-          trackSignUp('email')
-          setUserContext({ authenticated: true, level: 1 })
-          onAuthenticated?.(data.user.id)
-        }
+      if (authChannel === 'id') {
+        await handleIdAuth()
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: authEmail,
-          password: authPassword,
-        })
-        if (error) throw error
-        if (data.user) {
-          trackSignIn()
-          setUserContext({ authenticated: true })
-          onAuthenticated?.(data.user.id)
-        }
+        await handleEmailAuth()
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : t('common.error')
       trackAuthFailed(authMode, msg)
       setAuthError(msg)
+    }
+    setAuthLoading(false)
+  }
+
+  const handleEmailAuth = async () => {
+    if (authMode === 'signup') {
+      const { data, error } = await supabase.auth.signUp({
+        email: authEmail,
+        password: authPassword,
+        options: {
+          data: { name: authName || authEmail.split('@')[0] },
+        },
+      })
+      if (error) throw error
+      if (data.user && !data.session) {
+        setAuthSuccess(t('auth.confirmEmail'))
+        return
+      }
+      if (data.user) {
+        const { error: upsertError } = await supabase.from('users').upsert({
+          id: data.user.id,
+          email: authEmail,
+          name: authName || authEmail.split('@')[0],
+          level: 1,
+          points: 0,
+          login_streak: 0,
+          bio: '',
+        })
+        if (upsertError) console.error('User upsert failed:', upsertError)
+        trackSignUp('email')
+        setUserContext({ authenticated: true, level: 1 })
+        onAuthenticated?.(data.user.id)
+      }
+    } else {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: authEmail,
+        password: authPassword,
+      })
+      if (error) throw error
+      if (data.user) {
+        trackSignIn()
+        setUserContext({ authenticated: true })
+        onAuthenticated?.(data.user.id)
+      }
+    }
+  }
+
+  const handleIdAuth = async () => {
+    const username = authUsername.trim().toLowerCase()
+    if (!isValidUsername(username)) {
+      throw new Error('IDは半角小文字英数字とアンダースコア (_) で 4〜20 文字')
+    }
+    if (authMode === 'signup' && isReservedUsername(username)) {
+      throw new Error('そのIDは使えません (予約語)')
+    }
+    if (!isValidPassword(authPassword)) {
+      throw new Error('パスワードは 8 文字以上にしてね')
+    }
+    if (authMode === 'signup') {
+      // サーバーでアカウント作成 → 復旧コード受け取り
+      const res = await fetch('/api/auth/id-signup', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          username, password: authPassword,
+          nickname: authName.trim() || username,
+          agreedToTerms: authAgreedToTerms,
+        }),
+      })
+      const body = await res.json()
+      if (!res.ok || !body.ok) throw new Error(body.error ?? 'サインアップに失敗しました')
+
+      // 復旧コードを 1 回だけ表示 → 「保存した」でログイン続行
+      setRecoveryCode(body.recoveryCode as string)
+      // ログインは modal が閉じられた後で行う (continueAfterRecoveryCode)
+    } else {
+      // ログイン: ID → 合成メール → signInWithPassword
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: usernameToEmail(username),
+        password: authPassword,
+      })
+      if (error) {
+        // Supabase の「Invalid login credentials」だけだと ID 由来か分かりにくいので置換
+        throw new Error('IDかパスワードが違います')
+      }
+      if (data.user) {
+        trackSignIn()
+        setUserContext({ authenticated: true })
+        onAuthenticated?.(data.user.id)
+      }
+    }
+  }
+
+  // 復旧コード表示後、「保存した」で実ログイン
+  const continueAfterRecoveryCode = async () => {
+    setRecoveryCode(null)
+    setAuthLoading(true)
+    setAuthError('')
+    try {
+      const username = authUsername.trim().toLowerCase()
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: usernameToEmail(username),
+        password: authPassword,
+      })
+      if (error) throw error
+      if (data.user) {
+        trackSignUp('email')  // method='id' を取りたいが既存 schema は email/google/apple のみ
+        setUserContext({ authenticated: true, level: 1 })
+        onAuthenticated?.(data.user.id)
+      }
+    } catch (e) {
+      setAuthError(e instanceof Error ? e.message : 'ログインに失敗しました')
     }
     setAuthLoading(false)
   }
@@ -114,6 +201,28 @@ export default function LoginPrompt({ title, subtitle, onAuthenticated }: LoginP
           <p style={{ color: 'var(--fm-text-sub)', marginTop: 4, fontSize: 14, lineHeight: 1.6 }}>
             {subtitle || t('auth.tagline')}
           </p>
+        </div>
+
+        {/* チャネル切替 (メール / ID) */}
+        <div style={{
+          display: 'flex', marginBottom: 12,
+          background: 'var(--fm-bg-card)', borderRadius: 12, padding: 4,
+        }}>
+          {([
+            { key: 'email' as const, label: '📧 メール' },
+            { key: 'id' as const,    label: '🆔 IDで' },
+          ]).map(c => (
+            <button key={c.key}
+              onClick={() => { setAuthChannel(c.key); setAuthError(''); setAuthSuccess('') }}
+              style={{
+                flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
+                background: authChannel === c.key ? 'var(--fm-accent-light, #6CA9FF)' : 'transparent',
+                color: authChannel === c.key ? '#fff' : 'var(--fm-text-sub)',
+                fontWeight: 600, fontSize: 13, transition: 'all 0.2s',
+              }}>
+              {c.label}
+            </button>
+          ))}
         </div>
 
         <div style={{
@@ -149,13 +258,35 @@ export default function LoginPrompt({ title, subtitle, onAuthenticated }: LoginP
                 style={inputStyle} />
             </div>
           )}
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6 }}>
-              {t('auth.email')}
-            </label>
-            <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)}
-              placeholder="your@email.com" style={inputStyle} />
-          </div>
+          {authChannel === 'email' ? (
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6 }}>
+                {t('auth.email')}
+              </label>
+              <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)}
+                placeholder="your@email.com" style={inputStyle} />
+            </div>
+          ) : (
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6 }}>
+                ID (半角英数 + アンダースコア 4〜20文字)
+              </label>
+              <input
+                type="text"
+                value={authUsername}
+                onChange={e => setAuthUsername(e.target.value.toLowerCase())}
+                placeholder="yuki2008 / kentaro_h など"
+                autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                maxLength={20}
+                style={inputStyle}
+              />
+              {authMode === 'signup' && (
+                <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 4 }}>
+                  📌 メールが無いとパスワード忘れ時は復旧コードが頼り。登録時に表示されるコードを必ず保存してね
+                </div>
+              )}
+            </div>
+          )}
           <div style={{ marginBottom: 20 }}>
             <label style={{ display: 'block', fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 6 }}>
               {t('auth.password')}
@@ -226,18 +357,51 @@ export default function LoginPrompt({ title, subtitle, onAuthenticated }: LoginP
           </button>
 
           {authMode === 'login' && (
-            <p style={{
-              marginTop: 12, fontSize: 11, color: 'var(--fm-text-muted)',
-              lineHeight: 1.5, textAlign: 'center',
-            }}>
-              ログインすることで、
-              <a href="/legal" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fm-accent)' }}>利用規約</a>
-              および
-              <a href="/legal" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fm-accent)' }}>プライバシーポリシー</a>
-              に同意したものとみなされます。
-            </p>
+            <>
+              {authChannel === 'id' && (
+                <button
+                  type="button"
+                  onClick={() => setRecoveryOpen(true)}
+                  style={{
+                    width: '100%', marginTop: 10, padding: '8px 0',
+                    background: 'transparent', border: 'none',
+                    color: 'var(--fm-accent)', fontSize: 12, cursor: 'pointer',
+                    textDecoration: 'underline',
+                  }}>
+                  パスワードを忘れた? (復旧コードでリセット)
+                </button>
+              )}
+              <p style={{
+                marginTop: 12, fontSize: 11, color: 'var(--fm-text-muted)',
+                lineHeight: 1.5, textAlign: 'center',
+              }}>
+                ログインすることで、
+                <a href="/legal" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fm-accent)' }}>利用規約</a>
+                および
+                <a href="/legal" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fm-accent)' }}>プライバシーポリシー</a>
+                に同意したものとみなされます。
+              </p>
+            </>
           )}
         </div>
+
+        {recoveryCode && (
+          <RecoveryCodeModal
+            code={recoveryCode}
+            onContinue={continueAfterRecoveryCode}
+          />
+        )}
+        {recoveryOpen && (
+          <RecoveryFlowModal
+            onClose={() => setRecoveryOpen(false)}
+            onSuccess={(uid) => {
+              setRecoveryOpen(false)
+              trackSignIn()
+              setUserContext({ authenticated: true })
+              onAuthenticated?.(uid)
+            }}
+          />
+        )}
 
         {/* うらにゃん。 (未ログインでも試せる) */}
         <div style={{ marginTop: 24 }}>
@@ -355,4 +519,246 @@ const inputStyle: React.CSSProperties = {
   width: '100%', padding: '12px 16px', borderRadius: 10,
   border: '1px solid var(--fm-border)', background: 'var(--fm-bg-input)',
   color: 'var(--fm-text)', fontSize: 15, boxSizing: 'border-box',
+}
+
+// ============================================================
+// 部品: 復旧コード表示モーダル (ID 新規登録直後に 1 回だけ)
+// ============================================================
+function RecoveryCodeModal({ code, onContinue }: {
+  code: string
+  onContinue: () => void
+}) {
+  const [confirmed, setConfirmed] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const formatted = formatRecoveryCode(code)
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(formatted)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* ignore */ }
+  }
+  return (
+    <ModalOverlay>
+      <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', marginBottom: 4 }}>
+        🔑 復旧コードを保存して
+      </div>
+      <div style={{ fontSize: 12, color: '#ddd', marginBottom: 16, lineHeight: 1.6 }}>
+        パスワード忘れた時にこのコードでログインを取り戻せるよ。
+        <strong style={{ color: '#FFD24A' }}> 1 回しか表示されない</strong> から、
+        スクショ or メモ帳に必ず保存して。
+      </div>
+      <div style={{
+        padding: '20px 12px', borderRadius: 12, marginBottom: 12,
+        background: 'rgba(255,210,74,0.12)', border: '2px dashed rgba(255,210,74,0.50)',
+        textAlign: 'center',
+        fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+        fontSize: 22, fontWeight: 800, color: '#FFD24A', letterSpacing: 4,
+      }}>{formatted}</div>
+      <button type="button" onClick={copy} style={{
+        width: '100%', marginBottom: 14, padding: '10px 0', borderRadius: 10,
+        border: '1px solid var(--fm-border)', background: 'rgba(255,255,255,0.04)',
+        color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+      }}>{copied ? '✅ コピーした' : '🔗 コードをコピー'}</button>
+      <label style={{
+        display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer',
+        fontSize: 13, color: '#ddd', marginBottom: 16,
+      }}>
+        <input
+          type="checkbox" checked={confirmed}
+          onChange={e => setConfirmed(e.target.checked)}
+          style={{ marginTop: 3, width: 16, height: 16, cursor: 'pointer' }}
+        />
+        <span>コードを保存した。失くしたらアカウント復旧できないことに同意する。</span>
+      </label>
+      <button type="button" disabled={!confirmed} onClick={onContinue} style={{
+        width: '100%', padding: '14px 0', borderRadius: 10, border: 'none',
+        cursor: confirmed ? 'pointer' : 'not-allowed',
+        background: confirmed ? 'var(--fm-accent)' : 'var(--fm-text-muted)',
+        color: '#fff', fontWeight: 700, fontSize: 15,
+      }}>
+        Filmo を始める
+      </button>
+    </ModalOverlay>
+  )
+}
+
+// ============================================================
+// 部品: パスワード復旧フロー (ID + コード + 新パスワード)
+// ============================================================
+function RecoveryFlowModal({ onClose, onSuccess }: {
+  onClose: () => void
+  onSuccess: (userId: string) => void
+}) {
+  const [step, setStep] = useState<'enter' | 'done'>('enter')
+  const [username, setUsername] = useState('')
+  const [code, setCode] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [newPassword2, setNewPassword2] = useState('')
+  const [newRecoveryCode, setNewRecoveryCode] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const submit = async () => {
+    setErr(null)
+    const u = username.trim().toLowerCase()
+    if (!isValidUsername(u)) { setErr('IDの形式が正しくないよ'); return }
+    if (!code.trim()) { setErr('復旧コードを入力してね'); return }
+    if (!isValidPassword(newPassword)) { setErr('新しいパスワードは 8 文字以上にしてね'); return }
+    if (newPassword !== newPassword2) { setErr('新しいパスワードが一致しません'); return }
+    setBusy(true)
+    try {
+      const res = await fetch('/api/auth/id-recover', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: u, recoveryCode: code, newPassword }),
+      })
+      const body = await res.json()
+      if (!res.ok || !body.ok) { setErr(body.error ?? '復旧に失敗しました'); setBusy(false); return }
+      // 新復旧コード表示 → ログイン
+      setNewRecoveryCode(body.newRecoveryCode as string)
+      // バックグラウンドでログインも実行 (新パスワードで)
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: body.email as string,
+        password: newPassword,
+      })
+      if (error || !data.user) { setErr('再ログインに失敗しました。手動でログインし直してね'); setBusy(false); return }
+      setStep('done')
+      // ユーザーが新コードを保存し終わるまで待つので onSuccess はモーダル閉じる時に
+    } finally { setBusy(false) }
+  }
+
+  const copyNew = async () => {
+    if (!newRecoveryCode) return
+    try {
+      await navigator.clipboard.writeText(formatRecoveryCode(newRecoveryCode))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* ignore */ }
+  }
+
+  const finish = async () => {
+    const { data } = await supabase.auth.getSession()
+    if (data.session?.user) onSuccess(data.session.user.id)
+    else onClose()
+  }
+
+  if (step === 'done' && newRecoveryCode) {
+    return (
+      <ModalOverlay>
+        <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', marginBottom: 4 }}>
+          ✅ パスワード変更完了
+        </div>
+        <div style={{ fontSize: 12, color: '#ddd', marginBottom: 14, lineHeight: 1.6 }}>
+          新しい復旧コードを発行しました。古いコードは無効化されています。
+          <strong style={{ color: '#FFD24A' }}> このコードも 1 回しか表示されない</strong> ので必ず保存して。
+        </div>
+        <div style={{
+          padding: '20px 12px', borderRadius: 12, marginBottom: 12,
+          background: 'rgba(255,210,74,0.12)', border: '2px dashed rgba(255,210,74,0.50)',
+          textAlign: 'center',
+          fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+          fontSize: 22, fontWeight: 800, color: '#FFD24A', letterSpacing: 4,
+        }}>{formatRecoveryCode(newRecoveryCode)}</div>
+        <button type="button" onClick={copyNew} style={{
+          width: '100%', marginBottom: 14, padding: '10px 0', borderRadius: 10,
+          border: '1px solid var(--fm-border)', background: 'rgba(255,255,255,0.04)',
+          color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+        }}>{copied ? '✅ コピーした' : '🔗 コードをコピー'}</button>
+        <button type="button" onClick={finish} style={{
+          width: '100%', padding: '14px 0', borderRadius: 10, border: 'none',
+          background: 'var(--fm-accent)', color: '#fff', fontWeight: 700, fontSize: 15,
+          cursor: 'pointer',
+        }}>OK</button>
+      </ModalOverlay>
+    )
+  }
+
+  return (
+    <ModalOverlay onBackdropClick={busy ? undefined : onClose}>
+      <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', marginBottom: 4 }}>
+        🔑 パスワード復旧
+      </div>
+      <div style={{ fontSize: 12, color: '#ddd', marginBottom: 16, lineHeight: 1.6 }}>
+        ID と登録時に保存した復旧コードを入力すると、新しいパスワードを設定できます。
+      </div>
+      <input
+        type="text" value={username}
+        onChange={e => setUsername(e.target.value.toLowerCase())}
+        placeholder="ID (例: yuki2008)" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+        maxLength={20}
+        style={{ ...inputStyle, marginBottom: 10 }}
+      />
+      <input
+        type="text" value={code}
+        onChange={e => setCode(e.target.value.toUpperCase())}
+        placeholder="復旧コード (XXXX-XXXX-XXXX)"
+        autoCapitalize="characters" autoCorrect="off" spellCheck={false}
+        maxLength={16}
+        style={{ ...inputStyle, marginBottom: 10, letterSpacing: 2,
+                 fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace' }}
+      />
+      <input
+        type="password" value={newPassword}
+        onChange={e => setNewPassword(e.target.value)}
+        placeholder="新しいパスワード (8 文字以上)"
+        style={{ ...inputStyle, marginBottom: 10 }}
+      />
+      <input
+        type="password" value={newPassword2}
+        onChange={e => setNewPassword2(e.target.value)}
+        placeholder="新しいパスワード (確認)"
+        style={{ ...inputStyle, marginBottom: 12 }}
+      />
+      {err && (
+        <div style={{
+          color: 'var(--fm-danger)', fontSize: 13, marginBottom: 12, padding: '8px 12px',
+          background: 'rgba(255,107,107,0.1)', borderRadius: 8,
+        }}>{err}</div>
+      )}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button type="button" onClick={onClose} disabled={busy} style={{
+          flex: 1, padding: '12px 0', borderRadius: 10,
+          background: 'transparent', border: '1px solid var(--fm-border)',
+          color: 'var(--fm-text-sub)', fontSize: 14, fontWeight: 600,
+          cursor: busy ? 'not-allowed' : 'pointer',
+        }}>キャンセル</button>
+        <button type="button" onClick={submit} disabled={busy} style={{
+          flex: 2, padding: '12px 0', borderRadius: 10, border: 'none',
+          background: busy ? 'var(--fm-text-muted)' : 'var(--fm-accent)',
+          color: '#fff', fontSize: 14, fontWeight: 700,
+          cursor: busy ? 'not-allowed' : 'pointer',
+        }}>{busy ? '処理中…' : 'リセット'}</button>
+      </div>
+    </ModalOverlay>
+  )
+}
+
+// ============================================================
+// 部品: モーダル背景
+// ============================================================
+function ModalOverlay({ children, onBackdropClick }: {
+  children: React.ReactNode
+  onBackdropClick?: () => void
+}) {
+  return (
+    <div
+      onClick={onBackdropClick}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 16,
+      }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: 'linear-gradient(160deg, #20122E 0%, #1A1A2E 100%)',
+        borderRadius: 18, padding: 24,
+        border: '1px solid rgba(255,255,255,0.10)',
+        width: '100%', maxWidth: 420, maxHeight: '85dvh', overflowY: 'auto',
+      }}>
+        {children}
+      </div>
+    </div>
+  )
 }
