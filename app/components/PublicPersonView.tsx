@@ -11,6 +11,8 @@ import { getSupabaseAdmin } from '@/app/lib/supabase-admin'
 import PersonEditProposalTrigger from './PersonEditProposalTrigger'
 import PersonAddWorkTrigger from './PersonAddWorkTrigger'
 import AuthGate from './AuthGate'
+import PublicShareButton from './PublicShareButton'
+import OpenInAppBar from './OpenInAppBar'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://filmo.me'
@@ -377,9 +379,11 @@ export function PublicPersonView({
   const role = person.known_for_department
     ? DEPARTMENT_JA[person.known_for_department] || person.known_for_department
     : null
+  const personUrl = buildPersonUrl(person)
+  const shareTitle = buildPersonTitle(person)
 
   return (
-    <div style={{ minHeight: '100dvh', background: 'var(--fm-bg)', color: 'var(--fm-text)' }}>
+    <div style={{ minHeight: '100dvh', background: 'var(--fm-bg)', color: 'var(--fm-text)', paddingBottom: 60 }}>
       <header style={{
         borderBottom: '1px solid var(--fm-border)', padding: '12px 16px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -389,15 +393,18 @@ export function PublicPersonView({
             Filmo
           </span>
         </Link>
-        <AuthGate hideWhenAuthed>
-          <Link href="/" style={{
-            padding: '6px 16px', borderRadius: 6,
-            background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
-            textDecoration: 'none',
-          }}>
-            無料で記録を始める
-          </Link>
-        </AuthGate>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <PublicShareButton url={personUrl} title={shareTitle} />
+          <AuthGate hideWhenAuthed>
+            <Link href="/" style={{
+              padding: '6px 16px', borderRadius: 6,
+              background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
+              textDecoration: 'none',
+            }}>
+              無料で記録を始める
+            </Link>
+          </AuthGate>
+        </div>
       </header>
 
       <div style={{ maxWidth: 880, margin: '0 auto', padding: '24px 16px 60px' }}>
@@ -522,30 +529,6 @@ export function PublicPersonView({
           stats={reviewStats}
         />
 
-        {/* ログイン済み: アプリで開いて FAN! / レビュー操作 */}
-        <AuthGate showWhenAuthed>
-          <section style={{
-            marginTop: 32, padding: 24, borderRadius: 12,
-            background: 'linear-gradient(135deg, rgba(108,92,231,0.15), rgba(108,92,231,0.05))',
-            border: '1px solid rgba(108,92,231,0.3)',
-            textAlign: 'center',
-          }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px' }}>
-              FAN! 登録・レビューを書く
-            </h3>
-            <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', margin: '0 0 16px' }}>
-              アプリで開くと FAN! 登録やレビュー投稿ができます
-            </p>
-            <Link href={`/?person=${person.id}`} style={{
-              display: 'inline-block', padding: '10px 28px', borderRadius: 8,
-              background: 'var(--fm-accent)', color: '#fff', fontSize: 14, fontWeight: 600,
-              textDecoration: 'none',
-            }}>
-              アプリで開く
-            </Link>
-          </section>
-        </AuthGate>
-
         {/* 未ログイン: サインアップ誘導 */}
         <AuthGate hideWhenAuthed>
           <section style={{
@@ -569,6 +552,12 @@ export function PublicPersonView({
           </section>
         </AuthGate>
       </div>
+
+      {/* ログイン済み: sticky ボトムバー */}
+      <OpenInAppBar
+        href={`/?person=${person.id}`}
+        label="FAN! / レビューを書く"
+      />
     </div>
   )
 }

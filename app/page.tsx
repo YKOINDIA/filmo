@@ -103,10 +103,14 @@ export default function Page() {
     if (personParam) {
       const pid = Number(personParam)
       if (Number.isFinite(pid) && pid > 0) setSelectedPersonId(pid)
-      const workParam = params.get('work')
-      if (workParam) {
-        const wid = Number(workParam)
-        if (Number.isFinite(wid)) setSelectedWorkId(wid)
+    }
+    const workParam = params.get('work')
+    if (workParam) {
+      const wid = Number(workParam)
+      if (Number.isFinite(wid)) {
+        setSelectedWorkId(wid)
+        const typeParam = params.get('type')
+        if (typeParam === 'movie' || typeParam === 'tv') setSelectedWorkType(typeParam)
       }
     }
     const tabParam = params.get('tab') as Tab | null
