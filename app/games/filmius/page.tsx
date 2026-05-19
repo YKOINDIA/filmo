@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { addPoints, POINT_CONFIG } from '../../lib/points'
@@ -78,6 +78,8 @@ export default function FilmiusPage() {
   const [error, setError] = useState('')
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const playAreaRef = useRef<HTMLDivElement | null>(null)
+  const canvasBoxRef = useRef<HTMLDivElement | null>(null)
 
   // ─── 戦績 ─────────────────────────────
   const loadStats = useCallback(async (uid: string) => {
@@ -214,140 +216,168 @@ export default function FilmiusPage() {
     setPhase('menu')
   }
 
+  // ─── キャンバス letterbox サイジング ──────────────────
+  // 横向き iPhone のような縦が短いビューポートでも、ゲーム要素 (HUD・EQUIP) が
+  // 必ず画面に収まるよう、プレイエリアの実寸からアスペクトを保ったサイズを計算する。
+  useLayoutEffect(() => {
+    if (phase === 'menu') return
+    const playArea = playAreaRef.current
+    const canvasBox = canvasBoxRef.current
+    if (!playArea || !canvasBox) return
+
+    const ASPECT = LOGICAL_W / LOGICAL_H
+    const update = () => {
+      const availW = playArea.clientWidth
+      const availH = playArea.clientHeight
+      let w = availW
+      let h = w / ASPECT
+      if (h > availH) {
+        h = availH
+        w = h * ASPECT
+      }
+      canvasBox.style.width = `${Math.floor(w)}px`
+      canvasBox.style.height = `${Math.floor(h)}px`
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(playArea)
+    window.addEventListener('orientationchange', update)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('orientationchange', update)
+    }
+  }, [phase])
+
   // ====================================================
   // Render
   // ====================================================
-  return (
-    <div style={{
-      minHeight: '100dvh',
-      background: 'radial-gradient(ellipse at top, #1a0033 0%, #050015 60%, #000 100%)',
-      color: '#fff',
-      padding: '12px 0 max(80px, env(safe-area-inset-bottom)) 0',
-    }}>
-      {/* ヘッダ */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '0 16px', marginBottom: 14,
-      }}>
-        <Link href="/" style={{
-          color: '#6cf2ff', textDecoration: 'none', fontSize: 14, fontWeight: 700,
-        }}>← トップ</Link>
-        <div style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{
-            fontFamily: 'monospace', fontWeight: 800, fontSize: 18,
-            letterSpacing: 2, color: '#ffd24a',
-          }}>F I L M I U S</div>
-          <div style={{ fontSize: 10, color: '#aaa', marginTop: 2 }}>
-            横スクロール・シューティング
-          </div>
-        </div>
-        <div style={{ width: 48 }} />
-      </div>
 
-      {phase === 'menu' && (
+  // メニュー画面: 通常の縦スクロールページ
+  if (phase === 'menu') {
+    return (
+      <div style={{
+        minHeight: '100dvh',
+        background: 'radial-gradient(ellipse at top, #1a0033 0%, #050015 60%, #000 100%)',
+        color: '#fff',
+        padding: '12px 0 max(80px, env(safe-area-inset-bottom)) 0',
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '0 16px', marginBottom: 14,
+        }}>
+          <Link href="/" style={{
+            color: '#6cf2ff', textDecoration: 'none', fontSize: 14, fontWeight: 700,
+          }}>← トップ</Link>
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{
+              fontFamily: 'monospace', fontWeight: 800, fontSize: 18,
+              letterSpacing: 2, color: '#ffd24a',
+            }}>F I L M I U S</div>
+            <div style={{ fontSize: 10, color: '#aaa', marginTop: 2 }}>
+              横スクロール・シューティング
+            </div>
+          </div>
+          <div style={{ width: 48 }} />
+        </div>
         <MenuView
           stats={stats}
           leaderboard={leaderboard}
           leaderboardLoading={leaderboardLoading}
           onStart={startGame}
         />
-      )}
+      </div>
+    )
+  }
 
-      {phase !== 'menu' && (
+  // プレイ中・結果: フルスクリーンレイアウト
+  // 縦・横どちらの向きでもキャンバス全体が viewport に収まるよう、
+  // playArea の実寸を ResizeObserver で測って canvasBox を letterbox サイズに合わせる。
+  return (
+    <div style={{
+      position: 'fixed', inset: 0,
+      background: 'radial-gradient(ellipse at top, #1a0033 0%, #050015 60%, #000 100%)',
+      color: '#fff',
+      display: 'flex', flexDirection: 'column',
+      paddingTop: 'env(safe-area-inset-top)',
+      paddingBottom: 'env(safe-area-inset-bottom)',
+      paddingLeft: 'env(safe-area-inset-left)',
+      paddingRight: 'env(safe-area-inset-right)',
+      zIndex: 50,
+    }}>
+      {/* コンパクトヘッダ */}
+      <div style={{
+        flexShrink: 0,
+        padding: '6px 10px',
+        display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <button
+          onClick={backToMenu}
+          style={{
+            background: 'rgba(108,242,255,0.12)',
+            color: '#6cf2ff',
+            border: '1px solid rgba(108,242,255,0.35)',
+            borderRadius: 8,
+            padding: '6px 10px',
+            fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            touchAction: 'manipulation',
+          }}>
+          ← 終了
+        </button>
         <div style={{
-          position: 'relative',
-          maxWidth: 920,
-          margin: '0 auto',
-          padding: '0 12px',
+          flex: 1, textAlign: 'center',
+          fontFamily: 'monospace', color: '#ffd24a',
+          fontWeight: 800, fontSize: 13, letterSpacing: 3,
+        }}>FILMIUS</div>
+        <div style={{ width: 56 }} />
+      </div>
+
+      {/* プレイエリア (canvas を中央に letterbox 配置) */}
+      <div
+        ref={playAreaRef}
+        style={{
+          flex: 1, minHeight: 0, minWidth: 0,
+          padding: '4px 8px',
+          display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
         }}>
-          {/* Canvas */}
-          <div style={{
+        <div
+          ref={canvasBoxRef}
+          style={{
             position: 'relative',
             background: '#000',
             border: '1px solid rgba(255,210,74,0.35)',
             borderRadius: 8,
             overflow: 'hidden',
-            aspectRatio: `${LOGICAL_W} / ${LOGICAL_H}`,
             touchAction: 'none',
+            containerType: 'size', // ResultOverlay の cqw/cqh をこのボックスに対して解決
+            // width / height は useLayoutEffect が動的に設定
           }}>
-            <canvas
-              ref={canvasRef}
-              style={{
-                width: '100%', height: '100%',
-                display: 'block',
-                imageRendering: 'pixelated',
-              }}
-            />
-            {/* モバイル: EQUIP ボタン */}
-            {phase === 'playing' && (
-              <button
-                onClick={() => game.triggerEquip()}
-                style={{
-                  position: 'absolute', right: 10, bottom: 10,
-                  width: 64, height: 64, borderRadius: 32,
-                  background: 'rgba(255,210,74,0.85)', color: '#3a1500',
-                  border: '2px solid #fff', fontWeight: 900,
-                  fontSize: 14, fontFamily: 'monospace',
-                  touchAction: 'manipulation',
-                }}>
-                EQUIP
-              </button>
-            )}
-            {/* ゲーム終了オーバーレイ: 即タップできる位置にリトライ/メニューを表示 */}
-            {phase === 'result' && result && (
-              <div style={{
-                position: 'absolute', inset: 0,
-                background: 'rgba(0,0,8,0.78)',
-                display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center',
-                gap: 14, padding: '8% 6%',
-              }}>
-                <div style={{
-                  fontFamily: 'monospace', fontWeight: 900,
-                  fontSize: 'clamp(20px, 5vw, 32px)',
-                  letterSpacing: 3, textAlign: 'center',
-                  color: result.cleared ? '#ffd24a' : '#ff6188',
-                  textShadow: result.cleared
-                    ? '0 0 18px rgba(255,210,74,0.6)'
-                    : '0 0 14px rgba(255,97,136,0.5)',
-                }}>
-                  {result.cleared ? '★ ALL CLEARED ★' : 'GAME OVER'}
-                </div>
-                <div style={{
-                  fontFamily: 'monospace', fontWeight: 800,
-                  fontSize: 'clamp(14px, 3vw, 18px)',
-                  color: '#fff', letterSpacing: 2,
-                }}>
-                  SCORE {fmtScore(result.score)}
-                </div>
-                <div style={{
-                  display: 'flex', gap: 10, width: '100%',
-                  maxWidth: 360, marginTop: 4,
-                }}>
-                  <button onClick={startGame} style={overlayPrimaryBtn}>
-                    ▶ もう一度
-                  </button>
-                  <button onClick={backToMenu} style={overlaySecondaryBtn}>
-                    メニュー
-                  </button>
-                </div>
-                <div style={{
-                  fontSize: 10, color: '#aaa', marginTop: 6, textAlign: 'center',
-                }}>
-                  ↓ 下に詳細スコア・シェアボタンがあります
-                </div>
-              </div>
-            )}
-          </div>
-
+          <canvas
+            ref={canvasRef}
+            style={{
+              width: '100%', height: '100%',
+              display: 'block',
+              imageRendering: 'pixelated',
+            }}
+          />
+          {/* モバイル: EQUIP ボタン */}
           {phase === 'playing' && (
-            <div style={{ marginTop: 8, fontSize: 11, color: '#aaa', textAlign: 'center' }}>
-              PC: ←↑↓→ 移動 / Z 連射 / X 装備　　モバイル: ドラッグで移動・自動連射 / EQUIP ボタンで装備
-            </div>
+            <button
+              onClick={() => game.triggerEquip()}
+              style={{
+                position: 'absolute', right: 10, bottom: 10,
+                width: 64, height: 64, borderRadius: 32,
+                background: 'rgba(255,210,74,0.85)', color: '#3a1500',
+                border: '2px solid #fff', fontWeight: 900,
+                fontSize: 14, fontFamily: 'monospace',
+                touchAction: 'manipulation',
+              }}>
+              EQUIP
+            </button>
           )}
-
+          {/* ゲーム終了オーバーレイ (スコア + リトライ + シェア) */}
           {phase === 'result' && result && (
-            <ResultView
+            <ResultOverlay
               result={result}
               newBest={newBest}
               pointsAwarded={pointsAwarded}
@@ -359,7 +389,7 @@ export default function FilmiusPage() {
             />
           )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -553,9 +583,11 @@ function LeaderRow({ rank, row }: { rank: number; row: LeaderboardEntry }) {
 }
 
 // ====================================================
-// ResultView
+// ResultOverlay — キャンバス内に重ねる結果画面
 // ====================================================
-function ResultView({
+// フルスクリーンレイアウト上で、キャンバスにオーバーレイされる形で
+// スコア / リトライ / シェアまで一画面に収める。
+function ResultOverlay({
   result, newBest, pointsAwarded, error,
   onRetry, onMenu, onShareTweet, onShareLine,
 }: {
@@ -570,113 +602,100 @@ function ResultView({
 }) {
   return (
     <div style={{
-      marginTop: 18, padding: 18, borderRadius: 14,
-      background: result.cleared
-        ? 'linear-gradient(135deg, rgba(255,210,74,0.18), rgba(255,122,63,0.12))'
-        : 'rgba(255,255,255,0.05)',
-      border: `1px solid ${result.cleared ? 'rgba(255,210,74,0.5)' : 'rgba(255,255,255,0.15)'}`,
+      position: 'absolute', inset: 0,
+      background: 'rgba(0,0,8,0.86)',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      gap: 'clamp(6px, 1.5cqh, 12px)',
+      padding: 'clamp(8px, 3%, 22px)',
+      overflowY: 'auto',
     }}>
-      <div style={{ textAlign: 'center', marginBottom: 12 }}>
-        <div style={{
-          fontFamily: 'monospace', fontSize: 22, fontWeight: 900,
-          color: result.cleared ? '#ffd24a' : '#fff',
-        }}>{result.cleared ? '★ GAME CLEARED ★' : 'GAME OVER'}</div>
-        <div style={{ fontSize: 12, color: '#aaa', marginTop: 4 }}>
-          {stageLabel(result.stageReached, result.cleared)}
-        </div>
-      </div>
-
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 12,
+        fontFamily: 'monospace', fontWeight: 900,
+        fontSize: 'clamp(18px, 5cqw, 30px)',
+        letterSpacing: 3, textAlign: 'center',
+        color: result.cleared ? '#ffd24a' : '#ff6188',
+        textShadow: result.cleared
+          ? '0 0 18px rgba(255,210,74,0.6)'
+          : '0 0 14px rgba(255,97,136,0.5)',
       }}>
-        <StatChip label="スコア" value={fmtScore(result.score)} accent="#ffd24a" mono />
-        <StatChip label="撃破数" value={`${result.enemiesKilled}`} />
-        <StatChip
-          label="プレイ時間"
-          value={`${(result.durationMs / 1000).toFixed(1)} 秒`}
-        />
-        <StatChip
-          label="ノーミス"
-          value={result.noMiss && result.cleared ? '達成 💎' : '—'}
-          accent={result.noMiss && result.cleared ? '#6cf2ff' : undefined}
-        />
+        {result.cleared ? '★ ALL CLEARED ★' : 'GAME OVER'}
+      </div>
+      <div style={{
+        fontFamily: 'monospace', fontWeight: 800,
+        fontSize: 'clamp(13px, 3.4cqw, 20px)',
+        color: '#fff', letterSpacing: 2,
+      }}>
+        SCORE {fmtScore(result.score)}
+      </div>
+      <div style={{
+        display: 'flex', gap: 14, fontSize: 'clamp(10px, 2.4cqw, 13px)',
+        color: '#aaa', flexWrap: 'wrap', justifyContent: 'center',
+      }}>
+        <span>{stageLabel(result.stageReached, result.cleared).split(' / ')[0]}</span>
+        <span>撃破 {result.enemiesKilled}</span>
+        <span>{(result.durationMs / 1000).toFixed(1)} 秒</span>
+        {result.noMiss && result.cleared && <span style={{ color: '#6cf2ff' }}>💎 ノーミス</span>}
       </div>
 
       {newBest && (
         <div style={{
-          textAlign: 'center', padding: 10, borderRadius: 10,
-          background: 'rgba(255,210,74,0.18)', color: '#ffd24a',
-          fontWeight: 800, marginBottom: 10,
-          fontFamily: 'monospace', letterSpacing: 2,
+          padding: '6px 14px', borderRadius: 8,
+          background: 'rgba(255,210,74,0.22)', color: '#ffd24a',
+          fontWeight: 800, fontFamily: 'monospace', letterSpacing: 2,
+          fontSize: 'clamp(11px, 2.4cqw, 13px)',
         }}>
-          🏆 NEW BEST SCORE!
+          🏆 NEW BEST!
         </div>
       )}
-
       {pointsAwarded > 0 && (
         <div style={{
-          textAlign: 'center', padding: 8, borderRadius: 8,
-          background: 'rgba(46,204,138,0.12)', color: '#2ecc8a',
-          fontSize: 13, marginBottom: 10,
+          fontSize: 'clamp(11px, 2.4cqw, 13px)',
+          color: '#2ecc8a', fontWeight: 700,
         }}>
           +{pointsAwarded} pt 獲得
         </div>
       )}
-
       {error && (
         <div style={{
-          textAlign: 'center', padding: 8, borderRadius: 8,
-          background: 'rgba(239,68,68,0.12)', color: '#ef4444',
-          fontSize: 12, marginBottom: 10,
+          fontSize: 'clamp(10px, 2cqw, 12px)',
+          color: '#ef4444',
         }}>{error}</div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <button onClick={onRetry} style={primaryBtn}>もう一度</button>
-        <button onClick={onMenu} style={secondaryBtn}>メニューへ</button>
-      </div>
-
       <div style={{
-        marginTop: 14, paddingTop: 12,
-        borderTop: '1px solid rgba(255,255,255,0.1)',
+        display: 'flex', gap: 10, width: '100%',
+        maxWidth: 420, marginTop: 4,
       }}>
-        <div style={{ fontSize: 11, color: '#aaa', marginBottom: 8, textAlign: 'center' }}>
-          結果をシェア
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <button onClick={onShareTweet} style={{
-            ...secondaryBtn,
-            background: 'rgba(29,155,240,0.18)',
-            border: '1px solid rgba(29,155,240,0.4)',
-            color: '#5fa9f7',
-          }}>𝕏 でシェア</button>
-          <button onClick={onShareLine} style={{
-            ...secondaryBtn,
-            background: 'rgba(6,199,85,0.18)',
-            border: '1px solid rgba(6,199,85,0.4)',
-            color: '#6fdba0',
-          }}>LINE でシェア</button>
-        </div>
+        <button onClick={onRetry} style={overlayPrimaryBtn}>▶ もう一度</button>
+        <button onClick={onMenu} style={overlaySecondaryBtn}>メニュー</button>
+      </div>
+      <div style={{
+        display: 'flex', gap: 10, width: '100%',
+        maxWidth: 420,
+      }}>
+        <button onClick={onShareTweet} style={{
+          ...overlaySecondaryBtn,
+          background: 'rgba(29,155,240,0.20)',
+          border: '1px solid rgba(29,155,240,0.45)',
+          color: '#5fa9f7',
+          padding: '10px 12px',
+        }}>𝕏 でシェア</button>
+        <button onClick={onShareLine} style={{
+          ...overlaySecondaryBtn,
+          background: 'rgba(6,199,85,0.20)',
+          border: '1px solid rgba(6,199,85,0.45)',
+          color: '#6fdba0',
+          padding: '10px 12px',
+        }}>LINE でシェア</button>
       </div>
     </div>
   )
 }
 
-const primaryBtn: React.CSSProperties = {
-  padding: '14px 16px', fontSize: 14, fontWeight: 800,
-  color: '#000', background: 'linear-gradient(135deg, #ffd24a, #ff7a3f)',
-  border: 'none', borderRadius: 12, cursor: 'pointer',
-  fontFamily: 'monospace', letterSpacing: 2,
-}
-const secondaryBtn: React.CSSProperties = {
-  padding: '14px 16px', fontSize: 14, fontWeight: 700,
-  color: '#fff', background: 'rgba(255,255,255,0.08)',
-  border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12,
-  cursor: 'pointer', fontFamily: 'monospace',
-}
 const overlayPrimaryBtn: React.CSSProperties = {
-  flex: 1, padding: '14px 12px',
-  fontSize: 'clamp(13px, 3vw, 16px)', fontWeight: 900,
+  flex: 1, padding: '12px 10px',
+  fontSize: 'clamp(13px, 3cqw, 16px)', fontWeight: 900,
   color: '#000', background: 'linear-gradient(135deg, #ffd24a, #ff7a3f)',
   border: 'none', borderRadius: 12, cursor: 'pointer',
   fontFamily: 'monospace', letterSpacing: 2,
@@ -684,8 +703,8 @@ const overlayPrimaryBtn: React.CSSProperties = {
   touchAction: 'manipulation',
 }
 const overlaySecondaryBtn: React.CSSProperties = {
-  flex: 1, padding: '14px 12px',
-  fontSize: 'clamp(13px, 3vw, 16px)', fontWeight: 800,
+  flex: 1, padding: '12px 10px',
+  fontSize: 'clamp(13px, 3cqw, 16px)', fontWeight: 800,
   color: '#fff', background: 'rgba(255,255,255,0.12)',
   border: '1px solid rgba(255,255,255,0.25)', borderRadius: 12,
   cursor: 'pointer', fontFamily: 'monospace',
