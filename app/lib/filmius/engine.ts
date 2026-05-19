@@ -16,12 +16,30 @@ export const PLAYER_BASE_SPEED = 2.4
 export const PLAYER_SPEED_STEP = 0.5      // FAST FORWARD 1段で +0.5
 export const PLAYER_MAX_SPEED_LEVEL = 3
 export const PLAYER_INVINCIBLE_MS = 1800
-export const PLAYER_LIVES = 3
 
 // 弾
 export const SHOT_COOLDOWN_MS = 110
 export const BULLET_SPEED = 5.5
+export const LASER_SPEED = BULLET_SPEED * 2   // レーザーは通常弾の 2 倍速で直進
 export const LASER_LEN = 32
+
+// ============================================
+// 難易度
+// ============================================
+export type Difficulty = 'easy' | 'normal' | 'hard'
+
+export interface DifficultyConfig {
+  lives: number
+  enemyHpMul: number          // 敵 HP の倍率
+  enemyFireCooldownMul: number // 敵発射 cooldown の倍率 (大きいほど発射遅い)
+  enemyBulletSpeedMul: number  // 敵弾速度の倍率
+}
+
+export const DIFFICULTY: Record<Difficulty, DifficultyConfig> = {
+  easy:   { lives: 5, enemyHpMul: 0.7, enemyFireCooldownMul: 1.5, enemyBulletSpeedMul: 0.8 },
+  normal: { lives: 3, enemyHpMul: 1.0, enemyFireCooldownMul: 1.0, enemyBulletSpeedMul: 1.0 },
+  hard:   { lives: 2, enemyHpMul: 1.4, enemyFireCooldownMul: 0.7, enemyBulletSpeedMul: 1.2 },
+}
 
 // パワーアップゲージ (Gradius 方式)
 //   1: SPEED (Fast Forward)
@@ -128,6 +146,7 @@ export type Mode =
 
 export interface State {
   mode: Mode
+  difficulty: Difficulty
   stageIdx: number          // 0..2
   stageTimeMs: number       // 現ステージ内の経過 ms
   totalTimeMs: number
@@ -172,13 +191,14 @@ export interface State {
   toast: { text: string; until: number } | null
 }
 
-export function initialState(): State {
+export function initialState(difficulty: Difficulty = 'normal'): State {
   return {
     mode: 'playing',
+    difficulty,
     stageIdx: 0,
     stageTimeMs: 0,
     totalTimeMs: 0,
-    lives: PLAYER_LIVES,
+    lives: DIFFICULTY[difficulty].lives,
     score: 0,
     enemiesKilled: 0,
     noMiss: true,
@@ -297,7 +317,7 @@ function shoot(s: State) {
   const px = s.player.x + PLAYER_W / 2
   const py = s.player.y
   if (s.hasLaser) {
-    pushBullet(s, { x: px, y: py, vx: 0, vy: 0, kind: 'laser', life: 70 })
+    pushBullet(s, { x: px, y: py, vx: LASER_SPEED, vy: 0, kind: 'laser', life: 1000 })
   } else if (s.hasDouble) {
     pushBullet(s, { x: px, y: py, vx: BULLET_SPEED, vy: 0, kind: 'normal', life: 1500 })
     pushBullet(s, { x: px, y: py, vx: BULLET_SPEED * 0.85, vy: -BULLET_SPEED * 0.55, kind: 'normal', life: 1500 })
@@ -317,7 +337,7 @@ function shoot(s: State) {
       if (trailIdx >= s.playerTrail.length) continue
       const p = s.playerTrail[trailIdx]
       if (s.hasLaser) {
-        pushBullet(s, { x: p.x + PLAYER_W / 2, y: p.y, vx: 0, vy: 0, kind: 'laser', life: 70 })
+        pushBullet(s, { x: p.x + PLAYER_W / 2, y: p.y, vx: LASER_SPEED, vy: 0, kind: 'laser', life: 1000 })
       } else {
         pushBullet(s, { x: p.x + PLAYER_W / 2, y: p.y, vx: BULLET_SPEED, vy: 0, kind: 'normal', life: 1500 })
       }
@@ -347,6 +367,13 @@ export interface SpawnOpts {
 
 export function spawnEnemy(s: State, o: SpawnOpts): Enemy {
   const def = enemyDef(o.kind)
+  const dc = DIFFICULTY[s.difficulty]
+  // 難易度倍率を適用: HP は最低 1、fireCooldown は最低 100ms
+  const rawHp = o.hp ?? def.hp
+  const hp = Math.max(1, Math.round(rawHp * dc.enemyHpMul))
+  const fireCd = def.fireCooldown > 0
+    ? Math.max(100, Math.round(def.fireCooldown * dc.enemyFireCooldownMul))
+    : 0
   const e: Enemy = {
     id: s.nextId++,
     kind: o.kind,
@@ -356,13 +383,13 @@ export function spawnEnemy(s: State, o: SpawnOpts): Enemy {
     vy: o.vy ?? 0,
     w: def.w,
     h: def.h,
-    hp: o.hp ?? def.hp,
-    maxHp: o.hp ?? def.hp,
+    hp,
+    maxHp: hp,
     score: o.score ?? def.score,
     carriesCapsule: o.carriesCapsule ?? false,
     bornAt: s.stageTimeMs,
     baseY: o.y,
-    fireCooldown: def.fireCooldown,
+    fireCooldown: fireCd,
     phase: o.phase ?? 0,
     partner: o.partner ?? null,
   }
@@ -496,16 +523,8 @@ function updateBullets(s: State, dtMs: number) {
   const k = dtMs / FRAME_MS
   for (let i = s.bullets.length - 1; i >= 0; i--) {
     const b = s.bullets[i]
-    if (b.kind === 'laser') {
-      // レーザーは自機 (またはオプション) から右へ伸びる固定光。発射元の x に追従。
-      // 寿命で消す。
-    } else {
-      b.x += b.vx * k
-      b.y += b.vy * k
-      if (b.kind === 'missile' && b.y < LOGICAL_H - 14) {
-        // 地表近くまで降りたら水平移動に切り替わる挙動を簡略化
-      }
-    }
+    b.x += b.vx * k
+    b.y += b.vy * k
     b.life -= dtMs
     if (b.life <= 0 || b.x > LOGICAL_W + 20 || b.x < -20 || b.y < -20 || b.y > LOGICAL_H + 20) {
       s.bullets.splice(i, 1)
@@ -583,7 +602,8 @@ function updateEnemies(s: State, dtMs: number) {
       e.fireCooldown -= dtMs
       if (e.fireCooldown <= 0) {
         enemyFire(s, e)
-        e.fireCooldown = enemyDef(e.kind).fireCooldown
+        const baseCd = enemyDef(e.kind).fireCooldown
+        e.fireCooldown = Math.max(100, Math.round(baseCd * DIFFICULTY[s.difficulty].enemyFireCooldownMul))
         if (e.kind === 'boss1' || e.kind === 'boss2' || e.kind === 'boss3') {
           // ボスは少し短めに連射
           e.fireCooldown *= 0.75
@@ -609,7 +629,8 @@ function enemyFire(s: State, e: Enemy) {
   const dx = px - (e.x + e.w / 2)
   const dy = py - (e.y + e.h / 2)
   const d = Math.hypot(dx, dy) || 1
-  const sp = 2.6
+  const bsMul = DIFFICULTY[s.difficulty].enemyBulletSpeedMul
+  const sp = 2.6 * bsMul
   switch (e.kind) {
     case 'wave':
     case 'turret':
@@ -629,7 +650,7 @@ function enemyFire(s: State, e: Enemy) {
         const a = Math.atan2(dy, dx) + i * 0.18
         s.ebullets.push({
           id: s.nextId++, x: e.x + e.w / 2, y: e.y + e.h / 2,
-          vx: Math.cos(a) * 3.0, vy: Math.sin(a) * 3.0, r: 3,
+          vx: Math.cos(a) * 3.0 * bsMul, vy: Math.sin(a) * 3.0 * bsMul, r: 3,
         })
       }
       break
@@ -639,7 +660,7 @@ function enemyFire(s: State, e: Enemy) {
         const a = (i / 8) * Math.PI * 2 + e.phase * 0.1
         s.ebullets.push({
           id: s.nextId++, x: e.x + e.w / 2, y: e.y + e.h / 2,
-          vx: Math.cos(a) * 2.4, vy: Math.sin(a) * 2.4, r: 3,
+          vx: Math.cos(a) * 2.4 * bsMul, vy: Math.sin(a) * 2.4 * bsMul, r: 3,
         })
       }
       e.phase++
@@ -649,7 +670,7 @@ function enemyFire(s: State, e: Enemy) {
       for (let i = -2; i <= 2; i++) {
         s.ebullets.push({
           id: s.nextId++, x: e.x, y: e.y + e.h / 2 + i * 6,
-          vx: -3.6, vy: 0, r: 3,
+          vx: -3.6 * bsMul, vy: 0, r: 3,
         })
       }
       break
@@ -791,14 +812,9 @@ function killPlayer(s: State) {
   s.lives--
   s.flashLife = 200
   spawnExplosion(s, s.player.x + PLAYER_W / 2, s.player.y + PLAYER_H / 2, 32)
-  // パワーアップは全ロスト (Gradius らしさ)
-  s.speedLevel = 0
-  s.hasMissile = false
-  s.hasDouble = false
-  s.hasLaser = false
-  s.optionCount = 0
+  // パワーアップは死亡後もそのまま継続 (ユーザビリティ重視)
+  // playerTrail だけは復活位置に飛ばないようリセット
   s.playerTrail = []
-  s.gauge = 0
   s.player.respawnAt = s.totalTimeMs + 1200
   if (s.lives <= 0) {
     // step() ループは respawn 時に lives==0 を見て game-over に切り替える
