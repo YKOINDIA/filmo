@@ -12,8 +12,13 @@ import { buildCompatibilityReading } from '../../lib/uranyan/compatTemplates'
 import { buildGroupCompatReading, type GroupCompatReading } from '../../lib/uranyan/groupCompat'
 import { buildDailyReading, dailyShareText, type DailyReading } from '../../lib/uranyan/today'
 import {
+  buildPeriodReading, periodShareText, PERIOD_PRESETS,
+  type PeriodPreset,
+} from '../../lib/uranyan/period'
+import {
   saveReading, loadReadings, reviewReading, deleteReading, isReviewable,
   buildLifeSavePayload, buildCompatSavePayload, buildGroupCompatSavePayload,
+  buildPeriodSavePayload,
   type ReadingRow, type SaveInput,
 } from '../../lib/uranyan/history'
 import {
@@ -27,9 +32,9 @@ import { DogIcon, CatIcon } from '../../lib/uranyan/breedIcons'
 // ====================================================
 // 型
 // ====================================================
-type Mode = 'life' | 'compat' | 'group'
+type Mode = 'life' | 'compat' | 'group' | 'period'
 type Phase =
-  | 'menu' | 'pickLife' | 'pickCompat' | 'pickGroup'
+  | 'menu' | 'pickLife' | 'pickCompat' | 'pickGroup' | 'pickPeriod'
   | 'edit' | 'result' | 'character' | 'history' | 'today'
 
 const GROUP_MIN = 3
@@ -203,6 +208,26 @@ export default function UranyanPage() {
     setErrorMsg(null)
     setGroupPicks([])
     setPhase('pickGroup')
+  }, [])
+
+  // 期間限定占い: 選択された期間
+  const [periodSelection, setPeriodSelection] = useState<{
+    label: string; start: string; end: string
+  } | null>(null)
+
+  const onChoosePeriod = useCallback(() => {
+    setMode('period')
+    setErrorMsg(null)
+    setPeriodSelection(null)
+    setPhase('pickPeriod')
+  }, [])
+
+  const onRunPeriod = useCallback((label: string, startISO: string, endISO: string) => {
+    setErrorMsg(null)
+    setPeriodSelection({ label, start: startISO, end: endISO })
+    setMode('period')
+    setPhase('result')
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 })
   }, [])
 
   const onOpenHistory = useCallback(async () => {
@@ -474,10 +499,18 @@ export default function UranyanPage() {
         setPhase('history')
         return
       }
-      setPhase(mode === 'compat' ? 'pickCompat' : mode === 'group' ? 'pickGroup' : 'pickLife')
+      setPhase(
+        mode === 'compat' ? 'pickCompat' :
+        mode === 'group'  ? 'pickGroup'  :
+        mode === 'period' ? 'pickPeriod' : 'pickLife'
+      )
     } else if (phase === 'edit') {
       setDraft(null)
-      setPhase(mode === 'compat' ? 'pickCompat' : mode === 'group' ? 'pickGroup' : 'pickLife')
+      setPhase(
+        mode === 'compat' ? 'pickCompat' :
+        mode === 'group'  ? 'pickGroup'  :
+        mode === 'period' ? 'pickPeriod' : 'pickLife'
+      )
     } else {
       setPhase('menu')
     }
@@ -510,6 +543,13 @@ export default function UranyanPage() {
       setCompatA(cards[0] ?? null)
       setCompatB(cards[1] ?? null)
       setMode('compat')
+    } else if (r.menu === 'period') {
+      setPeriodSelection({
+        label: r.period_label ?? '期間運勢',
+        start: r.period_start ?? r.target_birthdates[0] ?? '',
+        end: r.period_end ?? r.target_birthdates[0] ?? '',
+      })
+      setMode('period')
     } else {
       setGroupPicks(cards)
       setMode('group')
@@ -560,6 +600,7 @@ export default function UranyanPage() {
           onChooseLife={onChooseLife}
           onChooseCompat={onChooseCompat}
           onChooseGroup={onChooseGroup}
+          onChoosePeriod={onChoosePeriod}
           onOpenHistory={onOpenHistory}
           onOpenCharacter={() => setPhase('character')}
           onRegisterSelf={beginEditSelf}
@@ -572,6 +613,32 @@ export default function UranyanPage() {
           today={today}
           catBreed={catBreed} dogBreed={dogBreed}
           onBack={() => setPhase('menu')}
+        />
+      )}
+
+      {phase === 'pickPeriod' && (
+        <PickPeriodView
+          loggedIn={!!me}
+          hasSelfBirth={!!(me?.birth_year && me?.birth_month && me?.birth_day)}
+          onRun={onRunPeriod}
+          onRegisterSelf={beginEditSelf}
+        />
+      )}
+
+      {phase === 'result' && mode === 'period' && periodSelection && me?.birth_year && me?.birth_month && me?.birth_day && (
+        <PeriodResultView
+          userName={me?.name || '自分'}
+          userBirth={{ year: me.birth_year, month: me.birth_month, day: me.birth_day }}
+          periodLabel={periodSelection.label}
+          startISO={periodSelection.start}
+          endISO={periodSelection.end}
+          catBreed={catBreed} dogBreed={dogBreed}
+          loggedIn={!!me}
+          savedReadingId={savedReadingId}
+          setSavedReadingId={setSavedReadingId}
+          savePromptOpen={savePromptOpen}
+          setSavePromptOpen={setSavePromptOpen}
+          onBack={() => setPhase('pickPeriod')}
         />
       )}
 
@@ -737,6 +804,7 @@ function MenuView(p: {
   onChooseLife: () => void
   onChooseCompat: () => void
   onChooseGroup: () => void
+  onChoosePeriod: () => void
   onOpenHistory: () => void
   onOpenCharacter: () => void
   onRegisterSelf: () => void
@@ -821,6 +889,16 @@ function MenuView(p: {
             </div>
           </div>
           <div style={{ fontSize: 22, color: '#5EE2C8' }}>→</div>
+        </button>
+        <button type="button" onClick={p.onChoosePeriod} style={menuCardPeriod}>
+          <div style={{ fontSize: 36 }}>📅</div>
+          <div style={{ flex: 1, textAlign: 'left' }}>
+            <div style={{ fontSize: 16, fontWeight: 900, color: '#fff' }}>期間限定占い</div>
+            <div style={{ fontSize: 11, color: '#ddd', marginTop: 4 }}>
+              テスト期間・夏休み・推し活ウィーク。期間まとめ運勢で先読み&後日レビュー
+            </div>
+          </div>
+          <div style={{ fontSize: 22, color: '#FF7AAE' }}>→</div>
         </button>
       </div>
 
@@ -1601,7 +1679,7 @@ function PersonChip({ name, mansion, emoji }: { name: string; mansion: string; e
 
 function ResultActions(p: ResultActionProps & {
   shareText: string
-  menu: 'life' | 'compat' | 'group_compat'
+  menu: 'life' | 'compat' | 'group_compat' | 'period'
   resultSummary: string
   saveInput: SaveInput
   onBack: () => void
@@ -1926,6 +2004,284 @@ function ColorChip({ label, color, small }: {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 9, color: '#888', letterSpacing: 1, fontWeight: 700 }}>{label}</div>
         <div style={{ fontSize: 12, color: '#fff', fontWeight: 800, marginTop: 2 }}>{color.name}</div>
+      </div>
+    </div>
+  )
+}
+
+// ====================================================
+// 部品: 期間限定占い ピッカー & 結果
+// ====================================================
+function PickPeriodView(p: {
+  loggedIn: boolean
+  hasSelfBirth: boolean
+  onRun: (label: string, startISO: string, endISO: string) => void
+  onRegisterSelf: () => void
+}) {
+  const [customLabel, setCustomLabel] = useState('')
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
+  const [err, setErr] = useState<string | null>(null)
+  const today = useMemo(() => new Date(), [])
+
+  const ymdISO = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+
+  const runPreset = (preset: PeriodPreset) => {
+    setErr(null)
+    const r = preset.range(today)
+    const lbl = preset.label + (r.labelExtra ? ` ${r.labelExtra}` : '')
+    p.onRun(lbl, ymdISO(r.start), ymdISO(r.end))
+  }
+  const runCustom = () => {
+    setErr(null)
+    if (!customLabel.trim()) { setErr('期間の名前を入力してね (例: 中間テスト)'); return }
+    if (!customStart || !customEnd) { setErr('開始日と終了日を選んでね'); return }
+    const s = new Date(customStart), e = new Date(customEnd)
+    if (e < s) { setErr('終了日は開始日より後にしてね'); return }
+    const days = Math.round((e.getTime() - s.getTime()) / 86400000) + 1
+    if (days > 90) { setErr('期間は 90 日以内にしてね'); return }
+    p.onRun(customLabel.trim(), customStart, customEnd)
+  }
+
+  if (!p.loggedIn) {
+    return (
+      <div style={{ padding: '8px 20px 40px' }}>
+        <SectionTitle emoji="📅" title="期間限定占い" />
+        <div style={inlineHintCard}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>
+            ログインが必要だよ
+          </div>
+          <div style={{ fontSize: 12, color: '#bbb' }}>
+            期間運勢は履歴保存して後日レビューする前提だから、
+            <Link href="/" style={{ color: '#FFD24A' }}>ログイン</Link> してね。
+          </div>
+        </div>
+      </div>
+    )
+  }
+  if (!p.hasSelfBirth) {
+    return (
+      <div style={{ padding: '8px 20px 40px' }}>
+        <SectionTitle emoji="📅" title="期間限定占い" />
+        <div style={inlineHintCard}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>
+            自分の生年月日が必要だよ
+          </div>
+          <button type="button" onClick={p.onRegisterSelf} style={primaryBtnSmall}>
+            自分の生年月日を登録
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: '8px 20px 40px' }}>
+      <SectionTitle emoji="📅" title="期間限定占い" sub="プリセット or カスタム期間で運勢を先読み" />
+
+      <div style={{ fontSize: 12, color: '#bbb', fontWeight: 700, marginBottom: 8 }}>
+        プリセット
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+        {PERIOD_PRESETS.map(preset => {
+          const r = preset.range(today)
+          return (
+            <button key={preset.id} type="button" onClick={() => runPreset(preset)} style={{
+              padding: '12px 10px', borderRadius: 12,
+              border: '1px solid var(--fm-border)',
+              background: 'rgba(255,255,255,0.04)',
+              color: '#fff', textAlign: 'left', cursor: 'pointer',
+            }}>
+              <div style={{ fontSize: 22 }}>{preset.emoji}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>{preset.label}</div>
+              <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>
+                {ymdISO(r.start)}〜{ymdISO(r.end)}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
+      <div style={{ fontSize: 12, color: '#bbb', fontWeight: 700, marginTop: 24, marginBottom: 8 }}>
+        カスタム
+      </div>
+      <input value={customLabel} onChange={e => setCustomLabel(e.target.value)}
+        placeholder="期間の名前 (例: 期末テスト / 修学旅行)" maxLength={40}
+        style={inputStyle} />
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+        <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
+          style={{ ...inputStyle, flex: 1 }} />
+        <span style={{ color: '#888' }}>〜</span>
+        <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
+          style={{ ...inputStyle, flex: 1 }} />
+      </div>
+      {err && <div style={{ color: '#FF6B6B', fontSize: 12, marginTop: 8 }}>{err}</div>}
+      <button type="button" onClick={runCustom} style={{ ...primaryBtn, width: '100%', marginTop: 12 }}>
+        この期間を占う
+      </button>
+    </div>
+  )
+}
+
+function PeriodResultView(p: ResultActionProps & {
+  userName: string
+  userBirth: { year: number; month: number; day: number }
+  periodLabel: string
+  startISO: string
+  endISO: string
+  catBreed: string
+  dogBreed: string
+  onBack: () => void
+}) {
+  const cat = getCatBreed(p.catBreed)
+  const dog = getDogBreed(p.dogBreed)
+  const reading = useMemo(() => {
+    const s = new Date(p.startISO), e = new Date(p.endISO)
+    return buildPeriodReading(p.userBirth, s, e)
+  }, [p.userBirth, p.startISO, p.endISO])
+  const shareText = useMemo(
+    () => periodShareText(p.periodLabel, p.userName, reading),
+    [p.periodLabel, p.userName, reading],
+  )
+  const savePayload = useMemo(() => buildPeriodSavePayload(
+    { name: p.userName, ...p.userBirth },
+    p.periodLabel,
+    reading,
+  ), [p.userName, p.userBirth, p.periodLabel, reading])
+
+  return (
+    <div style={{ padding: '8px 16px 40px' }}>
+      <div style={resultCardStyle}>
+        <div style={{ textAlign: 'center', fontSize: 11, color: '#A29BFE', letterSpacing: 2, marginBottom: 4 }}>
+          うらにゃん。 / 期間限定占い
+        </div>
+        <div style={{ textAlign: 'center', fontSize: 18, fontWeight: 900, color: '#fff', marginTop: 2 }}>
+          {p.periodLabel}
+        </div>
+        <div style={{ textAlign: 'center', fontSize: 11, color: '#888', marginBottom: 14 }}>
+          {reading.startDate} 〜 {reading.endDate} ({reading.days.length} 日間)
+        </div>
+
+        {/* ランク */}
+        <div style={{
+          textAlign: 'center', padding: '14px 0 18px', borderRadius: 16, marginBottom: 14,
+          background: 'radial-gradient(circle at 50% 0%, rgba(255,210,74,0.20), transparent 70%)',
+        }}>
+          <div style={{ fontSize: 48, lineHeight: 1, marginBottom: 6 }}>{reading.avgEmoji}</div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: '#fff' }}>{reading.avgLabel}</div>
+          <div style={{ fontSize: 20, marginTop: 4, letterSpacing: 2 }}>
+            <span style={{ color: '#FFD24A' }}>{'★'.repeat(reading.avgRank)}</span>
+            <span style={{ color: '#444' }}>{'☆'.repeat(5 - reading.avgRank)}</span>
+          </div>
+          <div style={{ fontSize: 13, color: '#ddd', marginTop: 8, fontWeight: 700 }}>
+            テーマ: {reading.themeHeadline}
+          </div>
+        </div>
+
+        {/* 掛け合い */}
+        <div style={dialogRow}>
+          <CatIcon breed={cat} size={32} />
+          <div style={bubbleNyan}>
+            <div style={bubbleSpeaker}>ニャンじろう</div>
+            {reading.nyanLine}
+          </div>
+        </div>
+        <div style={{ ...dialogRow, marginTop: 8 }}>
+          <DogIcon breed={dog} size={32} />
+          <div style={bubblePochi}>
+            <div style={bubbleSpeaker}>ポチ</div>
+            {reading.pochiLine}
+          </div>
+        </div>
+
+        {/* アドバイス */}
+        <div style={{
+          marginTop: 14, padding: '12px 14px', borderRadius: 12,
+          background: 'rgba(94,226,200,0.10)', border: '1px solid rgba(94,226,200,0.30)',
+          fontSize: 13, color: '#eee', lineHeight: 1.6,
+        }}>
+          <div style={{ fontSize: 10, color: '#5EE2C8', fontWeight: 800, letterSpacing: 1, marginBottom: 4 }}>
+            ADVICE
+          </div>
+          {reading.advice}
+        </div>
+
+        {/* ベスト / ワースト */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+          {reading.bestDay && <PeakDayChip title="🏆 ベスト日" tone="good" day={reading.bestDay} />}
+          {reading.worstDay && <PeakDayChip title="⚠️ 注意日" tone="bad"  day={reading.worstDay} />}
+        </div>
+
+        {/* 日別カレンダー (★) */}
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 11, color: '#A29BFE', fontWeight: 800, letterSpacing: 1, marginBottom: 6 }}>
+            日別の運勢
+          </div>
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))', gap: 4,
+          }}>
+            {reading.days.map(d => (
+              <div key={d.date} style={{
+                padding: '6px 4px', borderRadius: 6, textAlign: 'center',
+                background: d.rank >= 4 ? 'rgba(255,210,74,0.15)' :
+                            d.rank <= 2 ? 'rgba(255,107,107,0.12)' : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${d.rank >= 4 ? 'rgba(255,210,74,0.35)' :
+                            d.rank <= 2 ? 'rgba(255,107,107,0.30)' : 'rgba(255,255,255,0.08)'}`,
+              }}>
+                <div style={{ fontSize: 9, color: '#888' }}>
+                  {d.date.slice(5).replace('-', '/')}
+                </div>
+                <div style={{ fontSize: 11, marginTop: 2 }}>
+                  <span style={{ color: '#FFD24A' }}>{'★'.repeat(d.rank)}</span>
+                  <span style={{ color: '#444' }}>{'☆'.repeat(5 - d.rank)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <ShareFooter />
+      </div>
+      <ResultActions
+        shareText={shareText} menu="period" resultSummary={savePayload.result_summary}
+        onBack={p.onBack} backLabel="別の期間を選ぶ"
+        loggedIn={p.loggedIn}
+        savedReadingId={p.savedReadingId} setSavedReadingId={p.setSavedReadingId}
+        savePromptOpen={p.savePromptOpen} setSavePromptOpen={p.setSavePromptOpen}
+        saveInput={{
+          menu: 'period',
+          target_names: savePayload.target_names,
+          target_birthdates: savePayload.target_birthdates,
+          result_summary: savePayload.result_summary,
+          result_payload: savePayload.result_payload,
+          period_label: p.periodLabel,
+          period_start: p.startISO,
+          period_end: p.endISO,
+        }}
+      />
+    </div>
+  )
+}
+
+function PeakDayChip(p: {
+  title: string
+  tone: 'good' | 'bad'
+  day: { date: string; rank: number; rel: string }
+}) {
+  const fg = p.tone === 'good' ? '#5EE2C8' : '#FF6B6B'
+  const bg = p.tone === 'good' ? 'rgba(94,226,200,0.10)' : 'rgba(255,107,107,0.10)'
+  return (
+    <div style={{
+      padding: '10px 12px', borderRadius: 12,
+      background: bg, border: `1px solid ${fg}55`,
+    }}>
+      <div style={{ fontSize: 10, fontWeight: 800, color: fg, letterSpacing: 1 }}>{p.title}</div>
+      <div style={{ fontSize: 14, fontWeight: 800, color: '#fff', marginTop: 4 }}>
+        {p.day.date}
+      </div>
+      <div style={{ fontSize: 11, color: '#bbb', marginTop: 2 }}>
+        ★{p.day.rank}/5 ・ {p.day.rel}
       </div>
     </div>
   )
@@ -2350,7 +2706,10 @@ function HistoryRow(p: {
   onDelete: () => void
 }) {
   const r = p.row
-  const menuLabel = r.menu === 'life' ? '🔮 天命' : r.menu === 'compat' ? '💞 相性' : '👥 グループ'
+  const menuLabel = r.menu === 'life' ? '🔮 天命'
+    : r.menu === 'compat' ? '💞 相性'
+    : r.menu === 'period' ? '📅 期間'
+    : '👥 グループ'
   const reviewable = isReviewable(r)
   const reviewed = r.rating !== null
   return (
@@ -2494,6 +2853,14 @@ const menuCardGroup: React.CSSProperties = {
   padding: '18px 16px', borderRadius: 16,
   background: 'linear-gradient(135deg, rgba(94,226,200,0.20), rgba(108,169,255,0.14))',
   border: '1px solid rgba(94,226,200,0.30)',
+  cursor: 'pointer',
+}
+
+const menuCardPeriod: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 14,
+  padding: '18px 16px', borderRadius: 16,
+  background: 'linear-gradient(135deg, rgba(255,122,174,0.20), rgba(255,159,28,0.14))',
+  border: '1px solid rgba(255,122,174,0.30)',
   cursor: 'pointer',
 }
 
