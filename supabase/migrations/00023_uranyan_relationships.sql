@@ -10,6 +10,7 @@
 --   child      子供
 --   sibling    きょうだい
 --   relative   親戚
+--   pet        ペット (犬・猫・うさぎ等、誕生日が分かれば占い可)
 --   classmate  クラスメイト
 --   senior     先輩
 --   coworker   同僚
@@ -21,7 +22,7 @@ ALTER TABLE uranyan_targets
   ADD CONSTRAINT uranyan_targets_relationship_check
   CHECK (relationship IS NULL OR relationship IN (
     'self',
-    'parent', 'child', 'sibling', 'family', 'relative',
+    'parent', 'child', 'sibling', 'family', 'relative', 'pet',
     'friend', 'classmate', 'senior', 'coworker',
     'crush', 'partner', 'idol',
     'other'
