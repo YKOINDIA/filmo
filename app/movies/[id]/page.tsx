@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import {
   fetchPublicWork,
+  fetchFilmoCommunity,
   buildWorkTitle,
   buildWorkDescription,
   buildWorkUrl,
@@ -21,8 +22,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!work) {
     return { title: '作品が見つかりません', robots: { index: false, follow: false } }
   }
+  const community = await fetchFilmoCommunity(work.id)
   const title = buildWorkTitle(work)
-  const description = buildWorkDescription(work)
+  const description = buildWorkDescription(work, community)
   const url = buildWorkUrl(work)
   const image = buildPosterUrl(work.poster_path, 'w780')
 
@@ -52,16 +54,15 @@ export default async function MoviePage({ params }: Props) {
   const work = await fetchPublicWork(id, 'movie')
   if (!work) notFound()
 
-  const jsonLd = buildWorkJsonLd(work)
+  const community = await fetchFilmoCommunity(work.id)
+  const jsonLd = buildWorkJsonLd(work, community)
   return (
     <>
       <script
         type="application/ld+json"
-        // JSON.stringify は </script を含む可能性のある値があれば エスケープすべきだが、
-        // ここで使うのは TMDB / DB 由来の構造化データなので実害は低い。念のため最低限のサニタイズ。
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
       />
-      <PublicWorkView work={work} />
+      <PublicWorkView work={work} community={community} />
     </>
   )
 }
