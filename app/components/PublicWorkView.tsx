@@ -615,6 +615,31 @@ export function PublicWorkView({ work, community }: { work: PublicWorkData; comm
           </section>
         )}
 
+        {/* ログイン済み: アプリで開いて評価・レビュー */}
+        <AuthGate showWhenAuthed>
+          <section style={{
+            marginTop: 32, padding: 24, borderRadius: 12,
+            background: 'linear-gradient(135deg, rgba(108,92,231,0.15), rgba(108,92,231,0.05))',
+            border: '1px solid rgba(108,92,231,0.3)',
+            textAlign: 'center',
+          }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px' }}>
+              『{work.title}』を評価・レビューする
+            </h3>
+            <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', margin: '0 0 16px' }}>
+              アプリで開くと星評価やレビュー投稿ができます
+            </p>
+            <Link href={`/?work=${work.id}&type=${work.type}`} style={{
+              display: 'inline-block', padding: '10px 28px', borderRadius: 8,
+              background: 'var(--fm-accent)', color: '#fff', fontSize: 14, fontWeight: 600,
+              textDecoration: 'none',
+            }}>
+              アプリで開く
+            </Link>
+          </section>
+        </AuthGate>
+
+        {/* 未ログイン: サインアップ誘導 */}
         <AuthGate hideWhenAuthed>
           <section style={{
             marginTop: 32, padding: 24, borderRadius: 12,
