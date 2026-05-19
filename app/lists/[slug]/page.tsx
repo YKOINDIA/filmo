@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import AuthGate from '../../components/AuthGate'
+import PublicShareButton from '../../components/PublicShareButton'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://filmo.me'
@@ -229,15 +230,21 @@ export default async function PublicListPage({
             Filmo
           </span>
         </a>
-        <AuthGate hideWhenAuthed>
-          <a href="/" style={{
-            padding: '6px 16px', borderRadius: 6, border: 'none',
-            background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
-            textDecoration: 'none',
-          }}>
-            Sign Up Free
-          </a>
-        </AuthGate>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <PublicShareButton
+            url={`${APP_URL}/lists/${encodeURIComponent(canonicalSlug)}`}
+            title={`${list.title} — ${list.user_name}`}
+          />
+          <AuthGate hideWhenAuthed>
+            <a href="/" style={{
+              padding: '6px 16px', borderRadius: 6, border: 'none',
+              background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
+              textDecoration: 'none',
+            }}>
+              Sign Up Free
+            </a>
+          </AuthGate>
+        </div>
       </header>
 
       {/* List content */}
