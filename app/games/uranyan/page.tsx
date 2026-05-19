@@ -15,6 +15,7 @@ import {
   buildPeriodReading, periodShareText, PERIOD_PRESETS,
   type PeriodPreset,
 } from '../../lib/uranyan/period'
+import { buildFashionReading, fashionShareText } from '../../lib/uranyan/fashion'
 import {
   saveReading, loadReadings, reviewReading, deleteReading, isReviewable,
   buildLifeSavePayload, buildCompatSavePayload, buildGroupCompatSavePayload,
@@ -32,10 +33,10 @@ import { DogIcon, CatIcon } from '../../lib/uranyan/breedIcons'
 // ====================================================
 // 型
 // ====================================================
-type Mode = 'life' | 'compat' | 'group' | 'period'
+type Mode = 'life' | 'compat' | 'group' | 'period' | 'fashion'
 type Phase =
   | 'menu' | 'pickLife' | 'pickCompat' | 'pickGroup' | 'pickPeriod'
-  | 'edit' | 'result' | 'character' | 'history' | 'today'
+  | 'edit' | 'result' | 'character' | 'history' | 'today' | 'fashion'
 
 const GROUP_MIN = 3
 const GROUP_MAX = 8
@@ -220,6 +221,13 @@ export default function UranyanPage() {
     setErrorMsg(null)
     setPeriodSelection(null)
     setPhase('pickPeriod')
+  }, [])
+
+  const onChooseFashion = useCallback(() => {
+    setMode('fashion')
+    setErrorMsg(null)
+    setPhase('fashion')
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 })
   }, [])
 
   const onRunPeriod = useCallback((label: string, startISO: string, endISO: string) => {
@@ -601,6 +609,7 @@ export default function UranyanPage() {
           onChooseCompat={onChooseCompat}
           onChooseGroup={onChooseGroup}
           onChoosePeriod={onChoosePeriod}
+          onChooseFashion={onChooseFashion}
           onOpenHistory={onOpenHistory}
           onOpenCharacter={() => setPhase('character')}
           onRegisterSelf={beginEditSelf}
@@ -614,6 +623,30 @@ export default function UranyanPage() {
           catBreed={catBreed} dogBreed={dogBreed}
           onBack={() => setPhase('menu')}
         />
+      )}
+
+      {phase === 'fashion' && me?.birth_year && me?.birth_month && me?.birth_day && (
+        <FashionResultView
+          userName={me?.name || '自分'}
+          userBirth={{ year: me.birth_year, month: me.birth_month, day: me.birth_day }}
+          catBreed={catBreed} dogBreed={dogBreed}
+          onBack={() => setPhase('menu')}
+        />
+      )}
+      {phase === 'fashion' && !(me?.birth_year && me?.birth_month && me?.birth_day) && (
+        <div style={{ padding: '8px 20px 40px' }}>
+          <SectionTitle emoji="👗" title="ファッション占い" />
+          <div style={inlineHintCard}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>
+              {me ? '自分の生年月日を登録してね' : 'ログインしてね'}
+            </div>
+            {me && (
+              <button type="button" onClick={beginEditSelf} style={primaryBtnSmall}>
+                登録する
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       {phase === 'pickPeriod' && (
@@ -805,6 +838,7 @@ function MenuView(p: {
   onChooseCompat: () => void
   onChooseGroup: () => void
   onChoosePeriod: () => void
+  onChooseFashion: () => void
   onOpenHistory: () => void
   onOpenCharacter: () => void
   onRegisterSelf: () => void
@@ -899,6 +933,16 @@ function MenuView(p: {
             </div>
           </div>
           <div style={{ fontSize: 22, color: '#FF7AAE' }}>→</div>
+        </button>
+        <button type="button" onClick={p.onChooseFashion} style={menuCardFashion}>
+          <div style={{ fontSize: 36 }}>👗</div>
+          <div style={{ flex: 1, textAlign: 'left' }}>
+            <div style={{ fontSize: 16, fontWeight: 900, color: '#fff' }}>ファッション占い</div>
+            <div style={{ fontSize: 11, color: '#ddd', marginTop: 4 }}>
+              運命の勝ち服系統 (Y2K/ガーリー/ストリート/モード/etc) + 今週の合言葉
+            </div>
+          </div>
+          <div style={{ fontSize: 22, color: '#C374FF' }}>→</div>
         </button>
       </div>
 
@@ -2010,6 +2054,164 @@ function ColorChip({ label, color, small }: {
 }
 
 // ====================================================
+// 部品: ファッション占い 結果ビュー
+// ====================================================
+function FashionResultView(p: {
+  userName: string
+  userBirth: { year: number; month: number; day: number }
+  catBreed: string
+  dogBreed: string
+  onBack: () => void
+}) {
+  const cat = getCatBreed(p.catBreed)
+  const dog = getDogBreed(p.dogBreed)
+  const reading = useMemo(() => buildFashionReading(p.userBirth), [p.userBirth])
+  const [copied, setCopied] = useState(false)
+  const shareText = useMemo(() => fashionShareText(p.userName, reading), [p.userName, reading])
+
+  const onShareLine = useCallback(() => {
+    shareToLine(shareText, SHARE_URL)
+    trackUranyanShared('line', 'life', `fashion:${reading.star}`)
+  }, [shareText, reading.star])
+  const onShareX = useCallback(() => {
+    shareToTwitter(shareText, SHARE_URL)
+    trackUranyanShared('twitter', 'life', `fashion:${reading.star}`)
+  }, [shareText, reading.star])
+  const onCopy = useCallback(async () => {
+    const ok = await copyToClipboard(`${shareText}\n${SHARE_URL}`)
+    if (ok) {
+      setCopied(true)
+      trackUranyanShared('copy_link', 'life', `fashion:${reading.star}`)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }, [shareText, reading.star])
+
+  return (
+    <div style={{ padding: '8px 16px 40px' }}>
+      <div style={resultCardStyle}>
+        <div style={{ textAlign: 'center', fontSize: 11, color: '#A29BFE', letterSpacing: 2, marginBottom: 4 }}>
+          うらにゃん。 / ファッション占い
+        </div>
+        <div style={{ textAlign: 'center', fontSize: 14, color: '#bbb', marginBottom: 4 }}>
+          {p.userName} の運命の勝ち服系統
+        </div>
+
+        {/* 系統ヘッドライン */}
+        <div style={{
+          textAlign: 'center', padding: '16px 14px', borderRadius: 16, marginTop: 8,
+          background: `linear-gradient(135deg, ${hex2rgba(reading.palette[0]?.hex ?? '#C374FF', 0.20)}, rgba(255,255,255,0.04))`,
+          border: `1px solid ${hex2rgba(reading.palette[0]?.hex ?? '#C374FF', 0.40)}`,
+        }}>
+          <div style={{ fontSize: 22, fontWeight: 900, color: '#fff' }}>
+            👗 {reading.style.headline}
+          </div>
+          <div style={{ fontSize: 12, color: '#ddd', marginTop: 6, fontStyle: 'italic' }}>
+            {reading.style.vibe}
+          </div>
+          <div style={{
+            display: 'inline-block', marginTop: 10, padding: '4px 12px', borderRadius: 999,
+            background: 'rgba(255,210,74,0.20)', border: '1px solid rgba(255,210,74,0.40)',
+            fontSize: 12, fontWeight: 800, color: '#FFD24A',
+          }}>
+            合言葉: {reading.style.weeklyMantra}
+          </div>
+        </div>
+
+        {/* 勝ち服 */}
+        <div style={{
+          marginTop: 14, padding: '12px 14px', borderRadius: 12,
+          background: 'rgba(94,226,200,0.10)', border: '1px solid rgba(94,226,200,0.30)',
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: '#5EE2C8', letterSpacing: 1, marginBottom: 6 }}>
+            🏆 勝ち服アイテム
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#eee', lineHeight: 1.7 }}>
+            {reading.style.winItems.map(item => <li key={item}>{item}</li>)}
+          </ul>
+        </div>
+
+        {/* NG */}
+        <div style={{
+          marginTop: 10, padding: '12px 14px', borderRadius: 12,
+          background: 'rgba(255,107,107,0.10)', border: '1px solid rgba(255,107,107,0.30)',
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: '#FF6B6B', letterSpacing: 1, marginBottom: 6 }}>
+            🙅 NG 服装
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#eee', lineHeight: 1.7 }}>
+            {reading.style.ngItems.map(item => <li key={item}>{item}</li>)}
+          </ul>
+        </div>
+
+        {/* カラーパレット */}
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: '#A29BFE', letterSpacing: 1, marginBottom: 6 }}>
+            🎨 ラッキーカラーパレット ({reading.paletteElement})
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {reading.palette.map(c => (
+              <div key={c.hex} style={{
+                padding: '12px 8px', borderRadius: 10,
+                background: hex2rgba(c.hex, 0.12),
+                border: `1px solid ${hex2rgba(c.hex, 0.40)}`,
+                textAlign: 'center',
+              }}>
+                <div style={{
+                  width: 32, height: 32, margin: '0 auto', borderRadius: '50%',
+                  background: c.hex, border: '2px solid rgba(255,255,255,0.5)',
+                }}/>
+                <div style={{ fontSize: 11, color: '#fff', fontWeight: 700, marginTop: 6 }}>{c.name}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* アクセント */}
+        <div style={{
+          marginTop: 12, padding: '12px 14px', borderRadius: 12,
+          background: 'rgba(255,210,74,0.08)', border: '1px solid rgba(255,210,74,0.30)',
+          fontSize: 13, color: '#fff5d8',
+        }}>
+          <span style={{ fontSize: 10, fontWeight: 800, color: '#FFD24A', letterSpacing: 1 }}>✨ 今週のアクセント</span>
+          <div style={{ marginTop: 4, fontWeight: 700 }}>{reading.accent}</div>
+        </div>
+
+        {/* 掛け合い */}
+        <div style={{ ...dialogRow, marginTop: 14 }}>
+          <CatIcon breed={cat} size={32} />
+          <div style={bubbleNyan}>
+            <div style={bubbleSpeaker}>ニャンじろう</div>
+            {reading.nyanLine}
+          </div>
+        </div>
+        <div style={{ ...dialogRow, marginTop: 8 }}>
+          <DogIcon breed={dog} size={32} />
+          <div style={bubblePochi}>
+            <div style={bubbleSpeaker}>ポチ</div>
+            {reading.pochiLine}
+          </div>
+        </div>
+
+        <ShareFooter />
+      </div>
+
+      <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <button type="button" onClick={onShareLine} style={{ ...primaryBtn, background: '#06C755' }}>💬 LINE</button>
+          <button type="button" onClick={onShareX} style={{ ...primaryBtn, background: '#000' }}>🐦 X</button>
+        </div>
+        <button type="button" onClick={onCopy} style={{ ...secondaryBtn, width: '100%' }}>
+          {copied ? '✅ コピー完了' : '🔗 結果テキストをコピー'}
+        </button>
+        <button type="button" onClick={p.onBack} style={{ ...secondaryBtn, width: '100%', background: 'transparent' }}>
+          メニューへ戻る
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ====================================================
 // 部品: 期間限定占い ピッカー & 結果
 // ====================================================
 function PickPeriodView(p: {
@@ -2861,6 +3063,14 @@ const menuCardPeriod: React.CSSProperties = {
   padding: '18px 16px', borderRadius: 16,
   background: 'linear-gradient(135deg, rgba(255,122,174,0.20), rgba(255,159,28,0.14))',
   border: '1px solid rgba(255,122,174,0.30)',
+  cursor: 'pointer',
+}
+
+const menuCardFashion: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 14,
+  padding: '18px 16px', borderRadius: 16,
+  background: 'linear-gradient(135deg, rgba(195,116,255,0.20), rgba(255,210,74,0.12))',
+  border: '1px solid rgba(195,116,255,0.30)',
   cursor: 'pointer',
 }
 
