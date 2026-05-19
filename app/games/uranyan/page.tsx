@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import {
@@ -16,6 +16,7 @@ import {
   type PeriodPreset,
 } from '../../lib/uranyan/period'
 import { buildFashionReading, fashionShareText } from '../../lib/uranyan/fashion'
+import { shareOrDownloadImage, buildImageFileName } from '../../lib/uranyan/imageExport'
 import {
   saveReading, loadReadings, reviewReading, deleteReading, isReviewable,
   buildLifeSavePayload, buildCompatSavePayload, buildGroupCompatSavePayload,
@@ -1482,10 +1483,11 @@ function LifeResultView(p: ResultActionProps & {
     { name: p.target.name, year: p.target.birth_year, month: p.target.birth_month, day: p.target.birth_day },
     reading,
   ), [p.target, reading])
+  const cardRef = useRef<HTMLDivElement>(null)
 
   return (
     <div style={{ padding: '8px 16px 40px' }}>
-      <div style={resultCardStyle}>
+      <div ref={cardRef} style={resultCardStyle}>
         <div style={{ textAlign: 'center', fontSize: 11, color: '#A29BFE', letterSpacing: 2, marginBottom: 4 }}>
           うらにゃん。 / 天命トリセツ (算命学)
         </div>
@@ -1515,6 +1517,8 @@ function LifeResultView(p: ResultActionProps & {
           result_summary: savePayload.result_summary,
           result_payload: savePayload.result_payload,
         }}
+        cardRef={cardRef}
+        fileNameBase={`life_${p.target.name}`}
       />
     </div>
   )
@@ -1623,9 +1627,10 @@ function CompatResultView(p: ResultActionProps & {
     compat,
   ), [p.a, p.b, compat])
   const tone = fortuneColor(compat.template.fortune)
+  const cardRef = useRef<HTMLDivElement>(null)
   return (
     <div style={{ padding: '8px 16px 40px' }}>
-      <div style={resultCardStyle}>
+      <div ref={cardRef} style={resultCardStyle}>
         <div style={{ textAlign: 'center', fontSize: 11, color: '#A29BFE', letterSpacing: 2, marginBottom: 4 }}>
           うらにゃん。 / 相性診断 (宿曜)
         </div>
@@ -1699,6 +1704,8 @@ function CompatResultView(p: ResultActionProps & {
           result_summary: savePayload.result_summary,
           result_payload: savePayload.result_payload,
         }}
+        cardRef={cardRef}
+        fileNameBase={`compat_${p.a.name}_${p.b.name}`}
       />
     </div>
   )
@@ -1728,6 +1735,8 @@ function ResultActions(p: ResultActionProps & {
   saveInput: SaveInput
   onBack: () => void
   backLabel: string
+  cardRef?: React.RefObject<HTMLDivElement | null>
+  fileNameBase?: string
 }) {
   const [copied, setCopied] = useState(false)
 
@@ -1760,6 +1769,9 @@ function ResultActions(p: ResultActionProps & {
           ...primaryBtn, background: '#000',
         }}>🐦 X</button>
       </div>
+      {p.cardRef && (
+        <ImageSaveButton cardRef={p.cardRef} fileNameBase={p.fileNameBase ?? p.menu} />
+      )}
       <button type="button" onClick={onCopy} style={{ ...secondaryBtn, width: '100%' }}>
         {copied ? '✅ コピー完了' : '🔗 結果テキストをコピー'}
       </button>
@@ -1790,6 +1802,45 @@ function ResultActions(p: ResultActionProps & {
         />
       )}
     </div>
+  )
+}
+
+// ====================================================
+// 部品: 結果カードを PNG 画像化してシェア/保存
+// ====================================================
+function ImageSaveButton({ cardRef, fileNameBase }: {
+  cardRef: React.RefObject<HTMLDivElement | null>
+  fileNameBase: string
+}) {
+  const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState<null | 'shared' | 'downloaded' | 'failed'>(null)
+  const onTap = useCallback(async () => {
+    if (!cardRef.current) return
+    setBusy(true)
+    setStatus(null)
+    const r = await shareOrDownloadImage(cardRef.current, buildImageFileName('uranyan', fileNameBase))
+    setStatus(r)
+    setBusy(false)
+    setTimeout(() => setStatus(null), 3000)
+  }, [cardRef, fileNameBase])
+
+  const label =
+    busy ? '生成中…' :
+    status === 'shared' ? '✅ シェア完了' :
+    status === 'downloaded' ? '✅ 画像を保存しました' :
+    status === 'failed' ? '❌ 画像化に失敗 (再試行してね)' :
+    '📸 画像で保存・シェア'
+
+  return (
+    <button type="button" onClick={onTap} disabled={busy} style={{
+      ...secondaryBtn, width: '100%',
+      background: status === 'failed' ? 'rgba(255,107,107,0.10)' :
+                  status ? 'rgba(94,226,200,0.10)' : 'rgba(255,255,255,0.04)',
+      borderColor: status === 'failed' ? 'rgba(255,107,107,0.40)' :
+                   status ? '#5EE2C8' : 'var(--fm-border)',
+      color: status === 'failed' ? '#FF6B6B' : status ? '#5EE2C8' : '#fff',
+      cursor: busy ? 'wait' : 'pointer',
+    }}>{label}</button>
   )
 }
 
@@ -1908,6 +1959,7 @@ function TodayResultView(p: {
   const t = p.today
   const [copied, setCopied] = useState(false)
   const shareText = useMemo(() => dailyShareText(p.userName, t), [p.userName, t])
+  const cardRef = useRef<HTMLDivElement>(null)
 
   const onShareLine = useCallback(() => {
     shareToLine(shareText, SHARE_URL)
@@ -1928,7 +1980,7 @@ function TodayResultView(p: {
 
   return (
     <div style={{ padding: '8px 16px 40px' }}>
-      <div style={resultCardStyle}>
+      <div ref={cardRef} style={resultCardStyle}>
         <div style={{ textAlign: 'center', fontSize: 11, color: '#A29BFE', letterSpacing: 2, marginBottom: 4 }}>
           うらにゃん。 / 今日の運勢
         </div>
@@ -1999,6 +2051,7 @@ function TodayResultView(p: {
           <button type="button" onClick={onShareLine} style={{ ...primaryBtn, background: '#06C755' }}>💬 LINE</button>
           <button type="button" onClick={onShareX} style={{ ...primaryBtn, background: '#000' }}>🐦 X</button>
         </div>
+        <ImageSaveButton cardRef={cardRef} fileNameBase={`today_${t.todayDateStr}`} />
         <button type="button" onClick={onCopy} style={{ ...secondaryBtn, width: '100%' }}>
           {copied ? '✅ コピー完了' : '🔗 結果テキストをコピー'}
         </button>
@@ -2068,6 +2121,7 @@ function FashionResultView(p: {
   const reading = useMemo(() => buildFashionReading(p.userBirth), [p.userBirth])
   const [copied, setCopied] = useState(false)
   const shareText = useMemo(() => fashionShareText(p.userName, reading), [p.userName, reading])
+  const cardRef = useRef<HTMLDivElement>(null)
 
   const onShareLine = useCallback(() => {
     shareToLine(shareText, SHARE_URL)
@@ -2088,7 +2142,7 @@ function FashionResultView(p: {
 
   return (
     <div style={{ padding: '8px 16px 40px' }}>
-      <div style={resultCardStyle}>
+      <div ref={cardRef} style={resultCardStyle}>
         <div style={{ textAlign: 'center', fontSize: 11, color: '#A29BFE', letterSpacing: 2, marginBottom: 4 }}>
           うらにゃん。 / ファッション占い
         </div>
@@ -2203,6 +2257,7 @@ function FashionResultView(p: {
         <button type="button" onClick={onCopy} style={{ ...secondaryBtn, width: '100%' }}>
           {copied ? '✅ コピー完了' : '🔗 結果テキストをコピー'}
         </button>
+        <ImageSaveButton cardRef={cardRef} fileNameBase={`fashion_${reading.star}`} />
         <button type="button" onClick={p.onBack} style={{ ...secondaryBtn, width: '100%', background: 'transparent' }}>
           メニューへ戻る
         </button>
@@ -2351,10 +2406,11 @@ function PeriodResultView(p: ResultActionProps & {
     p.periodLabel,
     reading,
   ), [p.userName, p.userBirth, p.periodLabel, reading])
+  const cardRef = useRef<HTMLDivElement>(null)
 
   return (
     <div style={{ padding: '8px 16px 40px' }}>
-      <div style={resultCardStyle}>
+      <div ref={cardRef} style={resultCardStyle}>
         <div style={{ textAlign: 'center', fontSize: 11, color: '#A29BFE', letterSpacing: 2, marginBottom: 4 }}>
           うらにゃん。 / 期間限定占い
         </div>
@@ -2461,6 +2517,8 @@ function PeriodResultView(p: ResultActionProps & {
           period_start: p.startISO,
           period_end: p.endISO,
         }}
+        cardRef={cardRef}
+        fileNameBase={`period_${p.periodLabel}`}
       />
     </div>
   )
@@ -2587,10 +2645,11 @@ function GroupResultView(p: ResultActionProps & {
     p.members.map(m => ({ name: m.name, year: m.birth_year, month: m.birth_month, day: m.birth_day })),
     reading,
   ), [p.members, reading])
+  const cardRef = useRef<HTMLDivElement>(null)
 
   return (
     <div style={{ padding: '8px 16px 40px' }}>
-      <div style={resultCardStyle}>
+      <div ref={cardRef} style={resultCardStyle}>
         <div style={{ textAlign: 'center', fontSize: 11, color: '#A29BFE', letterSpacing: 2, marginBottom: 4 }}>
           うらにゃん。 / グループ相性 (宿曜)
         </div>
@@ -2686,6 +2745,8 @@ function GroupResultView(p: ResultActionProps & {
           result_summary: savePayload.result_summary,
           result_payload: savePayload.result_payload,
         }}
+        cardRef={cardRef}
+        fileNameBase={`group_${p.members.length}nin`}
       />
     </div>
   )
