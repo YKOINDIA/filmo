@@ -121,6 +121,11 @@ export const trackUranyanShared = (
   resultSummary: string,
 ) => track('uranyan_shared', { share_channel: channel, menu, result_summary: resultSummary })
 
+// メニュー画面からの「うらにゃん。」自体の共有 (友達に教える)
+export const trackUranyanAppShared = (
+  channel: 'twitter' | 'line' | 'copy_link',
+) => track('uranyan_app_shared', { share_channel: channel })
+
 export const trackUranyanSaved = (menu: 'life' | 'compat' | 'group_compat', withPeriod: boolean) =>
   track('uranyan_saved', { menu, with_period: withPeriod })
 
