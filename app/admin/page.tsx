@@ -510,7 +510,15 @@ export default function AdminPage() {
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--fm-bg)', padding: 16 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 16 }}>🎬 Filmo 管理画面</h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>🎬 Filmo 管理画面</h1>
+        <a href="/admin/uranyan-quality" style={{
+          fontSize: 12, padding: '6px 12px', borderRadius: 8,
+          background: 'linear-gradient(90deg, rgba(255,122,174,0.20), rgba(195,116,255,0.16))',
+          border: '1px solid rgba(255,122,174,0.30)',
+          color: '#fff', textDecoration: 'none', fontWeight: 600,
+        }}>🔮 うらにゃん品質管理 →</a>
+      </div>
 
       {/* タブ */}
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 20, paddingBottom: 4 }}>

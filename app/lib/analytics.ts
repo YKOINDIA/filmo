@@ -110,10 +110,22 @@ export const trackProfileShared = (channel: 'twitter' | 'line' | 'copy_link' | '
   track('profile_shared', { share_channel: channel })
 
 export const trackMinigameShared = (
-  channel: 'twitter' | 'system' | 'copy_link',
+  channel: 'twitter' | 'line' | 'native' | 'system' | 'copy_link',
   correctCount: number,
   score: number,
 ) => track('minigame_shared', { share_channel: channel, correct_count: correctCount, score })
+
+export const trackUranyanShared = (
+  channel: 'twitter' | 'line' | 'native' | 'copy_link',
+  menu: 'life' | 'compat' | 'group_compat',
+  resultSummary: string,
+) => track('uranyan_shared', { share_channel: channel, menu, result_summary: resultSummary })
+
+export const trackUranyanSaved = (menu: 'life' | 'compat' | 'group_compat', withPeriod: boolean) =>
+  track('uranyan_saved', { menu, with_period: withPeriod })
+
+export const trackUranyanReviewed = (menu: 'life' | 'compat' | 'group_compat', rating: number) =>
+  track('uranyan_reviewed', { menu, rating })
 
 export const trackSignUp = (method: 'email' | 'google' | 'apple') =>
   track('sign_up', { method })

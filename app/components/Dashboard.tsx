@@ -559,6 +559,37 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
         </div>
       </section>
 
+      {/* うらにゃん。占い (算命学 × 宿曜) */}
+      <section style={{ padding: '0 24px', marginTop: 12, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <span style={{ fontSize: 22 }}>🔮</span>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#fff', margin: 0 }}>
+            うらにゃん。
+          </h2>
+        </div>
+        <Link
+          href="/games/uranyan"
+          style={{
+            display: 'block', padding: 18, borderRadius: 16,
+            background: 'linear-gradient(135deg, rgba(255,122,174,0.25), rgba(195,116,255,0.18))',
+            border: '1px solid rgba(255,122,174,0.35)',
+            textDecoration: 'none', color: 'inherit',
+          }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ fontSize: 36 }}>🐱🐶</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>
+                毒舌な猫とおちゃめな犬の占い
+              </div>
+              <div style={{ fontSize: 12, color: '#ddd', marginTop: 4, lineHeight: 1.5 }}>
+                算命学で性格分析、宿曜で相性診断。<br />友達・家族・推しの生年月日を登録して占おう
+              </div>
+            </div>
+            <div style={{ fontSize: 22, color: '#FFD24A' }}>→</div>
+          </div>
+        </Link>
+      </section>
+
       {/* Filmo ゲーム */}
       <section style={{ padding: '0 24px', marginTop: 12, marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
