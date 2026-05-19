@@ -100,8 +100,8 @@ export default function LoginPrompt({ title, subtitle, onAuthenticated }: LoginP
 
   return (
     <div style={{
-      minHeight: '60dvh', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', padding: 20,
+      minHeight: '60dvh', display: 'flex', alignItems: 'flex-start',
+      justifyContent: 'center', padding: '20px 20px 40px',
     }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>

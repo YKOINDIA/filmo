@@ -397,6 +397,53 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
         </div>
       ) : null}
 
+      {/* Filmo ゲーム (Hero 直下、横スクロール式) */}
+      <section style={{ marginTop: 24, marginBottom: 8 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 24px', marginBottom: 14,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 22 }}>🎮</span>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: '#fff', margin: 0 }}>
+              Filmo ゲーム
+            </h2>
+          </div>
+        </div>
+        <div
+          className="filmo-scroll-row"
+          style={{
+            display: 'flex', overflowX: 'auto', overflowY: 'hidden',
+            gap: 14, padding: '0 24px 12px',
+            scrollSnapType: 'x mandatory',
+            WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'none', msOverflowStyle: 'none',
+          }}>
+          <GameCard
+            href="/games/emoji"
+            emoji="🚢💎🥶"
+            title="絵文字タイトル当て"
+            subtitle="絵文字から作品を当てる"
+            gradient="linear-gradient(160deg, #6c5ce7 0%, #00c030 100%)"
+          />
+          <GameCard
+            href="/games/crystal-blast"
+            emoji="💎"
+            title="CRYSTAL BLAST"
+            subtitle="連鎖でぶっ飛ばせ！"
+            gradient="linear-gradient(160deg, #ff5757 0%, #c374ff 100%)"
+            badge="対戦はログイン必須"
+          />
+          <GameCard
+            href="/games/minesweeper"
+            emoji="💣"
+            title="Minesweeper"
+            subtitle="古典マインスイーパ"
+            gradient="linear-gradient(160deg, #6366f1 0%, #ef4444 100%)"
+          />
+        </div>
+      </section>
+
       {/* あなたへのおすすめ (プロフィール属性ベース) */}
       {!forYouLoading && forYou.length > 0 && (
         <Section
@@ -559,80 +606,6 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
         </div>
       </section>
 
-      {/* Filmo ゲーム */}
-      <section style={{ padding: '0 24px', marginTop: 12, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-          <span style={{ fontSize: 22 }}>🎮</span>
-          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#fff', margin: 0 }}>
-            Filmo ゲーム
-          </h2>
-        </div>
-        <div style={{ display: 'grid', gap: 10 }}>
-          <Link
-            href="/games/emoji"
-            style={{
-              display: 'block', padding: 16, borderRadius: 14,
-              background: 'linear-gradient(135deg, rgba(108,92,231,0.18), rgba(0,192,48,0.10))',
-              border: '1px solid var(--fm-border)',
-              textDecoration: 'none', color: 'inherit',
-            }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 28 }}>🚢💎🥶</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>絵文字タイトル当て</div>
-                <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
-                  絵文字から作品名を当てよう。全10問でスコアを競おう
-                </div>
-              </div>
-              <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
-            </div>
-          </Link>
-          <Link
-            href="/games/crystal-blast"
-            style={{
-              display: 'block', padding: 16, borderRadius: 14,
-              background: 'linear-gradient(135deg, rgba(255,87,87,0.18), rgba(195,116,255,0.14))',
-              border: '1px solid var(--fm-border)',
-              textDecoration: 'none', color: 'inherit',
-            }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 28 }}>💎</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>CRYSTAL BLAST</div>
-                <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
-                  連鎖でぶっ飛ばせ！　ソロも対戦も
-                </div>
-                <div style={{
-                  fontSize: 11, color: '#ffd24a', marginTop: 6, fontWeight: 600,
-                }}>
-                  ⚔️ オンライン対戦はログインが必要です！
-                </div>
-              </div>
-              <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
-            </div>
-          </Link>
-          <Link
-            href="/games/minesweeper"
-            style={{
-              display: 'block', padding: 16, borderRadius: 14,
-              background: 'linear-gradient(135deg, rgba(99,102,241,0.20), rgba(239,68,68,0.10))',
-              border: '1px solid var(--fm-border)',
-              textDecoration: 'none', color: 'inherit',
-            }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 28 }}>💣</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Minesweeper</div>
-                <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
-                  古典マインスイーパ。3難易度・ベストタイム争い
-                </div>
-              </div>
-              <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
-            </div>
-          </Link>
-        </div>
-      </section>
-
       {/* ジャンルで探す */}
       <section style={{ padding: '0 24px', marginTop: 12, marginBottom: 32 }}>
         <div style={{
@@ -685,6 +658,76 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
         </div>
       </section>
     </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Game card (horizontal scroll row tile)                              */
+/* ------------------------------------------------------------------ */
+
+function GameCard({
+  href, emoji, title, subtitle, gradient, badge,
+}: {
+  href: string
+  emoji: string
+  title: string
+  subtitle: string
+  gradient: string
+  badge?: string
+}) {
+  return (
+    <Link
+      href={href}
+      className="filmo-poster-card"
+      style={{
+        flexShrink: 0,
+        width: 160,
+        height: 210,
+        borderRadius: 14,
+        background: gradient,
+        boxShadow: '0 6px 18px rgba(0,0,0,0.35)',
+        scrollSnapAlign: 'start',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        padding: 14,
+        textDecoration: 'none',
+        color: '#fff',
+        position: 'relative',
+        overflow: 'hidden',
+        transition: 'transform 0.25s ease',
+      }}
+    >
+      <div style={{ fontSize: 36, lineHeight: 1.1, letterSpacing: 2 }}>{emoji}</div>
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.25, marginBottom: 4 }}>
+          {title}
+        </div>
+        <div style={{ fontSize: 11, opacity: 0.85, lineHeight: 1.4 }}>
+          {subtitle}
+        </div>
+        {badge && (
+          <div style={{
+            marginTop: 6, fontSize: 9, fontWeight: 700,
+            background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)',
+            padding: '2px 6px', borderRadius: 4,
+            display: 'inline-block',
+          }}>
+            ⚔️ {badge}
+          </div>
+        )}
+        <div style={{
+          marginTop: 8,
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          fontSize: 11, fontWeight: 700,
+          background: 'rgba(255,255,255,0.18)',
+          backdropFilter: 'blur(4px)',
+          padding: '4px 10px', borderRadius: 12,
+        }}>
+          ▶ PLAY
+        </div>
+      </div>
+    </Link>
   )
 }
 
