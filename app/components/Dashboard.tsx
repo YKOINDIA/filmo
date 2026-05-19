@@ -643,6 +643,28 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
             </div>
           </Link>
           <Link
+            href="/games/filmius"
+            style={{
+              display: 'block', padding: 16, borderRadius: 14,
+              background: 'linear-gradient(135deg, rgba(255,210,74,0.18), rgba(108,242,255,0.10))',
+              border: '1px solid var(--fm-border)',
+              textDecoration: 'none', color: 'inherit',
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 28 }}>🚀</div>
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontSize: 15, fontWeight: 700, color: '#fff',
+                  fontFamily: 'monospace', letterSpacing: 2,
+                }}>FILMIUS</div>
+                <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
+                  横スクロール・シューティング。3ステージ+ボス戦
+                </div>
+              </div>
+              <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
+            </div>
+          </Link>
+          <Link
             href="/games/minesweeper"
             style={{
               display: 'block', padding: 16, borderRadius: 14,
