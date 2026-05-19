@@ -1,5 +1,5 @@
 // ============================================================
-// うらにゃん。: グループ相性 (3〜8人) — 宿曜ベース
+// うらにゃん。: グループ相性 (3〜30人) — 宿曜ベース
 // ============================================================
 // 全ペアの宿曜相性を計算してまとめる:
 //   - members[i] と members[j] の関係 + 吉凶
@@ -84,8 +84,8 @@ function roleOf(memberAvg: number, groupAvg: number): string {
 // 公開: グループ相性算出
 // ─────────────────────────────────────────────────────────────
 export function buildGroupCompatReading(members: GroupMember[]): GroupCompatReading {
-  if (members.length < 3 || members.length > 8) {
-    throw new Error('グループ相性は 3〜8 人で計算します')
+  if (members.length < 3 || members.length > 30) {
+    throw new Error('グループ相性は 3〜30 人で計算します')
   }
   // 各メンバーの宿を事前計算
   const withMansion = members.map(m => ({
