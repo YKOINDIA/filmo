@@ -13,8 +13,9 @@ import { supabase } from '../supabase'
 import type { LifeReading } from './templates'
 import type { CompatibilityReading } from './compatTemplates'
 import type { GroupCompatReading } from './groupCompat'
+import type { PeriodReading } from './period'
 
-export type ReadingMenu = 'life' | 'compat' | 'group_compat'
+export type ReadingMenu = 'life' | 'compat' | 'group_compat' | 'period'
 
 export interface ReadingRow {
   id: string
@@ -62,6 +63,19 @@ export function buildCompatSavePayload(
     target_birthdates: [isoDate(a.year, a.month, a.day), isoDate(b.year, b.month, b.day)],
     result_summary: reading.relation,
     result_payload: reading,
+  }
+}
+
+export function buildPeriodSavePayload(
+  user: { name: string; year: number; month: number; day: number },
+  periodLabel: string,
+  reading: PeriodReading,
+): { target_names: string[]; target_birthdates: string[]; result_summary: string; result_payload: unknown } {
+  return {
+    target_names: [user.name],
+    target_birthdates: [isoDate(user.year, user.month, user.day)],
+    result_summary: `${reading.themeHeadline}:★${reading.avgRank}/5`,
+    result_payload: { ...reading, periodLabel },
   }
 }
 

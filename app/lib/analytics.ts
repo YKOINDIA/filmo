@@ -117,7 +117,7 @@ export const trackMinigameShared = (
 
 export const trackUranyanShared = (
   channel: 'twitter' | 'line' | 'native' | 'copy_link',
-  menu: 'life' | 'compat' | 'group_compat',
+  menu: 'life' | 'compat' | 'group_compat' | 'period',
   resultSummary: string,
 ) => track('uranyan_shared', { share_channel: channel, menu, result_summary: resultSummary })
 
@@ -126,10 +126,10 @@ export const trackUranyanAppShared = (
   channel: 'twitter' | 'line' | 'copy_link',
 ) => track('uranyan_app_shared', { share_channel: channel })
 
-export const trackUranyanSaved = (menu: 'life' | 'compat' | 'group_compat', withPeriod: boolean) =>
+export const trackUranyanSaved = (menu: 'life' | 'compat' | 'group_compat' | 'period', withPeriod: boolean) =>
   track('uranyan_saved', { menu, with_period: withPeriod })
 
-export const trackUranyanReviewed = (menu: 'life' | 'compat' | 'group_compat', rating: number) =>
+export const trackUranyanReviewed = (menu: 'life' | 'compat' | 'group_compat' | 'period', rating: number) =>
   track('uranyan_reviewed', { menu, rating })
 
 export const trackSignUp = (method: 'email' | 'google' | 'apple') =>
