@@ -456,6 +456,25 @@ export default function Page() {
                   <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
                 </div>
               </Link>
+              <Link
+                href="/games/minesweeper"
+                style={{
+                  display: 'block', marginTop: 8, padding: 16, borderRadius: 14,
+                  background: 'linear-gradient(135deg, rgba(99,102,241,0.20), rgba(239,68,68,0.10))',
+                  border: '1px solid var(--fm-border)',
+                  textDecoration: 'none', color: 'inherit',
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ fontSize: 28 }}>💣</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700 }}>Minesweeper</div>
+                    <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginTop: 2 }}>
+                      古典マインスイーパ。3難易度・ベストタイム争い
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
+                </div>
+              </Link>
               <Gamification userId={user.id} />
             </div>
           </div>

@@ -42,6 +42,10 @@ export const POINT_CONFIG = {
   MINIGAME_CORRECT: 3,          // 1問正解
   MINIGAME_PERFECT: 30,         // 10/10 ボーナス
   MINIGAME_DAILY_CAP: 100,      // 1日のミニゲーム獲得上限
+  // ミニゲーム (Minesweeper)
+  MINESWEEPER_WIN_EASY: 5,
+  MINESWEEPER_WIN_NORMAL: 15,
+  MINESWEEPER_WIN_HARD: 30,
 }
 
 export const addPoints = async (userId: string, pts: number, reason: string): Promise<void> => {
