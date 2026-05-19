@@ -7,10 +7,12 @@ import { addPoints, POINT_CONFIG } from '../../lib/points'
 import { trackMinigameShared } from '../../lib/analytics'
 import { shareToLine } from '../../lib/share'
 import { useFilmius, type FilmiusResult } from '../../lib/filmius/useGame'
-import { type Difficulty, LOGICAL_H, LOGICAL_W } from '../../lib/filmius/engine'
+import { type Difficulty, type ShipType, LOGICAL_H, LOGICAL_W, SHIPS } from '../../lib/filmius/engine'
 
 const SHARE_URL = 'https://filmo.me/games/filmius'
 const DIFFICULTY_STORAGE_KEY = 'filmius:difficulty'
+const SHIP_STORAGE_KEY = 'filmius:ship'
+const SHIP_ORDER: ShipType[] = ['standard', 'scout', 'heavy']
 
 // ====================================================
 // Types
@@ -75,10 +77,12 @@ function stageLabel(stageReached: number, cleared: boolean): string {
 
 function buildTweetText(r: FilmiusResult): string {
   const diff = DIFFICULTY_META[r.difficulty].label
+  const sh = SHIPS[r.ship].name
+  const tag = `[${sh}/${diff}]`
   const head = r.cleared
-    ? (r.noMiss ? `🎬 [${diff}] ノーミス全クリア！ Filmius スコア ${r.score}!`
-                : `🎬 [${diff}] Filmius 全クリ！ スコア ${r.score}!`)
-    : `🎬 [${diff}] Filmius STAGE ${r.stageReached} まで到達 / スコア ${r.score}!`
+    ? (r.noMiss ? `🎬 ${tag} ノーミス全クリア！ Filmius スコア ${r.score}!`
+                : `🎬 ${tag} Filmius 全クリ！ スコア ${r.score}!`)
+    : `🎬 ${tag} Filmius STAGE ${r.stageReached} まで到達 / スコア ${r.score}!`
   return `${head}\n\nFilmoの横スクロールシューティング、挑戦してみて👇\n\n#Filmo #Filmius`
 }
 
@@ -93,6 +97,7 @@ export default function FilmiusPage() {
   const [newBest, setNewBest] = useState(false)
   const [stats, setStats] = useState<StatsByDifficulty>(EMPTY_STATS)
   const [difficulty, setDifficulty] = useState<Difficulty>('normal')
+  const [ship, setShip] = useState<ShipType>('standard')
   const [leaderboardDifficulty, setLeaderboardDifficulty] = useState<Difficulty>('normal')
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [leaderboardLoading, setLeaderboardLoading] = useState(false)
@@ -102,15 +107,19 @@ export default function FilmiusPage() {
   const playAreaRef = useRef<HTMLDivElement | null>(null)
   const canvasBoxRef = useRef<HTMLDivElement | null>(null)
 
-  // ─── localStorage で最後に選んだ難易度を復元 ────────────────
+  // ─── localStorage で最後に選んだ難易度 / 機体を復元 ────────────────
   // SSR ハイドレーション後にクライアントで読み込むため、effect 内 setState は意図的。
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(DIFFICULTY_STORAGE_KEY) as Difficulty | null
-      if (saved === 'easy' || saved === 'normal' || saved === 'hard') {
+      const savedDiff = window.localStorage.getItem(DIFFICULTY_STORAGE_KEY) as Difficulty | null
+      if (savedDiff === 'easy' || savedDiff === 'normal' || savedDiff === 'hard') {
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        setDifficulty(saved)
-        setLeaderboardDifficulty(saved)
+        setDifficulty(savedDiff)
+        setLeaderboardDifficulty(savedDiff)
+      }
+      const savedShip = window.localStorage.getItem(SHIP_STORAGE_KEY) as ShipType | null
+      if (savedShip === 'standard' || savedShip === 'scout' || savedShip === 'heavy') {
+        setShip(savedShip)
       }
     } catch { /* ignore */ }
   }, [])
@@ -119,6 +128,11 @@ export default function FilmiusPage() {
     setDifficulty(d)
     setLeaderboardDifficulty(d)
     try { window.localStorage.setItem(DIFFICULTY_STORAGE_KEY, d) } catch { /* ignore */ }
+  }
+
+  function selectShip(s: ShipType) {
+    setShip(s)
+    try { window.localStorage.setItem(SHIP_STORAGE_KEY, s) } catch { /* ignore */ }
   }
 
   // ─── 戦績 (難易度別) ─────────────────────────────
@@ -221,6 +235,7 @@ export default function FilmiusPage() {
         enemies_killed: r.enemiesKilled,
         duration_ms: r.durationMs,
         difficulty: r.difficulty,
+        ship: r.ship,
       })
       if (r.score > stats[r.difficulty].best_score) setNewBest(true)
       const pts = await awardClearPoints(userId, r)
@@ -262,7 +277,8 @@ export default function FilmiusPage() {
     setPhase('playing')
     // canvas のマウントを待ってから start
     const d = difficulty
-    setTimeout(() => game.start(d), 0)
+    const sh = ship
+    setTimeout(() => game.start(d, sh), 0)
   }
 
   function backToMenu() {
@@ -337,6 +353,8 @@ export default function FilmiusPage() {
           stats={stats}
           difficulty={difficulty}
           onSelectDifficulty={selectDifficulty}
+          ship={ship}
+          onSelectShip={selectShip}
           leaderboard={leaderboard}
           leaderboardDifficulty={leaderboardDifficulty}
           onSelectLeaderboardDifficulty={setLeaderboardDifficulty}
@@ -457,12 +475,15 @@ export default function FilmiusPage() {
 // ====================================================
 function MenuView({
   stats, difficulty, onSelectDifficulty,
+  ship, onSelectShip,
   leaderboard, leaderboardDifficulty, onSelectLeaderboardDifficulty,
   leaderboardLoading, onStart,
 }: {
   stats: StatsByDifficulty
   difficulty: Difficulty
   onSelectDifficulty: (d: Difficulty) => void
+  ship: ShipType
+  onSelectShip: (s: ShipType) => void
   leaderboard: LeaderboardEntry[]
   leaderboardDifficulty: Difficulty
   onSelectLeaderboardDifficulty: (d: Difficulty) => void
@@ -470,6 +491,7 @@ function MenuView({
   onStart: () => void
 }) {
   const currentStat = stats[difficulty]
+  const shipConfig = SHIPS[ship]
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 16px' }}>
       {/* タイトル */}
@@ -484,6 +506,67 @@ function MenuView({
         <div style={{
           fontSize: 12, color: '#6cf2ff', letterSpacing: 4, marginTop: 4,
         }}>FILMO × HORIZONTAL SHOOTER</div>
+      </div>
+
+      {/* 機体選択 */}
+      <div style={{
+        padding: 14, borderRadius: 12, marginBottom: 12,
+        background: `linear-gradient(135deg, ${shipConfig.color}1a, rgba(255,255,255,0.02))`,
+        border: `1px solid ${shipConfig.color}55`,
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+          marginBottom: 10,
+        }}>
+          <div style={{
+            fontSize: 11, color: '#aaa',
+            fontFamily: 'monospace', letterSpacing: 2,
+          }}>▸ CHOOSE YOUR SHIP</div>
+          <div style={{
+            fontSize: 10, color: shipConfig.color,
+            fontFamily: 'monospace', letterSpacing: 1, fontWeight: 700,
+          }}>{shipConfig.emoji} {shipConfig.name}</div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {SHIP_ORDER.map(sId => {
+            const sc = SHIPS[sId]
+            const selected = sId === ship
+            return (
+              <button
+                key={sId}
+                onClick={() => onSelectShip(sId)}
+                style={{
+                  padding: '10px 6px', borderRadius: 10,
+                  background: selected
+                    ? `linear-gradient(135deg, ${sc.color}44, ${sc.color}11)`
+                    : 'rgba(0,0,0,0.3)',
+                  border: `2px solid ${selected ? sc.color : 'rgba(255,255,255,0.1)'}`,
+                  color: selected ? sc.color : '#bbb',
+                  fontFamily: 'monospace', fontWeight: 800,
+                  cursor: 'pointer', touchAction: 'manipulation',
+                  textAlign: 'center',
+                }}>
+                <ShipIcon body={sc.color} trim={sc.trim} dimmed={!selected} />
+                <div style={{ fontSize: 12, letterSpacing: 1, marginTop: 4 }}>{sc.name}</div>
+                <div style={{
+                  fontSize: 9, color: selected ? sc.color : '#888',
+                  marginTop: 2, fontFamily: 'inherit', fontWeight: 500,
+                }}>{sc.subtitle}</div>
+              </button>
+            )
+          })}
+        </div>
+        {/* 現在選択中の機体ステータス */}
+        <div style={{
+          marginTop: 10, padding: '8px 10px', borderRadius: 8,
+          background: 'rgba(0,0,0,0.3)',
+          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8,
+          fontSize: 10, fontFamily: 'monospace',
+        }}>
+          <StatBar label="移動" value={shipConfig.speedMul} max={1.5} color={shipConfig.color} />
+          <StatBar label="連射" value={1 / shipConfig.fireCooldownMul} max={1.5} color={shipConfig.color} />
+          <StatBar label="火力" value={shipConfig.normalDamage} max={2} color={shipConfig.color} />
+        </div>
       </div>
 
       {/* 難易度選択 */}
@@ -536,7 +619,7 @@ function MenuView({
           border: 'none', borderRadius: 14, cursor: 'pointer',
           boxShadow: '0 4px 22px rgba(255,210,74,0.45)',
         }}>
-        ▶ INSERT COIN  [{DIFFICULTY_META[difficulty].label}]
+        ▶ INSERT COIN  [{shipConfig.name} / {DIFFICULTY_META[difficulty].label}]
       </button>
 
       {/* 操作説明 */}
@@ -676,6 +759,46 @@ function StatChip({ label, value, accent, mono }: {
   )
 }
 
+// 機体選択ボタン内の小アイコン
+function ShipIcon({ body, trim, dimmed }: { body: string; trim: string; dimmed?: boolean }) {
+  // engine の自機シェイプを簡易再現した SVG
+  return (
+    <svg viewBox="0 0 32 18" width="44" height="24"
+         style={{ display: 'block', margin: '0 auto', opacity: dimmed ? 0.55 : 1 }}>
+      {/* 噴射 */}
+      <rect x="0" y="8" width="4" height="2" fill="#a8e9ff" />
+      {/* 本体 (台形) */}
+      <polygon points="4,3 24,2 30,9 24,16 4,15" fill={body} />
+      {/* ハイライト */}
+      <rect x="6" y="5" width="14" height="1.5" fill={trim} />
+      {/* レンズ */}
+      <circle cx="26" cy="9" r="2" fill="#fff" />
+    </svg>
+  )
+}
+
+// 機体ステータス比較用の小バー
+function StatBar({ label, value, max, color }: {
+  label: string; value: number; max: number; color: string
+}) {
+  const pct = Math.min(100, (value / max) * 100)
+  return (
+    <div>
+      <div style={{ color: '#aaa', marginBottom: 2 }}>{label}</div>
+      <div style={{
+        height: 4, borderRadius: 2,
+        background: 'rgba(255,255,255,0.1)',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          width: `${pct}%`, height: '100%',
+          background: color, borderRadius: 2,
+        }} />
+      </div>
+    </div>
+  )
+}
+
 function LeaderRow({ rank, row }: { rank: number; row: LeaderboardEntry }) {
   const rankColor = rank === 1 ? '#ffd24a' : rank === 2 ? '#c0c0c0' : rank === 3 ? '#cd7f32' : '#888'
   return (
@@ -771,6 +894,9 @@ function ResultOverlay({
         display: 'flex', gap: 14, fontSize: 'clamp(10px, 2.4cqw, 13px)',
         color: '#aaa', flexWrap: 'wrap', justifyContent: 'center',
       }}>
+        <span style={{ color: SHIPS[result.ship].color }}>
+          {SHIPS[result.ship].emoji} {SHIPS[result.ship].name}
+        </span>
         <span style={{ color: DIFFICULTY_META[result.difficulty].color }}>
           {DIFFICULTY_META[result.difficulty].emoji} {DIFFICULTY_META[result.difficulty].label}
         </span>

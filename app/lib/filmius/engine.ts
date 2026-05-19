@@ -41,6 +41,42 @@ export const DIFFICULTY: Record<Difficulty, DifficultyConfig> = {
   hard:   { lives: 2, enemyHpMul: 1.4, enemyFireCooldownMul: 0.7, enemyBulletSpeedMul: 1.2 },
 }
 
+// ============================================
+// 機体タイプ
+// ============================================
+// マリオカート方式で開始前に選択。性能差で個性をつける。
+export type ShipType = 'standard' | 'scout' | 'heavy'
+
+export interface ShipConfig {
+  name: string
+  subtitle: string
+  emoji: string
+  color: string            // 本体色
+  trim: string             // ハイライト色
+  speedMul: number         // 移動速度倍率
+  fireCooldownMul: number  // 連射 cooldown 倍率 (小さいほど速い)
+  normalDamage: number     // 通常弾 1 発のダメージ
+  laserDamage: number      // レーザー 1 ヒットあたりのダメージ
+}
+
+export const SHIPS: Record<ShipType, ShipConfig> = {
+  standard: {
+    name: 'STANDARD', subtitle: '万能型',
+    emoji: '🛩️', color: '#6cf2ff', trim: '#ffffff',
+    speedMul: 1.0, fireCooldownMul: 1.0, normalDamage: 1, laserDamage: 2,
+  },
+  scout: {
+    name: 'SCOUT', subtitle: '軽量・高速連射',
+    emoji: '✈️', color: '#2ecc8a', trim: '#dffff0',
+    speedMul: 1.4, fireCooldownMul: 0.7, normalDamage: 1, laserDamage: 2,
+  },
+  heavy: {
+    name: 'HEAVY', subtitle: '重装甲・高火力',
+    emoji: '🚀', color: '#ff7a3f', trim: '#ffd9b3',
+    speedMul: 0.78, fireCooldownMul: 1.6, normalDamage: 2, laserDamage: 4,
+  },
+}
+
 // パワーアップゲージ (Gradius 方式)
 //   1: SPEED (Fast Forward)
 //   2: MISSILE (B-Roll)
@@ -147,6 +183,7 @@ export type Mode =
 export interface State {
   mode: Mode
   difficulty: Difficulty
+  ship: ShipType
   stageIdx: number          // 0..2
   stageTimeMs: number       // 現ステージ内の経過 ms
   totalTimeMs: number
@@ -191,10 +228,14 @@ export interface State {
   toast: { text: string; until: number } | null
 }
 
-export function initialState(difficulty: Difficulty = 'normal'): State {
+export function initialState(
+  difficulty: Difficulty = 'normal',
+  ship: ShipType = 'standard',
+): State {
   return {
     mode: 'playing',
     difficulty,
+    ship,
     stageIdx: 0,
     stageTimeMs: 0,
     totalTimeMs: 0,
@@ -309,7 +350,11 @@ function toast(s: State, text: string) {
 // プレイヤー操作
 // ============================================
 function playerSpeed(s: State): number {
-  return PLAYER_BASE_SPEED + s.speedLevel * PLAYER_SPEED_STEP
+  return (PLAYER_BASE_SPEED + s.speedLevel * PLAYER_SPEED_STEP) * SHIPS[s.ship].speedMul
+}
+
+function shotCooldown(s: State): number {
+  return SHOT_COOLDOWN_MS * SHIPS[s.ship].fireCooldownMul
 }
 
 function shoot(s: State) {
@@ -452,7 +497,7 @@ export function step(s: State, dtMs: number, input: Input, stage: StageRuntime):
       }
 
       // 連射 (時間ベース)
-      if (input.shoot && s.totalTimeMs - s.lastShotMs >= SHOT_COOLDOWN_MS) {
+      if (input.shoot && s.totalTimeMs - s.lastShotMs >= shotCooldown(s)) {
         shoot(s)
         s.lastShotMs = s.totalTimeMs
       }
@@ -725,7 +770,7 @@ function collideBullets(s: State) {
       const bw = b.kind === 'laser' ? LASER_LEN : 6
       const bh = b.kind === 'laser' ? 3 : 3
       if (aabb(b.x, b.y - bh / 2, bw, bh, e.x, e.y, e.w, e.h)) {
-        e.hp -= b.kind === 'laser' ? 2 : 1
+        e.hp -= b.kind === 'laser' ? SHIPS[s.ship].laserDamage : SHIPS[s.ship].normalDamage
         spawnSparks(s, e.x + e.w / 2, e.y + e.h / 2, '#ffd24a', 4)
         if (b.kind !== 'laser') {
           hit = true
