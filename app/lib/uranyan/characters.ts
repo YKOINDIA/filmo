@@ -243,6 +243,7 @@ export function getDogBreed(id: string | null | undefined): BreedOption {
 export type Relationship =
   | 'self'
   | 'parent' | 'child' | 'sibling' | 'family' | 'relative'
+  | 'pet'
   | 'friend' | 'classmate' | 'senior' | 'coworker'
   | 'crush' | 'partner' | 'idol'
   | 'other'
@@ -255,6 +256,7 @@ export const RELATIONSHIP_LABELS: Record<Relationship, { label: string; emoji: s
   sibling:   { label: 'きょうだい',   emoji: '👫' },
   family:    { label: '家族 (その他)', emoji: '🏠' },
   relative:  { label: '親戚',         emoji: '🌳' },
+  pet:       { label: 'ペット',       emoji: '🐾' },
   // 学校・職場系
   friend:    { label: '友達',         emoji: '🤝' },
   classmate: { label: 'クラスメイト', emoji: '🎒' },
@@ -269,7 +271,7 @@ export const RELATIONSHIP_LABELS: Record<Relationship, { label: string; emoji: s
 
 export const RELATIONSHIPS: readonly Relationship[] = [
   'self',
-  'parent', 'child', 'sibling', 'family', 'relative',
+  'parent', 'child', 'sibling', 'family', 'relative', 'pet',
   'friend', 'classmate', 'senior', 'coworker',
   'crush', 'partner', 'idol',
   'other',
