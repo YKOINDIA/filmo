@@ -105,24 +105,48 @@ export async function generateMetadata({
   const data = await fetchListData(slug)
 
   if (!data) {
-    return { title: 'List Not Found' }
+    return { title: 'List Not Found', robots: { index: false } }
   }
 
-  const { list } = data
+  const { list, items } = data
+  const canonicalSlug = list.slug || list.id
+  const canonicalUrl = `${APP_URL}/lists/${encodeURIComponent(canonicalSlug)}`
+
+  // 映画タイトルを含む description（Google に内容を伝える）
+  const movieTitles = items
+    .slice(0, 5)
+    .map(i => i.movie?.title)
+    .filter(Boolean)
+    .join('、')
+  const baseDesc = list.description || ''
+  const autoDesc = movieTitles
+    ? `${list.user_name} が選んだ${list.items_count}本の映画リスト。${movieTitles} ほか。`
+    : `${list.user_name} が厳選した${list.items_count}本の映画リスト — Filmo`
+  const description = baseDesc || autoDesc
+
+  // OG画像: 最初の映画ポスターを使う
+  const firstPoster = items.find(i => i.movie?.poster_path)?.movie?.poster_path
+  const ogImages = firstPoster
+    ? [{ url: `${TMDB_IMG}/w780${firstPoster}`, width: 780, height: 1170 }]
+    : undefined
+
   return {
     title: `${list.title} — ${list.user_name}`,
-    description: list.description || `A list of ${list.items_count} films curated by ${list.user_name} on Filmo.`,
+    description,
+    alternates: { canonical: canonicalUrl },
     openGraph: {
       type: 'article',
       title: `${list.title} — ${list.user_name}`,
-      description: list.description || `${list.items_count} films`,
-      url: `${APP_URL}/lists/${slug}`,
+      description,
+      url: canonicalUrl,
       siteName: 'Filmo',
+      images: ogImages,
     },
     twitter: {
-      card: 'summary',
+      card: firstPoster ? 'summary_large_image' : 'summary',
       title: `${list.title} — ${list.user_name}`,
-      description: list.description || `${list.items_count} films`,
+      description,
+      images: ogImages,
     },
   }
 }
@@ -154,10 +178,47 @@ export default async function PublicListPage({
 
   const { list, items } = data
 
+  // JSON-LD: ItemList 構造化データ（Google がリスト構造を理解し、リッチリザルトに出しやすくなる）
+  const canonicalSlug = list.slug || list.id
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: list.title,
+    description: list.description || `${list.user_name} が厳選した${list.items_count}本の映画リスト`,
+    url: `${APP_URL}/lists/${encodeURIComponent(canonicalSlug)}`,
+    numberOfItems: items.length,
+    author: { '@type': 'Person', name: list.user_name },
+    itemListElement: items.slice(0, 30).map((item, idx) => ({
+      '@type': 'ListItem',
+      position: idx + 1,
+      item: {
+        '@type': 'Movie',
+        name: item.movie?.title || `Movie #${item.movie_id}`,
+        ...(item.movie?.poster_path && {
+          image: `${TMDB_IMG}/w780${item.movie.poster_path}`,
+        }),
+        ...(item.movie?.release_date && {
+          datePublished: item.movie.release_date,
+        }),
+        ...(item.movie?.vote_average != null && item.movie.vote_average > 0 && {
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: (item.movie.vote_average / 2).toFixed(1),
+            bestRating: 5,
+          },
+        }),
+      },
+    })),
+  }
+
   return (
     <div style={{
       minHeight: '100dvh', background: 'var(--fm-bg)', color: 'var(--fm-text)',
     }}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Header */}
       <header style={{
         borderBottom: '1px solid var(--fm-border)', padding: '12px 16px',
@@ -226,7 +287,7 @@ export default async function PublicListPage({
                   {idx + 1}
                 </span>
                 {item.movie?.poster_path ? (
-                  <img src={`${TMDB_IMG}/w154${item.movie.poster_path}`} alt=""
+                  <img src={`${TMDB_IMG}/w154${item.movie.poster_path}`} alt={item.movie?.title || ''}
                     style={{ width: 48, height: 72, borderRadius: 4, objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }} />
                 ) : (
                   <div style={{ width: 48, height: 72, borderRadius: 4, background: 'var(--fm-bg-secondary)', flexShrink: 0 }} />
