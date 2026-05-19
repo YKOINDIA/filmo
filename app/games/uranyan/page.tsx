@@ -40,7 +40,7 @@ type Phase =
   | 'edit' | 'result' | 'character' | 'history' | 'today' | 'fashion'
 
 const GROUP_MIN = 3
-const GROUP_MAX = 8
+const GROUP_MAX = 30
 const SHARE_URL = 'https://filmo.me/games/uranyan'
 
 interface TargetCard {
@@ -918,7 +918,7 @@ function MenuView(p: {
         <button type="button" onClick={p.onChooseGroup} style={menuCardGroup}>
           <div style={{ fontSize: 36 }}>👥</div>
           <div style={{ flex: 1, textAlign: 'left' }}>
-            <div style={{ fontSize: 16, fontWeight: 900, color: '#fff' }}>グループ相性 (3〜8人)</div>
+            <div style={{ fontSize: 16, fontWeight: 900, color: '#fff' }}>グループ相性 (3〜30人)</div>
             <div style={{ fontSize: 11, color: '#ddd', marginTop: 4 }}>
               友達グループ・家族・部活の調和度を計算。ベストペア/ワーストペアも出るよ
             </div>
@@ -2748,37 +2748,8 @@ function GroupResultView(p: ResultActionProps & {
           <PairHighlight title="⚠️ 要注意ペア" tone="bad" pair={reading.worstPair} />
         )}
 
-        {/* 全ペア */}
-        <div style={{ marginTop: 24 }}>
-          <SectionHeaderLarge emoji="🔗" title={`全ペア (${reading.pairs.length}組)`}
-            sub="2人ずつ組み合わせた相性の一覧" />
-          <div style={{ display: 'grid', gap: 6 }}>
-            {reading.pairs.map((pair, idx) => {
-              const tone = fortuneColor(pair.template.fortune)
-              return (
-                <div key={idx} style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '12px 14px', borderRadius: 10,
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.07)',
-                }}>
-                  <div style={{ flex: 1, fontSize: 15, fontWeight: 700, color: '#fff',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {pair.aName} × {pair.bName}
-                  </div>
-                  <div style={{
-                    fontSize: 14, padding: '4px 12px', borderRadius: 8,
-                    background: tone.bg, color: tone.fg, fontWeight: 900,
-                    border: `1px solid ${tone.fg}88`,
-                  }}>{pair.relation}</div>
-                  <div style={{ fontSize: 13, color: tone.fg, fontWeight: 800, minWidth: 36, textAlign: 'right' }}>
-                    {pair.template.fortune}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+        {/* 全ペア (人数が多い時は折りたたみ) */}
+        <AllPairsSection pairs={reading.pairs} />
 
         {/* 凡例: 出現した関係名の意味 */}
         <div style={{ marginTop: 24 }}>
@@ -2855,6 +2826,76 @@ const RELATION_MEANINGS: Record<string, string> = {
   '栄胎': 'じんわり運が上向く優しい吉',
   '衰胎': '時々モヤッとする、中くらいの関係',
   '安胎': '可もなく不可もない平和なペア',
+}
+
+// 全ペア表示: 21 組超 (= 7 人超) はデフォ折りたたみ + 上位ベスト/ワースト 各 5 件のプレビュー
+function AllPairsSection({ pairs }: { pairs: import('../../lib/uranyan/groupCompat').PairResult[] }) {
+  const PREVIEW_THRESHOLD = 21   // 7 人 = C(7,2) = 21 ペアまでは全展開
+  const PREVIEW_TOP_N = 5
+  const isLarge = pairs.length > PREVIEW_THRESHOLD
+  const [expanded, setExpanded] = useState(!isLarge)
+
+  const visiblePairs = useMemo(() => {
+    if (expanded) return pairs
+    // 折りたたみ時: スコア降順 + 昇順から上位 N ずつ取る (重複は除く)
+    const sortedDesc = [...pairs].sort((a, b) => b.score - a.score)
+    const sortedAsc  = [...pairs].sort((a, b) => a.score - b.score)
+    const top = sortedDesc.slice(0, PREVIEW_TOP_N)
+    const bot = sortedAsc.slice(0, PREVIEW_TOP_N)
+    const seen = new Set<number>()
+    const result: typeof pairs = []
+    for (const p of [...top, ...bot]) {
+      const key = p.i * 100 + p.j
+      if (seen.has(key)) continue
+      seen.add(key)
+      result.push(p)
+    }
+    return result
+  }, [pairs, expanded])
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <SectionHeaderLarge emoji="🔗" title={`全ペア (${pairs.length}組)`}
+        sub={isLarge && !expanded
+          ? `多いから上位ベスト${PREVIEW_TOP_N}とワースト${PREVIEW_TOP_N}だけ表示中`
+          : '2人ずつ組み合わせた相性の一覧'} />
+      <div style={{ display: 'grid', gap: 6 }}>
+        {visiblePairs.map((pair, idx) => {
+          const tone = fortuneColor(pair.template.fortune)
+          return (
+            <div key={`${pair.i}-${pair.j}-${idx}`} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '12px 14px', borderRadius: 10,
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.07)',
+            }}>
+              <div style={{ flex: 1, fontSize: 15, fontWeight: 700, color: '#fff',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {pair.aName} × {pair.bName}
+              </div>
+              <div style={{
+                fontSize: 14, padding: '4px 12px', borderRadius: 8,
+                background: tone.bg, color: tone.fg, fontWeight: 900,
+                border: `1px solid ${tone.fg}88`,
+              }}>{pair.relation}</div>
+              <div style={{ fontSize: 13, color: tone.fg, fontWeight: 800, minWidth: 36, textAlign: 'right' }}>
+                {pair.template.fortune}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {isLarge && (
+        <button type="button" onClick={() => setExpanded(e => !e)} style={{
+          width: '100%', marginTop: 10, padding: '12px 0', borderRadius: 10,
+          background: 'rgba(255,255,255,0.04)', border: '1px solid var(--fm-border)',
+          color: '#A29BFE', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+        }}>
+          {expanded ? `▲ 上位だけ表示 (${PREVIEW_TOP_N * 2}件)` : `▼ 全 ${pairs.length} ペアを表示`}
+        </button>
+      )}
+    </div>
+  )
 }
 
 // セクション見出し (大きい・説明付き)
