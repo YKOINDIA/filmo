@@ -10,6 +10,7 @@ import { shareToLine, shareToTwitter, copyToClipboard } from '../../lib/share'
 import { buildLifeReading } from '../../lib/uranyan/templates'
 import { buildCompatibilityReading } from '../../lib/uranyan/compatTemplates'
 import { buildGroupCompatReading, type GroupCompatReading } from '../../lib/uranyan/groupCompat'
+import { buildDailyReading, dailyShareText, type DailyReading } from '../../lib/uranyan/today'
 import {
   saveReading, loadReadings, reviewReading, deleteReading, isReviewable,
   buildLifeSavePayload, buildCompatSavePayload, buildGroupCompatSavePayload,
@@ -29,7 +30,7 @@ import { DogIcon, CatIcon } from '../../lib/uranyan/breedIcons'
 type Mode = 'life' | 'compat' | 'group'
 type Phase =
   | 'menu' | 'pickLife' | 'pickCompat' | 'pickGroup'
-  | 'edit' | 'result' | 'character' | 'history'
+  | 'edit' | 'result' | 'character' | 'history' | 'today'
 
 const GROUP_MIN = 3
 const GROUP_MAX = 8
@@ -107,6 +108,14 @@ export default function UranyanPage() {
 
   const [catBreed, setCatBreed] = useState<string>(DEFAULT_CAT_BREED)
   const [dogBreed, setDogBreed] = useState<string>(DEFAULT_DOG_BREED)
+
+  // 今日の運勢 (me.birth_* が揃っている時のみ算出)
+  const today = useMemo<DailyReading | null>(() => {
+    if (!me?.birth_year || !me?.birth_month || !me?.birth_day) return null
+    return buildDailyReading({
+      year: me.birth_year, month: me.birth_month, day: me.birth_day,
+    })
+  }, [me?.birth_year, me?.birth_month, me?.birth_day])
 
   // ────────────────────────────
   // 初期ロード
@@ -544,11 +553,25 @@ export default function UranyanPage() {
         <MenuView
           catBreed={catBreed} dogBreed={dogBreed}
           loggedIn={!!me}
+          userName={me?.name || '自分'}
+          today={today}
+          hasSelfBirth={!!(me?.birth_year && me?.birth_month && me?.birth_day)}
+          onOpenToday={() => { setPhase('today'); if (typeof window !== 'undefined') window.scrollTo({ top: 0 }) }}
           onChooseLife={onChooseLife}
           onChooseCompat={onChooseCompat}
           onChooseGroup={onChooseGroup}
           onOpenHistory={onOpenHistory}
           onOpenCharacter={() => setPhase('character')}
+          onRegisterSelf={beginEditSelf}
+        />
+      )}
+
+      {phase === 'today' && today && (
+        <TodayResultView
+          userName={me?.name || '自分'}
+          today={today}
+          catBreed={catBreed} dogBreed={dogBreed}
+          onBack={() => setPhase('menu')}
         />
       )}
 
@@ -707,11 +730,16 @@ function MenuView(p: {
   catBreed: string
   dogBreed: string
   loggedIn: boolean
+  userName: string
+  today: DailyReading | null
+  hasSelfBirth: boolean
+  onOpenToday: () => void
   onChooseLife: () => void
   onChooseCompat: () => void
   onChooseGroup: () => void
   onOpenHistory: () => void
   onOpenCharacter: () => void
+  onRegisterSelf: () => void
 }) {
   const cat = getCatBreed(p.catBreed)
   const dog = getDogBreed(p.dogBreed)
@@ -745,6 +773,23 @@ function MenuView(p: {
           )}
         </div>
       </div>
+
+      {/* 今日の運勢カード (生年月日登録済みなら表示) */}
+      {p.today ? (
+        <TodayPreviewCard today={p.today} userName={p.userName} onTap={p.onOpenToday} />
+      ) : p.loggedIn && !p.hasSelfBirth ? (
+        <button type="button" onClick={p.onRegisterSelf} style={{
+          width: '100%', marginTop: 16, padding: 14, borderRadius: 14,
+          background: 'linear-gradient(135deg, rgba(255,210,74,0.18), rgba(255,122,174,0.10))',
+          border: '1px dashed rgba(255,210,74,0.40)', color: '#fff',
+          cursor: 'pointer', textAlign: 'left',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 800 }}>🔔 今日の運勢を見るには</div>
+          <div style={{ fontSize: 11, color: '#bbb', marginTop: 4 }}>
+            自分の生年月日を登録すると、毎日変わる運勢が見られるよ
+          </div>
+        </button>
+      ) : null}
 
       <div style={{ display: 'grid', gap: 12, marginTop: 18 }}>
         <button type="button" onClick={p.onChooseLife} style={menuCardLife}>
@@ -1685,6 +1730,205 @@ function fortuneColor(f: 'great' | string): { bg: string; fg: string } {
     case '凶':   return { bg: 'rgba(255,107,107,0.16)', fg: '#FF6B6B' }
     default:     return { bg: 'rgba(162,155,254,0.16)', fg: '#A29BFE' }
   }
+}
+
+// ====================================================
+// 部品: 今日の運勢 (プレビューカード + 詳細ビュー)
+// ====================================================
+function TodayPreviewCard(p: { today: DailyReading; userName: string; onTap: () => void }) {
+  const t = p.today
+  return (
+    <button type="button" onClick={p.onTap} style={{
+      width: '100%', marginTop: 16, padding: '14px 16px', borderRadius: 16,
+      background: `linear-gradient(135deg, ${hex2rgba(t.luckyColor.hex, 0.20)}, rgba(255,255,255,0.04))`,
+      border: `1px solid ${hex2rgba(t.luckyColor.hex, 0.50)}`,
+      color: '#fff', cursor: 'pointer', textAlign: 'left',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{
+          fontSize: 32, lineHeight: 1, width: 48, height: 48,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          borderRadius: 12, background: 'rgba(0,0,0,0.20)',
+        }}>{t.rankEmoji}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 10, color: '#bbb', letterSpacing: 1, fontWeight: 700 }}>
+            {t.todayDateStr} · 今日の運勢
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 900, color: '#fff', marginTop: 2 }}>
+            {t.rankLabel}
+            <span style={{ marginLeft: 8, fontSize: 13, color: '#FFD24A' }}>
+              {'★'.repeat(t.rank)}<span style={{ color: '#444' }}>{'☆'.repeat(5 - t.rank)}</span>
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: '#ddd', marginTop: 2 }}>
+            {t.oneLineSummary}
+          </div>
+        </div>
+        <div style={{
+          width: 28, height: 28, borderRadius: '50%',
+          background: t.luckyColor.hex,
+          border: '2px solid rgba(255,255,255,0.5)',
+        }} title={`ラッキー: ${t.luckyColor.name}`} />
+      </div>
+    </button>
+  )
+}
+
+function TodayResultView(p: {
+  userName: string
+  today: DailyReading
+  catBreed: string
+  dogBreed: string
+  onBack: () => void
+}) {
+  const cat = getCatBreed(p.catBreed)
+  const dog = getDogBreed(p.dogBreed)
+  const t = p.today
+  const [copied, setCopied] = useState(false)
+  const shareText = useMemo(() => dailyShareText(p.userName, t), [p.userName, t])
+
+  const onShareLine = useCallback(() => {
+    shareToLine(shareText, SHARE_URL)
+    trackUranyanShared('line', 'life', `daily:${t.rank}`)
+  }, [shareText, t.rank])
+  const onShareX = useCallback(() => {
+    shareToTwitter(shareText, SHARE_URL)
+    trackUranyanShared('twitter', 'life', `daily:${t.rank}`)
+  }, [shareText, t.rank])
+  const onCopy = useCallback(async () => {
+    const ok = await copyToClipboard(`${shareText}\n${SHARE_URL}`)
+    if (ok) {
+      setCopied(true)
+      trackUranyanShared('copy_link', 'life', `daily:${t.rank}`)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }, [shareText, t.rank])
+
+  return (
+    <div style={{ padding: '8px 16px 40px' }}>
+      <div style={resultCardStyle}>
+        <div style={{ textAlign: 'center', fontSize: 11, color: '#A29BFE', letterSpacing: 2, marginBottom: 4 }}>
+          うらにゃん。 / 今日の運勢
+        </div>
+        <div style={{ textAlign: 'center', fontSize: 12, color: '#888', marginBottom: 14 }}>
+          {t.todayDateStr} · {p.userName}
+        </div>
+
+        {/* 大きなランク表示 */}
+        <div style={{
+          textAlign: 'center', padding: '14px 0 18px',
+          borderRadius: 16, marginBottom: 14,
+          background: `radial-gradient(circle at 50% 0%, ${hex2rgba(t.luckyColor.hex, 0.30)}, transparent 70%)`,
+        }}>
+          <div style={{ fontSize: 56, lineHeight: 1, marginBottom: 6 }}>{t.rankEmoji}</div>
+          <div style={{ fontSize: 24, fontWeight: 900, color: '#fff' }}>{t.rankLabel}</div>
+          <div style={{ fontSize: 20, marginTop: 4, letterSpacing: 2 }}>
+            <span style={{ color: '#FFD24A' }}>{'★'.repeat(t.rank)}</span>
+            <span style={{ color: '#444' }}>{'☆'.repeat(5 - t.rank)}</span>
+          </div>
+          <div style={{ fontSize: 13, color: '#ddd', marginTop: 8, fontWeight: 700 }}>
+            {t.oneLineSummary}
+          </div>
+        </div>
+
+        {/* 掛け合い */}
+        <div style={dialogRow}>
+          <CatIcon breed={cat} size={32} />
+          <div style={bubbleNyan}>
+            <div style={bubbleSpeaker}>ニャンじろう</div>
+            {t.nyanLine}
+          </div>
+        </div>
+        <div style={{ ...dialogRow, marginTop: 8 }}>
+          <DogIcon breed={dog} size={32} />
+          <div style={bubblePochi}>
+            <div style={bubbleSpeaker}>ポチ</div>
+            {t.pochiLine}
+          </div>
+        </div>
+
+        {/* ラッキー行動 */}
+        <ActionBox icon="✨" label="ラッキー行動" tone="good" text={t.luckyAction} />
+        {/* NG 行動 */}
+        <ActionBox icon="🙅" label="NG 行動" tone="bad" text={t.ngAction} />
+
+        {/* カラー 2 種 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+          <ColorChip label="ラッキーカラー" color={t.luckyColor} />
+          <ColorChip label="ガチ病み回避" color={t.escapeColor} small />
+        </div>
+
+        {/* 詳細メタ (折りたたみ風) */}
+        <div style={{
+          marginTop: 14, padding: '10px 12px', borderRadius: 10,
+          background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+          fontSize: 11, color: '#888', lineHeight: 1.6,
+        }}>
+          <span style={{ color: '#A29BFE', fontWeight: 700 }}>算命学:</span> {t.userDayStem}日生まれ vs 今日 {t.todayDayStem}{t.todayDayBranch} ({t.sanmeiRelation})
+          <br />
+          <span style={{ color: '#A29BFE', fontWeight: 700 }}>宿曜:</span> {t.userMansion}宿 vs 今日 {t.todayMansion}宿 → {t.sukuyoRelation}「{t.sukuyoHeadline}」
+        </div>
+
+        <ShareFooter />
+      </div>
+
+      <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <button type="button" onClick={onShareLine} style={{ ...primaryBtn, background: '#06C755' }}>💬 LINE</button>
+          <button type="button" onClick={onShareX} style={{ ...primaryBtn, background: '#000' }}>🐦 X</button>
+        </div>
+        <button type="button" onClick={onCopy} style={{ ...secondaryBtn, width: '100%' }}>
+          {copied ? '✅ コピー完了' : '🔗 結果テキストをコピー'}
+        </button>
+        <button type="button" onClick={p.onBack} style={{ ...secondaryBtn, width: '100%', background: 'transparent' }}>
+          メニューへ戻る
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ActionBox({ icon, label, tone, text }: {
+  icon: string; label: string; tone: 'good' | 'bad'; text: string
+}) {
+  const fg = tone === 'good' ? '#5EE2C8' : '#FF6B6B'
+  const bg = tone === 'good' ? 'rgba(94,226,200,0.10)' : 'rgba(255,107,107,0.10)'
+  return (
+    <div style={{
+      marginTop: 12, padding: '12px 14px', borderRadius: 12,
+      background: bg, border: `1px solid ${fg}40`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <span style={{ fontSize: 16 }}>{icon}</span>
+        <span style={{ fontSize: 11, fontWeight: 800, color: fg, letterSpacing: 1 }}>{label}</span>
+      </div>
+      <div style={{ fontSize: 13, color: '#eee', lineHeight: 1.55 }}>{text}</div>
+    </div>
+  )
+}
+
+function ColorChip({ label, color, small }: {
+  label: string
+  color: { name: string; hex: string }
+  small?: boolean
+}) {
+  return (
+    <div style={{
+      padding: '10px 12px', borderRadius: 12,
+      display: 'flex', alignItems: 'center', gap: 10,
+      background: `linear-gradient(135deg, ${hex2rgba(color.hex, small ? 0.12 : 0.20)}, rgba(255,255,255,0.03))`,
+      border: `1px solid ${hex2rgba(color.hex, 0.40)}`,
+    }}>
+      <div style={{
+        width: small ? 28 : 36, height: small ? 28 : 36, borderRadius: '50%',
+        background: color.hex, border: '2px solid rgba(255,255,255,0.5)',
+      }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 9, color: '#888', letterSpacing: 1, fontWeight: 700 }}>{label}</div>
+        <div style={{ fontSize: 12, color: '#fff', fontWeight: 800, marginTop: 2 }}>{color.name}</div>
+      </div>
+    </div>
+  )
 }
 
 // ====================================================
