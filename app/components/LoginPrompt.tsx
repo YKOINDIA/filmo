@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import { useLocale } from '../lib/i18n'
 import { setUserContext, trackSignUp, trackAuthStarted, trackAuthFailed, trackSignIn } from '../lib/analytics'
@@ -236,6 +237,81 @@ export default function LoginPrompt({ title, subtitle, onAuthenticated }: LoginP
               に同意したものとみなされます。
             </p>
           )}
+        </div>
+
+        {/* Filmo ゲーム (未ログインでも遊べる) */}
+        <div style={{ marginTop: 24 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            marginBottom: 10, color: 'var(--fm-text-sub)',
+            fontSize: 12, fontWeight: 600, letterSpacing: 0.5,
+          }}>
+            <span style={{ fontSize: 16 }}>🎮</span>
+            <span>ログインしなくても遊べる Filmo ゲーム</span>
+          </div>
+          <Link
+            href="/games/emoji"
+            style={{
+              display: 'block', padding: 14, borderRadius: 12,
+              background: 'linear-gradient(135deg, rgba(108,92,231,0.18), rgba(0,192,48,0.10))',
+              border: '1px solid var(--fm-border)',
+              textDecoration: 'none', color: 'inherit', marginBottom: 8,
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 24 }}>🚢💎🥶</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>絵文字タイトル当て</div>
+                <div style={{ fontSize: 11, color: 'var(--fm-text-sub)', marginTop: 2 }}>
+                  絵文字から作品名を当てよう。全10問
+                </div>
+              </div>
+              <div style={{ fontSize: 16, color: 'var(--fm-accent)' }}>→</div>
+            </div>
+          </Link>
+          <Link
+            href="/games/crystal-blast"
+            style={{
+              display: 'block', padding: 14, borderRadius: 12,
+              background: 'linear-gradient(135deg, rgba(255,87,87,0.18), rgba(195,116,255,0.14))',
+              border: '1px solid var(--fm-border)',
+              textDecoration: 'none', color: 'inherit',
+              marginBottom: 8,
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 24 }}>💎</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>CRYSTAL BLAST</div>
+                <div style={{ fontSize: 11, color: 'var(--fm-text-sub)', marginTop: 2 }}>
+                  連鎖でぶっ飛ばせ！　ソロも対戦も
+                </div>
+                <div style={{
+                  fontSize: 10, color: '#ffd24a', marginTop: 4, fontWeight: 600,
+                }}>
+                  ⚔️ オンライン対戦はログインが必要です！
+                </div>
+              </div>
+              <div style={{ fontSize: 16, color: 'var(--fm-accent)' }}>→</div>
+            </div>
+          </Link>
+          <Link
+            href="/games/minesweeper"
+            style={{
+              display: 'block', padding: 14, borderRadius: 12,
+              background: 'linear-gradient(135deg, rgba(99,102,241,0.20), rgba(239,68,68,0.10))',
+              border: '1px solid var(--fm-border)',
+              textDecoration: 'none', color: 'inherit',
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 24 }}>💣</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>Minesweeper</div>
+                <div style={{ fontSize: 11, color: 'var(--fm-text-sub)', marginTop: 2 }}>
+                  古典マインスイーパ。3難易度
+                </div>
+              </div>
+              <div style={{ fontSize: 16, color: 'var(--fm-accent)' }}>→</div>
+            </div>
+          </Link>
         </div>
       </div>
     </div>

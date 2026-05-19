@@ -559,6 +559,80 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
         </div>
       </section>
 
+      {/* Filmo ゲーム */}
+      <section style={{ padding: '0 24px', marginTop: 12, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <span style={{ fontSize: 22 }}>🎮</span>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#fff', margin: 0 }}>
+            Filmo ゲーム
+          </h2>
+        </div>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <Link
+            href="/games/emoji"
+            style={{
+              display: 'block', padding: 16, borderRadius: 14,
+              background: 'linear-gradient(135deg, rgba(108,92,231,0.18), rgba(0,192,48,0.10))',
+              border: '1px solid var(--fm-border)',
+              textDecoration: 'none', color: 'inherit',
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 28 }}>🚢💎🥶</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>絵文字タイトル当て</div>
+                <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
+                  絵文字から作品名を当てよう。全10問でスコアを競おう
+                </div>
+              </div>
+              <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
+            </div>
+          </Link>
+          <Link
+            href="/games/crystal-blast"
+            style={{
+              display: 'block', padding: 16, borderRadius: 14,
+              background: 'linear-gradient(135deg, rgba(255,87,87,0.18), rgba(195,116,255,0.14))',
+              border: '1px solid var(--fm-border)',
+              textDecoration: 'none', color: 'inherit',
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 28 }}>💎</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>CRYSTAL BLAST</div>
+                <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
+                  連鎖でぶっ飛ばせ！　ソロも対戦も
+                </div>
+                <div style={{
+                  fontSize: 11, color: '#ffd24a', marginTop: 6, fontWeight: 600,
+                }}>
+                  ⚔️ オンライン対戦はログインが必要です！
+                </div>
+              </div>
+              <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
+            </div>
+          </Link>
+          <Link
+            href="/games/minesweeper"
+            style={{
+              display: 'block', padding: 16, borderRadius: 14,
+              background: 'linear-gradient(135deg, rgba(99,102,241,0.20), rgba(239,68,68,0.10))',
+              border: '1px solid var(--fm-border)',
+              textDecoration: 'none', color: 'inherit',
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 28 }}>💣</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Minesweeper</div>
+                <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
+                  古典マインスイーパ。3難易度・ベストタイム争い
+                </div>
+              </div>
+              <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
+            </div>
+          </Link>
+        </div>
+      </section>
+
       {/* ジャンルで探す */}
       <section style={{ padding: '0 24px', marginTop: 12, marginBottom: 32 }}>
         <div style={{
