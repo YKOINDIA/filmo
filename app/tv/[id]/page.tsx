@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import {
   fetchPublicWork,
+  fetchFilmoCommunity,
   buildWorkTitle,
   buildWorkDescription,
   buildWorkUrl,
@@ -20,8 +21,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!work) {
     return { title: '作品が見つかりません', robots: { index: false, follow: false } }
   }
+  const community = await fetchFilmoCommunity(work.id)
   const title = buildWorkTitle(work)
-  const description = buildWorkDescription(work)
+  const description = buildWorkDescription(work, community)
   const url = buildWorkUrl(work)
   const image = buildPosterUrl(work.poster_path, 'w780')
 
@@ -51,14 +53,15 @@ export default async function TvPage({ params }: Props) {
   const work = await fetchPublicWork(id, 'tv')
   if (!work) notFound()
 
-  const jsonLd = buildWorkJsonLd(work)
+  const community = await fetchFilmoCommunity(work.id)
+  const jsonLd = buildWorkJsonLd(work, community)
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
       />
-      <PublicWorkView work={work} />
+      <PublicWorkView work={work} community={community} />
     </>
   )
 }

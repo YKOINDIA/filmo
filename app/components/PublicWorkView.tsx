@@ -7,6 +7,7 @@
  */
 import Link from 'next/link'
 import { getMovieDetailCached, getUserWorkDetail } from '@/app/lib/tmdb-cache'
+import { getSupabaseAdmin } from '@/app/lib/supabase-admin'
 import AuthGate from './AuthGate'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
@@ -163,6 +164,124 @@ function normalizeTmdbWork(data: TmdbDetail, type: 'movie' | 'tv'): PublicWorkDa
   }
 }
 
+// ── Filmo community data ────────────────────────────────────────────────────
+
+export interface FilmoReview {
+  id: string
+  body: string
+  score: number | null
+  created_at: string
+  user_name: string
+}
+
+export interface FilmoListRef {
+  id: string
+  title: string
+  slug: string | null
+  items_count: number
+  user_name: string
+}
+
+export interface FilmoCommunityData {
+  avgScore: number | null      // Filmo ユーザー平均 (1-5)
+  watcherCount: number         // 「観た」マーク数
+  reviewCount: number          // レビュー数
+  reviews: FilmoReview[]       // 最新レビュー (最大5件)
+  lists: FilmoListRef[]        // この作品を含む公開リスト (最大5件)
+}
+
+export async function fetchFilmoCommunity(workId: number): Promise<FilmoCommunityData> {
+  const empty: FilmoCommunityData = { avgScore: null, watcherCount: 0, reviewCount: 0, reviews: [], lists: [] }
+  try {
+    const admin = getSupabaseAdmin()
+
+    // 視聴者数 + 平均スコア (watchlists)
+    const { data: wl } = await admin
+      .from('watchlists')
+      .select('score')
+      .eq('movie_id', workId)
+      .eq('status', 'watched')
+      .limit(10000)
+    const watchers = wl || []
+    const scores = watchers.map(w => w.score).filter((s): s is number => s != null && s > 0)
+    const avgScore = scores.length >= 2
+      ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
+      : null
+
+    // レビュー (公開のみ, ネタバレなし, 最新5件)
+    const { data: revRows, count: reviewCount } = await admin
+      .from('reviews')
+      .select('id, body, score, created_at, user_id', { count: 'exact' })
+      .eq('movie_id', workId)
+      .eq('is_draft', false)
+      .eq('has_spoiler', false)
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    let reviews: FilmoReview[] = []
+    if (revRows && revRows.length > 0) {
+      const userIds = [...new Set(revRows.map(r => r.user_id))]
+      const { data: users } = await admin
+        .from('users')
+        .select('id, name')
+        .in('id', userIds)
+      const nameMap = new Map((users || []).map(u => [u.id, u.name || 'Anonymous']))
+      reviews = revRows.map(r => ({
+        id: r.id,
+        body: (r.body || '').slice(0, 200),
+        score: r.score,
+        created_at: r.created_at,
+        user_name: nameMap.get(r.user_id) || 'Anonymous',
+      }))
+    }
+
+    // この作品を含む公開リスト (最大5件)
+    const { data: listItems } = await admin
+      .from('list_items')
+      .select('list_id')
+      .eq('movie_id', workId)
+      .limit(50)
+    let lists: FilmoListRef[] = []
+    if (listItems && listItems.length > 0) {
+      const listIds = [...new Set(listItems.map(li => li.list_id))]
+      const { data: listRows } = await admin
+        .from('user_lists')
+        .select('id, title, slug, items_count, user_id')
+        .in('id', listIds)
+        .eq('is_public', true)
+        .gt('items_count', 1)
+        .order('likes_count', { ascending: false })
+        .limit(5)
+      if (listRows && listRows.length > 0) {
+        const listUserIds = [...new Set(listRows.map(l => l.user_id))]
+        const { data: listUsers } = await admin
+          .from('users')
+          .select('id, name')
+          .in('id', listUserIds)
+        const listNameMap = new Map((listUsers || []).map(u => [u.id, u.name || 'Anonymous']))
+        lists = listRows.map(l => ({
+          id: l.id,
+          title: l.title,
+          slug: l.slug,
+          items_count: l.items_count,
+          user_name: listNameMap.get(l.user_id) || 'Anonymous',
+        }))
+      }
+    }
+
+    return {
+      avgScore,
+      watcherCount: watchers.length,
+      reviewCount: reviewCount ?? revRows?.length ?? 0,
+      reviews,
+      lists,
+    }
+  } catch (err) {
+    console.error('fetchFilmoCommunity failed:', err)
+    return empty
+  }
+}
+
 // ── Metadata helpers ────────────────────────────────────────────────────────
 
 export function buildWorkTitle(w: PublicWorkData): string {
@@ -171,15 +290,17 @@ export function buildWorkTitle(w: PublicWorkData): string {
   return year ? `『${w.title}』(${year}) ${typeLabel}` : `『${w.title}』 ${typeLabel}`
 }
 
-export function buildWorkDescription(w: PublicWorkData): string {
+export function buildWorkDescription(w: PublicWorkData, community?: FilmoCommunityData): string {
   const parts: string[] = []
   if (w.director) parts.push(`監督: ${w.director.name}`)
   if (w.cast.length > 0) parts.push(`出演: ${w.cast.slice(0, 3).map(c => c.name).join('・')}`)
   if (w.genres.length > 0) parts.push(`ジャンル: ${w.genres.map(g => g.name).join('・')}`)
+  // Filmo 独自の統計 (Google が TMDB/IMDb との差異として認識)
+  if (community?.avgScore != null) parts.push(`Filmo平均★${community.avgScore.toFixed(1)}`)
+  if (community && community.reviewCount > 0) parts.push(`${community.reviewCount}件のレビュー`)
   const head = parts.join(' / ')
   const tail = w.overview ? ` ${w.overview}` : ''
   const desc = `${head}${tail}`.trim()
-  // メタディスクリプションは155字程度が無難
   return desc.length > 155 ? `${desc.slice(0, 152)}…` : desc
 }
 
@@ -196,7 +317,7 @@ export function buildPosterUrl(posterPath: string | null, size: 'w342' | 'w500' 
 
 // ── JSON-LD (Movie / TVSeries schema) ───────────────────────────────────────
 
-export function buildWorkJsonLd(w: PublicWorkData): Record<string, unknown> {
+export function buildWorkJsonLd(w: PublicWorkData, community?: FilmoCommunityData): Record<string, unknown> {
   const schemaType = w.type === 'movie' ? 'Movie' : 'TVSeries'
   const url = buildWorkUrl(w)
   const image = buildPosterUrl(w.poster_path, 'w780')
@@ -237,12 +358,29 @@ export function buildWorkJsonLd(w: PublicWorkData): Record<string, unknown> {
       ratingCount: w.vote_count,
     }
   }
+  // Filmo ユーザーレビューを JSON-LD に追加 (Google がユニークコンテンツとして認識)
+  if (community?.reviews && community.reviews.length > 0) {
+    jsonLd.review = community.reviews.map(r => ({
+      '@type': 'Review',
+      author: { '@type': 'Person', name: r.user_name },
+      datePublished: r.created_at?.slice(0, 10),
+      reviewBody: r.body,
+      ...(r.score != null && r.score > 0 && {
+        reviewRating: {
+          '@type': 'Rating',
+          ratingValue: r.score,
+          bestRating: 5,
+          worstRating: 1,
+        },
+      }),
+    }))
+  }
   return jsonLd
 }
 
 // ── View ────────────────────────────────────────────────────────────────────
 
-export function PublicWorkView({ work }: { work: PublicWorkData }) {
+export function PublicWorkView({ work, community }: { work: PublicWorkData; community?: FilmoCommunityData }) {
   const poster = buildPosterUrl(work.poster_path, 'w500')
   const backdrop = work.backdrop_path ? buildPosterUrl(work.backdrop_path, 'w780') : null
   const year = work.release_date?.slice(0, 4)
@@ -395,6 +533,82 @@ export function PublicWorkView({ work }: { work: PublicWorkData }) {
                   {c.character && (
                     <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 2 }}>{c.character}</div>
                   )}
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Filmo コミュニティデータ ── */}
+        {community && (community.watcherCount > 0 || community.reviewCount > 0) && (
+          <section style={{ marginBottom: 28, padding: '20px 0', borderTop: '1px solid var(--fm-border)' }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 16px' }}>Filmo ユーザーの評価</h2>
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 16 }}>
+              {community.avgScore != null && (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--fm-star)' }}>★ {community.avgScore.toFixed(1)}</div>
+                  <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginTop: 2 }}>Filmo 平均</div>
+                </div>
+              )}
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--fm-text)' }}>{community.watcherCount}</div>
+                <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginTop: 2 }}>人が視聴</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--fm-text)' }}>{community.reviewCount}</div>
+                <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginTop: 2 }}>件のレビュー</div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {community && community.reviews.length > 0 && (
+          <section style={{ marginBottom: 28 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px' }}>ユーザーレビュー</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {community.reviews.map(r => (
+                <article key={r.id} style={{
+                  padding: '14px 16px', borderRadius: 10,
+                  background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
+                }}>
+                  <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fm-text)' }}>{r.user_name}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {r.score != null && r.score > 0 && (
+                        <span style={{ fontSize: 13, color: 'var(--fm-star)', fontWeight: 600 }}>★ {r.score}</span>
+                      )}
+                      <span style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
+                        {r.created_at?.slice(0, 10)}
+                      </span>
+                    </span>
+                  </header>
+                  <p style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--fm-text-sub)', margin: 0 }}>
+                    {r.body}{r.body.length >= 200 ? '…' : ''}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {community && community.lists.length > 0 && (
+          <section style={{ marginBottom: 28 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px' }}>この作品を含むリスト</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {community.lists.map(l => (
+                <Link key={l.id} href={`/lists/${l.slug || l.id}`} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '12px 16px', borderRadius: 10,
+                  background: 'var(--fm-bg-card)', border: '1px solid var(--fm-border)',
+                  textDecoration: 'none', color: 'inherit',
+                }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>{l.title}</div>
+                    <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginTop: 2 }}>
+                      {l.user_name} · {l.items_count}本
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 16, color: 'var(--fm-text-muted)' }}>›</span>
                 </Link>
               ))}
             </div>
