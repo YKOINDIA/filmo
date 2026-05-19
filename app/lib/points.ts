@@ -46,6 +46,11 @@ export const POINT_CONFIG = {
   MINESWEEPER_WIN_EASY: 5,
   MINESWEEPER_WIN_NORMAL: 15,
   MINESWEEPER_WIN_HARD: 30,
+  // ミニゲーム (Filmius — 横スクロールシューティング)
+  FILMIUS_CLEAR_STAGE1: 10,    // ステージ1ボス撃破
+  FILMIUS_CLEAR_STAGE2: 20,    // ステージ2ボス撃破
+  FILMIUS_CLEAR_ALL: 50,       // ラスボス撃破 (全クリア)
+  FILMIUS_NO_MISS_BONUS: 30,   // ノーミス全クリアボーナス
 }
 
 export const addPoints = async (userId: string, pts: number, reason: string): Promise<void> => {
