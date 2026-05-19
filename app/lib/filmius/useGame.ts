@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  type Difficulty,
   type Input,
   type Mode,
   type State,
@@ -20,6 +21,7 @@ export interface FilmiusResult {
   noMiss: boolean
   enemiesKilled: number
   durationMs: number
+  difficulty: Difficulty
 }
 
 interface UseFilmiusOpts {
@@ -106,12 +108,13 @@ export function useFilmius(
       noMiss: s.noMiss && s.mode === 'all-cleared',
       enemiesKilled: s.enemiesKilled,
       durationMs: Math.round(s.totalTimeMs),
+      difficulty: s.difficulty,
     }
     onEndRef.current?.(result)
   }, [])
 
-  const start = useCallback(() => {
-    stateRef.current = initialState()
+  const start = useCallback((difficulty: Difficulty = 'normal') => {
+    stateRef.current = initialState(difficulty)
     stageRuntimeRef.current = makeStageRuntime()
     stageRuntimeRef.current.onStageStart(stateRef.current)
     inputRef.current = {

@@ -7,22 +7,42 @@ import { addPoints, POINT_CONFIG } from '../../lib/points'
 import { trackMinigameShared } from '../../lib/analytics'
 import { shareToLine } from '../../lib/share'
 import { useFilmius, type FilmiusResult } from '../../lib/filmius/useGame'
-import { LOGICAL_H, LOGICAL_W } from '../../lib/filmius/engine'
+import { type Difficulty, LOGICAL_H, LOGICAL_W } from '../../lib/filmius/engine'
 
 const SHARE_URL = 'https://filmo.me/games/filmius'
+const DIFFICULTY_STORAGE_KEY = 'filmius:difficulty'
 
 // ====================================================
 // Types
 // ====================================================
 type Phase = 'menu' | 'playing' | 'result'
 
-interface Stats {
+interface StatEntry {
+  difficulty: Difficulty
   best_score: number
   max_stage_reached: number
   total_plays: number
   total_clears: number
   no_miss_clears: number
 }
+
+type StatsByDifficulty = Record<Difficulty, StatEntry>
+
+const EMPTY_STATS: StatsByDifficulty = {
+  easy:   { difficulty: 'easy',   best_score: 0, max_stage_reached: 1, total_plays: 0, total_clears: 0, no_miss_clears: 0 },
+  normal: { difficulty: 'normal', best_score: 0, max_stage_reached: 1, total_plays: 0, total_clears: 0, no_miss_clears: 0 },
+  hard:   { difficulty: 'hard',   best_score: 0, max_stage_reached: 1, total_plays: 0, total_clears: 0, no_miss_clears: 0 },
+}
+
+const DIFFICULTY_META: Record<Difficulty, {
+  label: string; sublabel: string; emoji: string; color: string;
+}> = {
+  easy:   { label: 'EASY',   sublabel: '残機 5 / 敵弱め',     emoji: '🌱', color: '#2ecc8a' },
+  normal: { label: 'NORMAL', sublabel: '残機 3 / 標準',       emoji: '⚡', color: '#6cf2ff' },
+  hard:   { label: 'HARD',   sublabel: '残機 2 / 敵強め',     emoji: '🔥', color: '#ff6188' },
+}
+
+const DIFFICULTY_ORDER: Difficulty[] = ['easy', 'normal', 'hard']
 
 interface LeaderboardEntry {
   user_id: string
@@ -54,10 +74,11 @@ function stageLabel(stageReached: number, cleared: boolean): string {
 }
 
 function buildTweetText(r: FilmiusResult): string {
+  const diff = DIFFICULTY_META[r.difficulty].label
   const head = r.cleared
-    ? (r.noMiss ? `🎬 ノーミス全クリア！ Filmius スコア ${r.score}!`
-                : `🎬 Filmius 全クリ！ スコア ${r.score}!`)
-    : `🎬 Filmius STAGE ${r.stageReached} まで到達 / スコア ${r.score}!`
+    ? (r.noMiss ? `🎬 [${diff}] ノーミス全クリア！ Filmius スコア ${r.score}!`
+                : `🎬 [${diff}] Filmius 全クリ！ スコア ${r.score}!`)
+    : `🎬 [${diff}] Filmius STAGE ${r.stageReached} まで到達 / スコア ${r.score}!`
   return `${head}\n\nFilmoの横スクロールシューティング、挑戦してみて👇\n\n#Filmo #Filmius`
 }
 
@@ -70,9 +91,9 @@ export default function FilmiusPage() {
   const [result, setResult] = useState<FilmiusResult | null>(null)
   const [pointsAwarded, setPointsAwarded] = useState(0)
   const [newBest, setNewBest] = useState(false)
-  const [stats, setStats] = useState<Stats>({
-    best_score: 0, max_stage_reached: 1, total_plays: 0, total_clears: 0, no_miss_clears: 0,
-  })
+  const [stats, setStats] = useState<StatsByDifficulty>(EMPTY_STATS)
+  const [difficulty, setDifficulty] = useState<Difficulty>('normal')
+  const [leaderboardDifficulty, setLeaderboardDifficulty] = useState<Difficulty>('normal')
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [leaderboardLoading, setLeaderboardLoading] = useState(false)
   const [error, setError] = useState('')
@@ -81,26 +102,55 @@ export default function FilmiusPage() {
   const playAreaRef = useRef<HTMLDivElement | null>(null)
   const canvasBoxRef = useRef<HTMLDivElement | null>(null)
 
-  // ─── 戦績 ─────────────────────────────
+  // ─── localStorage で最後に選んだ難易度を復元 ────────────────
+  // SSR ハイドレーション後にクライアントで読み込むため、effect 内 setState は意図的。
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(DIFFICULTY_STORAGE_KEY) as Difficulty | null
+      if (saved === 'easy' || saved === 'normal' || saved === 'hard') {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setDifficulty(saved)
+        setLeaderboardDifficulty(saved)
+      }
+    } catch { /* ignore */ }
+  }, [])
+
+  function selectDifficulty(d: Difficulty) {
+    setDifficulty(d)
+    setLeaderboardDifficulty(d)
+    try { window.localStorage.setItem(DIFFICULTY_STORAGE_KEY, d) } catch { /* ignore */ }
+  }
+
+  // ─── 戦績 (難易度別) ─────────────────────────────
   const loadStats = useCallback(async (uid: string) => {
     const { data } = await supabase.rpc('get_filmius_stats', { p_user_id: uid })
     if (!data) return
-    const row = (Array.isArray(data) ? data[0] : data) as Stats | undefined
-    if (row) {
-      setStats({
-        best_score: row.best_score || 0,
-        max_stage_reached: row.max_stage_reached || 1,
-        total_plays: row.total_plays || 0,
-        total_clears: row.total_clears || 0,
-        no_miss_clears: row.no_miss_clears || 0,
-      })
+    const next: StatsByDifficulty = {
+      easy:   { ...EMPTY_STATS.easy },
+      normal: { ...EMPTY_STATS.normal },
+      hard:   { ...EMPTY_STATS.hard },
     }
+    for (const row of data as StatEntry[]) {
+      if (row.difficulty === 'easy' || row.difficulty === 'normal' || row.difficulty === 'hard') {
+        next[row.difficulty] = {
+          difficulty: row.difficulty,
+          best_score: row.best_score || 0,
+          max_stage_reached: row.max_stage_reached || 1,
+          total_plays: row.total_plays || 0,
+          total_clears: row.total_clears || 0,
+          no_miss_clears: row.no_miss_clears || 0,
+        }
+      }
+    }
+    setStats(next)
   }, [])
 
-  const fetchLeaderboard = useCallback(async () => {
+  const fetchLeaderboard = useCallback(async (diff: Difficulty) => {
     setLeaderboardLoading(true)
     try {
-      const { data } = await supabase.rpc('get_filmius_leaderboard', { p_limit: 20 })
+      const { data } = await supabase.rpc('get_filmius_leaderboard', {
+        p_difficulty: diff, p_limit: 20,
+      })
       setLeaderboard((data || []) as LeaderboardEntry[])
     } catch {
       setLeaderboard([])
@@ -117,18 +167,19 @@ export default function FilmiusPage() {
     })
   }, [loadStats])
 
-  // 初回マウント時にリーダーボードを取得。fetchLeaderboard 内の setState は意図的。
+  // 難易度タブ切替時に該当リーダーボードを取得。setState は意図的。
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { fetchLeaderboard() }, [fetchLeaderboard])
+  useEffect(() => { fetchLeaderboard(leaderboardDifficulty) }, [fetchLeaderboard, leaderboardDifficulty])
 
   // ─── ポイント付与 (ミニゲーム日次キャップ共有) ─────────────
   const awardClearPoints = useCallback(async (uid: string, r: FilmiusResult): Promise<number> => {
     let total = 0
     const breakdown: { pts: number; reason: string }[] = []
-    if (r.stageReached >= 2) breakdown.push({ pts: POINT_CONFIG.FILMIUS_CLEAR_STAGE1, reason: '🎮 ミニゲーム Filmius STAGE 1 クリア' })
-    if (r.stageReached >= 3) breakdown.push({ pts: POINT_CONFIG.FILMIUS_CLEAR_STAGE2, reason: '🎮 ミニゲーム Filmius STAGE 2 クリア' })
-    if (r.cleared)           breakdown.push({ pts: POINT_CONFIG.FILMIUS_CLEAR_ALL,    reason: '🎮 ミニゲーム Filmius 全クリア' })
-    if (r.cleared && r.noMiss) breakdown.push({ pts: POINT_CONFIG.FILMIUS_NO_MISS_BONUS, reason: '🎮 ミニゲーム Filmius ノーミスボーナス' })
+    const tag = `[${DIFFICULTY_META[r.difficulty].label}]`
+    if (r.stageReached >= 2) breakdown.push({ pts: POINT_CONFIG.FILMIUS_CLEAR_STAGE1, reason: `🎮 ミニゲーム Filmius ${tag} STAGE 1 クリア` })
+    if (r.stageReached >= 3) breakdown.push({ pts: POINT_CONFIG.FILMIUS_CLEAR_STAGE2, reason: `🎮 ミニゲーム Filmius ${tag} STAGE 2 クリア` })
+    if (r.cleared)           breakdown.push({ pts: POINT_CONFIG.FILMIUS_CLEAR_ALL,    reason: `🎮 ミニゲーム Filmius ${tag} 全クリア` })
+    if (r.cleared && r.noMiss) breakdown.push({ pts: POINT_CONFIG.FILMIUS_NO_MISS_BONUS, reason: `🎮 ミニゲーム Filmius ${tag} ノーミスボーナス` })
     if (breakdown.length === 0) return 0
 
     const today = new Date().toISOString().slice(0, 10)
@@ -169,8 +220,9 @@ export default function FilmiusPage() {
         no_miss: r.noMiss,
         enemies_killed: r.enemiesKilled,
         duration_ms: r.durationMs,
+        difficulty: r.difficulty,
       })
-      if (r.score > stats.best_score) setNewBest(true)
+      if (r.score > stats[r.difficulty].best_score) setNewBest(true)
       const pts = await awardClearPoints(userId, r)
       setPointsAwarded(pts)
       await loadStats(userId)
@@ -178,8 +230,9 @@ export default function FilmiusPage() {
       console.error('filmius end insert error:', e)
       setError('スコアの保存に失敗しました')
     }
-    fetchLeaderboard()
-  }, [userId, stats.best_score, loadStats, fetchLeaderboard, awardClearPoints])
+    setLeaderboardDifficulty(r.difficulty)
+    fetchLeaderboard(r.difficulty)
+  }, [userId, stats, loadStats, fetchLeaderboard, awardClearPoints])
 
   // ─── ゲームフック ──────────────────────────
   const game = useFilmius(canvasRef, { onEnd: handleEnd })
@@ -208,7 +261,8 @@ export default function FilmiusPage() {
     setError('')
     setPhase('playing')
     // canvas のマウントを待ってから start
-    setTimeout(() => game.start(), 0)
+    const d = difficulty
+    setTimeout(() => game.start(d), 0)
   }
 
   function backToMenu() {
@@ -281,7 +335,11 @@ export default function FilmiusPage() {
         </div>
         <MenuView
           stats={stats}
+          difficulty={difficulty}
+          onSelectDifficulty={selectDifficulty}
           leaderboard={leaderboard}
+          leaderboardDifficulty={leaderboardDifficulty}
+          onSelectLeaderboardDifficulty={setLeaderboardDifficulty}
           leaderboardLoading={leaderboardLoading}
           onStart={startGame}
         />
@@ -398,18 +456,25 @@ export default function FilmiusPage() {
 // MenuView
 // ====================================================
 function MenuView({
-  stats, leaderboard, leaderboardLoading, onStart,
+  stats, difficulty, onSelectDifficulty,
+  leaderboard, leaderboardDifficulty, onSelectLeaderboardDifficulty,
+  leaderboardLoading, onStart,
 }: {
-  stats: Stats
+  stats: StatsByDifficulty
+  difficulty: Difficulty
+  onSelectDifficulty: (d: Difficulty) => void
   leaderboard: LeaderboardEntry[]
+  leaderboardDifficulty: Difficulty
+  onSelectLeaderboardDifficulty: (d: Difficulty) => void
   leaderboardLoading: boolean
   onStart: () => void
 }) {
+  const currentStat = stats[difficulty]
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 16px' }}>
       {/* タイトル */}
       <div style={{
-        textAlign: 'center', padding: '14px 0 26px 0',
+        textAlign: 'center', padding: '14px 0 22px 0',
       }}>
         <div style={{
           fontFamily: 'monospace', fontSize: 40, fontWeight: 900,
@@ -419,6 +484,46 @@ function MenuView({
         <div style={{
           fontSize: 12, color: '#6cf2ff', letterSpacing: 4, marginTop: 4,
         }}>FILMO × HORIZONTAL SHOOTER</div>
+      </div>
+
+      {/* 難易度選択 */}
+      <div style={{
+        padding: 14, borderRadius: 12, marginBottom: 14,
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.10)',
+      }}>
+        <div style={{
+          fontSize: 11, color: '#aaa', marginBottom: 8,
+          fontFamily: 'monospace', letterSpacing: 2,
+        }}>▸ DIFFICULTY</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {DIFFICULTY_ORDER.map(d => {
+            const meta = DIFFICULTY_META[d]
+            const selected = d === difficulty
+            return (
+              <button
+                key={d}
+                onClick={() => onSelectDifficulty(d)}
+                style={{
+                  padding: '10px 6px', borderRadius: 10,
+                  background: selected
+                    ? `linear-gradient(135deg, ${meta.color}33, ${meta.color}11)`
+                    : 'rgba(0,0,0,0.3)',
+                  border: `1px solid ${selected ? meta.color : 'rgba(255,255,255,0.1)'}`,
+                  color: selected ? meta.color : '#bbb',
+                  fontFamily: 'monospace', fontWeight: 800,
+                  cursor: 'pointer', touchAction: 'manipulation',
+                }}>
+                <div style={{ fontSize: 18 }}>{meta.emoji}</div>
+                <div style={{ fontSize: 13, letterSpacing: 1, marginTop: 2 }}>{meta.label}</div>
+                <div style={{
+                  fontSize: 9, color: selected ? meta.color : '#888',
+                  marginTop: 4, fontFamily: 'inherit', fontWeight: 500,
+                }}>{meta.sublabel}</div>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       <button
@@ -431,7 +536,7 @@ function MenuView({
           border: 'none', borderRadius: 14, cursor: 'pointer',
           boxShadow: '0 4px 22px rgba(255,210,74,0.45)',
         }}>
-        ▶ INSERT COIN
+        ▶ INSERT COIN  [{DIFFICULTY_META[difficulty].label}]
       </button>
 
       {/* 操作説明 */}
@@ -447,6 +552,7 @@ function MenuView({
           <div>📱 <b>モバイル:</b> 画面をドラッグして移動 (自動連射)、<b>EQUIP</b> ボタンで装備</div>
           <div>⌨️ <b>PC:</b> <kbd>←↑↓→</kbd>/WASD 移動、<kbd>Z</kbd> 連射、<kbd>X</kbd> 装備</div>
           <div>🟧 オレンジの <b>P</b> カプセルを取るとゲージが進む。装備ボタンで現在のスロットを装備</div>
+          <div>❤️ ミスしてもパワーアップは継続。残機が 0 になるとゲームオーバー</div>
         </div>
       </div>
 
@@ -468,24 +574,31 @@ function MenuView({
         </div>
       </div>
 
-      {/* 自分の戦績 */}
+      {/* 自分の戦績 (現在選択中の難易度) */}
       <div style={{
         marginTop: 16, padding: 14, borderRadius: 12,
         background: 'rgba(255,255,255,0.04)',
         border: '1px solid rgba(255,255,255,0.10)',
       }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: '#fff', marginBottom: 10 }}>
-          ▸ 戦績
+        <div style={{
+          display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+          marginBottom: 10,
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>▸ 戦績</div>
+          <div style={{
+            fontSize: 10, color: DIFFICULTY_META[difficulty].color,
+            fontFamily: 'monospace', letterSpacing: 2,
+          }}>{DIFFICULTY_META[difficulty].label}</div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, fontSize: 12 }}>
-          <StatChip label="ベストスコア" value={fmtScore(stats.best_score)} accent="#ffd24a" mono />
-          <StatChip label="最高到達" value={stageLabel(stats.max_stage_reached, false).split(' / ')[0]} accent="#6cf2ff" />
-          <StatChip label="プレイ回数" value={`${stats.total_plays} 回`} />
-          <StatChip label="クリア回数" value={`${stats.total_clears} 回 (ノーミス ${stats.no_miss_clears})`} />
+          <StatChip label="ベストスコア" value={fmtScore(currentStat.best_score)} accent="#ffd24a" mono />
+          <StatChip label="最高到達" value={stageLabel(currentStat.max_stage_reached, false).split(' / ')[0]} accent="#6cf2ff" />
+          <StatChip label="プレイ回数" value={`${currentStat.total_plays} 回`} />
+          <StatChip label="クリア回数" value={`${currentStat.total_clears} 回 (ノーミス ${currentStat.no_miss_clears})`} />
         </div>
       </div>
 
-      {/* リーダーボード */}
+      {/* リーダーボード (難易度タブ付き) */}
       <div style={{
         marginTop: 16, padding: 14, borderRadius: 12,
         background: 'rgba(255,255,255,0.04)',
@@ -498,13 +611,39 @@ function MenuView({
           <div style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>▸ HIGH SCORES</div>
           <div style={{ fontSize: 10, color: '#aaa', fontFamily: 'monospace' }}>TOP 20</div>
         </div>
+        {/* 難易度タブ */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: 6, marginBottom: 12,
+        }}>
+          {DIFFICULTY_ORDER.map(d => {
+            const meta = DIFFICULTY_META[d]
+            const active = d === leaderboardDifficulty
+            return (
+              <button
+                key={d}
+                onClick={() => onSelectLeaderboardDifficulty(d)}
+                style={{
+                  padding: '8px 4px', borderRadius: 8,
+                  background: active ? `${meta.color}22` : 'rgba(0,0,0,0.25)',
+                  border: `1px solid ${active ? meta.color : 'rgba(255,255,255,0.1)'}`,
+                  color: active ? meta.color : '#888',
+                  fontFamily: 'monospace', fontWeight: 800, fontSize: 11,
+                  cursor: 'pointer', touchAction: 'manipulation',
+                  letterSpacing: 1,
+                }}>
+                {meta.emoji} {meta.label}
+              </button>
+            )
+          })}
+        </div>
         {leaderboardLoading ? (
           <div style={{ fontSize: 12, color: '#888', textAlign: 'center', padding: 16 }}>
             読み込み中…
           </div>
         ) : leaderboard.length === 0 ? (
           <div style={{ fontSize: 12, color: '#888', textAlign: 'center', padding: 16 }}>
-            まだ記録がありません。最初の挑戦者になろう！
+            {DIFFICULTY_META[leaderboardDifficulty].label} の記録はまだありません。最初の挑戦者になろう！
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 4 }}>
@@ -632,6 +771,9 @@ function ResultOverlay({
         display: 'flex', gap: 14, fontSize: 'clamp(10px, 2.4cqw, 13px)',
         color: '#aaa', flexWrap: 'wrap', justifyContent: 'center',
       }}>
+        <span style={{ color: DIFFICULTY_META[result.difficulty].color }}>
+          {DIFFICULTY_META[result.difficulty].emoji} {DIFFICULTY_META[result.difficulty].label}
+        </span>
         <span>{stageLabel(result.stageReached, result.cleared).split(' / ')[0]}</span>
         <span>撃破 {result.enemiesKilled}</span>
         <span>{(result.durationMs / 1000).toFixed(1)} 秒</span>
