@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import {
   fetchPublicPerson,
   fetchPersonReviews,
+  shouldIndexPerson,
   buildPersonTitle,
   buildPersonDescription,
   buildPersonUrl,
@@ -21,6 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!person) {
     return { title: t('publicPerson.notFoundTitle'), robots: { index: false, follow: false } }
   }
+  const { stats } = await fetchPersonReviews(person.id)
   const title = buildPersonTitle(person, t)
   const description = buildPersonDescription(person, t)
   const url = buildPersonUrl(person)
@@ -30,6 +32,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title,
     description,
     alternates: { canonical: url },
+    robots: shouldIndexPerson(stats)
+      ? { index: true, follow: true }
+      : { index: false, follow: true },
     openGraph: {
       type: 'profile',
       url,

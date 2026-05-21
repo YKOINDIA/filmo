@@ -236,6 +236,12 @@ export async function fetchPersonReviews(
   }
 }
 
+// レビュー0件は TMDB の人物データそのままで Filmo 独自の価値が無いので noindex。
+// follow は残してリンク資産を流す。
+export function shouldIndexPerson(stats: PersonReviewStats): boolean {
+  return stats.count > 0
+}
+
 // ── Metadata helpers ────────────────────────────────────────────────────────
 
 function deptLabel(t: ServerT, dept: string): string {
