@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
+import { useStandaloneApp } from '../../lib/standaloneApp'
 import {
   trackUranyanShared, trackUranyanSaved, trackUranyanReviewed, trackUranyanAppShared,
 } from '../../lib/analytics'
@@ -87,6 +88,12 @@ const EMOJI_PRESETS = ['🌸','✨','💫','🌙','⭐','🍑','🍓','🦋','�
 // ページ本体
 // ====================================================
 export default function UranyanPage() {
+  // うらにゃん単独 iOS アプリ (jp.filmo.uranyan) からのアクセス時は
+  // Filmo 本体への戻り導線を消して、独立アプリとして振る舞う。
+  // Apple 4.2 (Minimum Functionality) リジェクト対策にも兼ねる。
+  const standaloneMode = useStandaloneApp()
+  const isStandalone = standaloneMode === 'uranyan'
+
   const [phase, setPhase] = useState<Phase>('menu')
   const [mode, setMode] = useState<Mode>('life')
   const [me, setMe] = useState<MyProfile | null>(null)
@@ -596,7 +603,7 @@ export default function UranyanPage() {
   // ====================================================
   return (
     <div style={pageStyle}>
-      <TopBar phase={phase} onBack={onBack} />
+      <TopBar phase={phase} onBack={onBack} isStandalone={isStandalone} />
 
       {phase === 'menu' && (
         <MenuView
@@ -808,13 +815,32 @@ export default function UranyanPage() {
 }
 
 // ====================================================
+// 部品: LoginLinkInline
+// ====================================================
+// 通常は Filmo の `/` (Dashboard 内の auth フォーム) に飛ばす。
+// うらにゃん単独アプリ (?app=uranyan) からは Filmo 本体に遷移したくないので、
+// プレーンテキストとして表示する (= 「ログイン」という単語だけ残してリンク無効化)。
+// 履歴保存などのアカウント必須機能は別途「Filmo アプリで作成可能」と案内している。
+function LoginLinkInline({ style, children }: { style?: React.CSSProperties; children: React.ReactNode }) {
+  const mode = useStandaloneApp()
+  if (mode === 'uranyan') {
+    return <span style={style}>{children}</span>
+  }
+  return <Link href="/" style={style}>{children}</Link>
+}
+
+// ====================================================
 // 部品: TopBar
 // ====================================================
-function TopBar({ phase, onBack }: { phase: Phase; onBack: () => void }) {
+function TopBar({ phase, onBack, isStandalone }: { phase: Phase; onBack: () => void; isStandalone: boolean }) {
+  // スタンドアロンアプリでは menu 画面が「ホーム」なので、← ホーム ボタンは出さない。
+  const showHomeLink = phase === 'menu' && !isStandalone
   return (
     <div style={topBarStyle}>
-      {phase === 'menu' ? (
+      {showHomeLink ? (
         <Link href="/" style={topBackBtn}>← ホーム</Link>
+      ) : phase === 'menu' ? (
+        <div style={{ width: 64 }} />
       ) : (
         <button type="button" onClick={onBack} style={topBackBtn}>← 戻る</button>
       )}
@@ -1092,7 +1118,7 @@ function PickCompatView(p: {
         !p.loggedIn ? (
           <div>
             <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>
-              <Link href="/" style={{ color: '#FFD24A' }}>ログイン</Link> すると、カードを保存して何度でも占えるよ。
+              <LoginLinkInline style={{ color: '#FFD24A' }}>ログイン</LoginLinkInline> すると、カードを保存して何度でも占えるよ。
             </div>
             <div style={{ fontSize: 13, color: '#bbb', marginTop: 12, marginBottom: 6 }}>あなた</div>
             <GuestSingleFormInline draft={p.guestDraft} setDraft={p.setGuestDraft} />
@@ -1283,7 +1309,7 @@ function GuestSingleForm(p: {
   return (
     <div style={{ marginTop: 12 }}>
       <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>
-        まずは試してみて。<Link href="/" style={{ color: '#FFD24A' }}>ログイン</Link> すると複数登録できるよ。
+        まずは試してみて。<LoginLinkInline style={{ color: '#FFD24A' }}>ログイン</LoginLinkInline> すると複数登録できるよ。
       </div>
       <GuestSingleFormInline draft={p.draft} setDraft={p.setDraft} />
       {p.error && <div style={{ color: '#FF6B6B', fontSize: 12, marginTop: 8 }}>{p.error}</div>}
@@ -2350,7 +2376,7 @@ function PickPeriodView(p: {
           </div>
           <div style={{ fontSize: 12, color: '#bbb' }}>
             期間運勢は履歴保存して後日レビューする前提だから、
-            <Link href="/" style={{ color: '#FFD24A' }}>ログイン</Link> してね。
+            <LoginLinkInline style={{ color: '#FFD24A' }}>ログイン</LoginLinkInline> してね。
           </div>
         </div>
       </div>
@@ -2613,7 +2639,7 @@ function PickGroupView(p: {
           </div>
           <div style={{ fontSize: 12, color: '#bbb' }}>
             複数のカードを保存してから組み合わせるので、
-            <Link href="/" style={{ color: '#FFD24A' }}>ログイン</Link>してね。
+            <LoginLinkInline style={{ color: '#FFD24A' }}>ログイン</LoginLinkInline>してね。
           </div>
         </div>
       ) : (
