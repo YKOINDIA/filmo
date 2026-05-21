@@ -51,6 +51,11 @@ export const POINT_CONFIG = {
   FILMIUS_CLEAR_STAGE2: 20,    // ステージ2ボス撃破
   FILMIUS_CLEAR_ALL: 50,       // ラスボス撃破 (全クリア)
   FILMIUS_NO_MISS_BONUS: 30,   // ノーミス全クリアボーナス
+  // ミニゲーム (Filmappy — マッピーランド風アクション)
+  FILMAPPY_CLEAR_STAGE1: 10,   // ステージ1全アイテム回収
+  FILMAPPY_CLEAR_STAGE2: 20,   // ステージ2全アイテム回収
+  FILMAPPY_CLEAR_ALL: 50,      // 全ステージクリア
+  FILMAPPY_NO_MISS_BONUS: 30,  // ノーミス全クリアボーナス
 }
 
 export const addPoints = async (userId: string, pts: number, reason: string): Promise<void> => {
