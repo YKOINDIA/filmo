@@ -111,7 +111,15 @@ export async function POST(req: Request) {
   if (upsertErr) {
     // 致命: 作成した auth user を取り消す (best-effort)
     await admin.auth.admin.deleteUser(userId).catch(() => { /* ignore */ })
-    return NextResponse.json({ ok: false, error: 'プロフィール作成に失敗しました' }, { status: 500 })
+    // 詳細を露出する: SQL エラー (column does not exist, check constraint failed 等) が
+    // 直接見えないと再現困難。message にユーザー個人情報は含まれないので公開して問題ない。
+    console.error('[id-signup] users upsert failed:', upsertErr)
+    const detail = upsertErr.message || upsertErr.code || 'unknown'
+    return NextResponse.json({
+      ok: false,
+      error: `プロフィール作成に失敗しました: ${detail}`,
+      code: upsertErr.code ?? null,
+    }, { status: 500 })
   }
 
   return NextResponse.json({
