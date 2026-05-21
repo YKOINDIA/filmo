@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { addPoints, POINT_CONFIG } from '../../lib/points'
-import { shareToLine } from '../../lib/share'
+import { trackMinigameShared } from '../../lib/analytics'
+import GameShareButtons from '../../components/GameShareButtons'
 import { useGame } from '../../lib/crystalBlast/useGame'
 import { useMultiplayer } from '../../lib/crystalBlast/useMultiplayer'
 import {
@@ -1363,30 +1364,11 @@ export default function CrystalBlastPage() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <button
-                onClick={() => openLineShareSolo(finalScore, finalMaxChain)}
-                style={{
-                  padding: '14px 0', borderRadius: 12, border: 'none',
-                  background: '#06C755', color: '#fff', fontSize: 14, fontWeight: 700,
-                  cursor: 'pointer',
-                }}>
-                💬 LINEでシェア
-              </button>
-              <button
-                onClick={() => openTwitterShareSolo(finalScore, finalMaxChain)}
-                style={{
-                  padding: '14px 0', borderRadius: 12, border: 'none',
-                  background: '#000', color: '#fff', fontSize: 14, fontWeight: 700,
-                  cursor: 'pointer', display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', gap: 8,
-                }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                </svg>
-                X でシェア
-              </button>
-            </div>
+            <GameShareButtons
+              shareText={buildShareTextSolo(finalScore, finalMaxChain)}
+              shareUrl={CRYSTAL_SHARE_URL}
+              onTrack={(channel) => trackMinigameShared(channel, finalMaxChain, finalScore)}
+            />
             <button
               onClick={() => { setPointsAwarded(0); setPhase('solo-playing') }}
               className="pulse-glow"
@@ -1718,20 +1700,14 @@ function ConfettiShower({ seed }: { seed: number }) {
 // ====================================================
 // シェアヘルパー
 // ====================================================
+const CRYSTAL_SHARE_URL = 'https://filmo.me/games/crystal-blast'
 function buildShareTextSolo(score: number, maxChain: number): string {
-  return score >= 20000
+  const head = score >= 20000
     ? `💎 CRYSTAL BLAST で ${score.toLocaleString()} 点（最大 ${maxChain} 連鎖）！\nあなたも挑戦してみて👇`
     : score >= 5000
       ? `💎 CRYSTAL BLAST で ${score.toLocaleString()} 点 (${maxChain} 連鎖)。\n対戦もできるよ👇`
       : `💎 CRYSTAL BLAST で ${score.toLocaleString()} 点。次はもっといける気がする…\n挑戦してみて👇`
-}
-function openTwitterShareSolo(score: number, maxChain: number) {
-  const text = buildShareTextSolo(score, maxChain) + '\n\n#Filmo #CRYSTAL_BLAST'
-  const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent('https://filmo.me/games/crystal-blast')}`
-  if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer')
-}
-function openLineShareSolo(score: number, maxChain: number) {
-  shareToLine(buildShareTextSolo(score, maxChain), 'https://filmo.me/games/crystal-blast')
+  return `${head}\n\n#Filmo #CRYSTAL_BLAST`
 }
 
 // ====================================================
