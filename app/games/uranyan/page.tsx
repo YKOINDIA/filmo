@@ -267,6 +267,24 @@ export default function UranyanPage() {
     setHistoryRows(rows)
   }, [])
 
+  // ────────────────────────────
+  // ログアウト (スタンドアロンアプリ用)
+  // ────────────────────────────
+  // うらにゃん iOS スタンドアロンアプリは Filmo Dashboard を見せない方針なので、
+  // Profile → ログアウトの導線に到達できない。ここでアプリ内ログアウト経路を提供する。
+  // state を一個ずつクリアするより reload してしまったほうが取りこぼしが無く確実。
+  // ?app=uranyan は localStorage に永続化済み (lib/standaloneApp.ts) なので、
+  // reload してもスタンドアロンモードは維持される。
+  const onLogout = useCallback(async () => {
+    if (typeof window !== 'undefined' && !window.confirm('ログアウトする?')) return
+    try {
+      await supabase.auth.signOut()
+    } catch (e) {
+      console.error('[uranyan] signOut failed', e)
+    }
+    if (typeof window !== 'undefined') window.location.reload()
+  }, [])
+
   const pickForGroup = useCallback((t: TargetCard) => {
     setErrorMsg(null)
     setGroupPicks(prev => {
@@ -635,6 +653,7 @@ export default function UranyanPage() {
           onOpenHistory={onOpenHistory}
           onOpenCharacter={() => setPhase('character')}
           onRegisterSelf={beginEditSelf}
+          onLogout={onLogout}
         />
       )}
 
@@ -883,6 +902,7 @@ function MenuView(p: {
   onOpenHistory: () => void
   onOpenCharacter: () => void
   onRegisterSelf: () => void
+  onLogout: () => void
 }) {
   const cat = getCatBreed(p.catBreed)
   const dog = getDogBreed(p.dogBreed)
@@ -912,6 +932,11 @@ function MenuView(p: {
           {p.loggedIn && (
             <button type="button" onClick={p.onOpenHistory} style={smallChipBtn}>
               📜 占い履歴
+            </button>
+          )}
+          {p.loggedIn && (
+            <button type="button" onClick={p.onLogout} style={smallChipBtn}>
+              🚪 ログアウト
             </button>
           )}
         </div>
