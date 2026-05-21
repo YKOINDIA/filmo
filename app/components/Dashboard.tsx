@@ -769,7 +769,7 @@ function FilmoUniverseSection() {
               Filmo Games
             </div>
             <div style={{ fontSize: 12, color: '#ddd', marginTop: 4, lineHeight: 1.5 }}>
-              4種のミニゲームでスコアを競おう
+              5種のミニゲームでスコアを競おう
             </div>
             <div style={{
               display: 'flex', gap: 8, marginTop: 10,
@@ -778,6 +778,7 @@ function FilmoUniverseSection() {
               <span title="絵文字タイトル当て">🚢💎</span>
               <span title="CRYSTAL BLAST">💎</span>
               <span title="FILMIUS">🚀</span>
+              <span title="FILMAPPY">🎞️</span>
               <span title="Minesweeper">💣</span>
             </div>
           </div>

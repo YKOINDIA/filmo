@@ -5,11 +5,11 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://filmo.me'
 
 export const metadata: Metadata = {
   title: 'Filmo Games — 映画ファンのミニゲーム集',
-  description: '映画ファンのためのミニゲーム集。絵文字タイトル当て、CRYSTAL BLAST、FILMIUS、Minesweeper。スコアを競って映画好きの腕試し。',
+  description: '映画ファンのためのミニゲーム集。絵文字タイトル当て、CRYSTAL BLAST、FILMIUS、FILMAPPY、Minesweeper。スコアを競って映画好きの腕試し。',
   openGraph: {
     type: 'website',
     title: 'Filmo Games — 映画ファンのミニゲーム集',
-    description: '映画ファンのためのミニゲーム集。絵文字タイトル当て、CRYSTAL BLAST、FILMIUS、Minesweeper。',
+    description: '映画ファンのためのミニゲーム集。絵文字タイトル当て、CRYSTAL BLAST、FILMIUS、FILMAPPY、Minesweeper。',
     url: `${APP_URL}/games`,
     siteName: 'Filmo',
   },
@@ -56,6 +56,17 @@ const GAMES: Game[] = [
     tagline: '3ステージ+ボス戦。EASY/NORMAL/HARD',
     gradient: 'linear-gradient(135deg, rgba(255,210,74,0.25), rgba(108,242,255,0.15))',
     border: 'rgba(255,210,74,0.4)',
+    titleFont: 'monospace',
+    titleLetterSpacing: 2,
+  },
+  {
+    href: '/games/filmappy',
+    emoji: '🎞️🍿🏆',
+    title: 'FILMAPPY',
+    subtitle: 'マッピーランド風アクション',
+    tagline: '映画館で泥棒を追え！3ステージ',
+    gradient: 'linear-gradient(135deg, rgba(255,80,120,0.28), rgba(255,210,74,0.18))',
+    border: 'rgba(255,80,120,0.4)',
     titleFont: 'monospace',
     titleLetterSpacing: 2,
   },
