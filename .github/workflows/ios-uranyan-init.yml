@@ -94,9 +94,18 @@ jobs:
           rm capacitor.config.ts
           mv capacitor.config.ts.bak capacitor.config.ts
 
+      - name: Patch pbxproj — iPhone only (TARGETED_DEVICE_FAMILY=1)
+        # うらにゃんアプリは iPhone のみ配信。iPad screenshot 提出を
+        # 不要にするため、TARGETED_DEVICE_FAMILY を "1,2" → "1" に変更。
+        run: |
+          sed -i '' 's/TARGETED_DEVICE_FAMILY = "1,2";/TARGETED_DEVICE_FAMILY = "1";/g' ios-uranyan/App/App.xcodeproj/project.pbxproj
+          grep -n "TARGETED_DEVICE_FAMILY" ios-uranyan/App/App.xcodeproj/project.pbxproj
+
       - name: Patch Info.plist (CFBundleDisplayName = うらにゃん)
         run: |
           plutil -replace CFBundleDisplayName -string "うらにゃん" ios-uranyan/App/App/Info.plist
+          # iPad サポートを外したので ~ipad の orientation キーも削除 (見栄え目的、必須ではない)
+          plutil -remove "UISupportedInterfaceOrientations~ipad" ios-uranyan/App/App/Info.plist || true
           # 輸出コンプライアンス: 標準 HTTPS 以外の暗号化を使っていないので false。
           # これが無いと TestFlight で毎ビルド「Missing Compliance」になる。
           plutil -replace ITSAppUsesNonExemptEncryption -bool false ios-uranyan/App/App/Info.plist || \
