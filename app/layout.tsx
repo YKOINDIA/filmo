@@ -4,6 +4,14 @@ import { Suspense } from 'react'
 import "./globals.css";
 import { LocaleProviderWrapper } from "./components/LocaleProviderWrapper";
 import GoogleAnalytics from "./components/GoogleAnalytics";
+import MaintenanceCard from "./components/MaintenanceCard";
+
+// 計画メンテナンス用キルスイッチ。Vercel の環境変数で `MAINTENANCE_MODE=1` を
+// セットしてデプロイすると、サイト全体がメンテナンス画面に切り替わる。
+// 解除は env を空にして再デプロイ。
+//   ※ ISR キャッシュが残っている古いページは次の revalidate まで残るため、
+//     即時切替が必要なときは Vercel Dashboard から「Redeploy」を 1 回叩く。
+//   ※ env 評価はコンポーネント内で行い、静的ビルド時の baked-in を避ける。
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -106,6 +114,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const maintenanceMode = process.env.MAINTENANCE_MODE === '1'
   return (
     // suppressHydrationWarning: 下の inline script が hydration 前に data-theme 属性を
     // セットするため React の hydration mismatch 警告を抑止する。
@@ -123,6 +132,13 @@ export default function RootLayout({
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        {/* MAINTENANCE_MODE=1 のときはアプリ本体を一切マウントせず、メンテナンス
+            カードだけ描画する。これにより Supabase / 各種クライアントの初期化や
+            アプリ JS のエラー伝播を完全に止められる。 */}
+        {maintenanceMode ? (
+          <MaintenanceCard />
+        ) : (
+          <>
         {/* GA4: useSearchParams() を含むので Suspense 境界で囲む (Next.js App Router 要件) */}
         <Suspense fallback={null}>
           <GoogleAnalytics />
@@ -136,6 +152,8 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{
           __html: `try{if('serviceWorker' in navigator && (location.protocol==='https:'||location.protocol==='http:')){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(e){console.log('SW fail:',e)})})}}catch(e){console.log('SW skip:',e)}`
         }} />
+          </>
+        )}
       </body>
     </html>
   );
