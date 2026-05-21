@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { addPoints, POINT_CONFIG } from '../../lib/points'
 import { trackMinigameShared } from '../../lib/analytics'
-import { shareToLine } from '../../lib/share'
+import GameShareButtons from '../../components/GameShareButtons'
 
 const SHARE_URL = 'https://filmo.me/games/emoji'
 
@@ -26,11 +26,6 @@ function buildTweetText(correctCount: number, score: number, results: AttemptRes
   }
 
   return `${opener}\n\n${emojis} ← これ何の作品？\nあなたも挑戦してみて👇\n\n#Filmo #絵文字クイズ`
-}
-
-function openTwitterShare(text: string) {
-  const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(SHARE_URL)}`
-  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 interface Quiz {
@@ -576,37 +571,11 @@ export default function EmojiQuizPage() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <button
-              onClick={() => {
-                shareToLine(buildTweetText(correctCount, score, results), SHARE_URL)
-                trackMinigameShared('line', correctCount, score)
-              }}
-              style={{
-                padding: '14px 0', borderRadius: 12, border: 'none',
-                background: '#06C755', color: '#fff',
-                fontSize: 15, fontWeight: 700, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              }}>
-              💬 LINEでシェア
-            </button>
-            <button
-              onClick={() => {
-                openTwitterShare(buildTweetText(correctCount, score, results))
-                trackMinigameShared('twitter', correctCount, score)
-              }}
-              style={{
-                padding: '14px 0', borderRadius: 12, border: 'none',
-                background: '#000', color: '#fff',
-                fontSize: 15, fontWeight: 700, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-              </svg>
-              Xでシェア
-            </button>
-          </div>
+          <GameShareButtons
+            shareText={buildTweetText(correctCount, score, results)}
+            shareUrl={SHARE_URL}
+            onTrack={(channel) => trackMinigameShared(channel, correctCount, score)}
+          />
           <button
             onClick={startGame}
             style={{

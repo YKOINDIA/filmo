@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { addPoints, POINT_CONFIG } from '../../lib/points'
 import { trackMinigameShared } from '../../lib/analytics'
-import { shareToLine } from '../../lib/share'
+import GameShareButtons, { type GameShareChannel } from '../../components/GameShareButtons'
 import { useFilmius, type FilmiusResult } from '../../lib/filmius/useGame'
 import { type Difficulty, type ShipType, LOGICAL_H, LOGICAL_W, SHIPS } from '../../lib/filmius/engine'
 
@@ -252,22 +252,11 @@ export default function FilmiusPage() {
   // ─── ゲームフック ──────────────────────────
   const game = useFilmius(canvasRef, { onEnd: handleEnd })
 
-  // ─── シェア ──────────────────────────────
-  function openTwitterShare(text: string) {
-    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(SHARE_URL)}`
-    window.open(url, '_blank', 'noopener,noreferrer')
-  }
-
-  function handleShareTweet() {
+  // ─── シェアトラッキング ────────────────────────
+  const trackShare = useCallback((channel: GameShareChannel) => {
     if (!result) return
-    trackMinigameShared('twitter', result.enemiesKilled, result.score)
-    openTwitterShare(buildTweetText(result))
-  }
-  function handleShareLine() {
-    if (!result) return
-    trackMinigameShared('line', result.enemiesKilled, result.score)
-    shareToLine(buildTweetText(result), SHARE_URL)
-  }
+    trackMinigameShared(channel, result.enemiesKilled, result.score)
+  }, [result])
 
   function startGame() {
     setResult(null)
@@ -460,8 +449,9 @@ export default function FilmiusPage() {
               error={error}
               onRetry={startGame}
               onMenu={backToMenu}
-              onShareTweet={handleShareTweet}
-              onShareLine={handleShareLine}
+              shareText={buildTweetText(result)}
+              shareUrl={SHARE_URL}
+              onTrack={trackShare}
             />
           )}
         </div>
@@ -851,7 +841,7 @@ function LeaderRow({ rank, row }: { rank: number; row: LeaderboardEntry }) {
 // スコア / リトライ / シェアまで一画面に収める。
 function ResultOverlay({
   result, newBest, pointsAwarded, error,
-  onRetry, onMenu, onShareTweet, onShareLine,
+  onRetry, onMenu, shareText, shareUrl, onTrack,
 }: {
   result: FilmiusResult
   newBest: boolean
@@ -859,8 +849,9 @@ function ResultOverlay({
   error: string
   onRetry: () => void
   onMenu: () => void
-  onShareTweet: () => void
-  onShareLine: () => void
+  shareText: string
+  shareUrl: string
+  onTrack: (channel: GameShareChannel) => void
 }) {
   return (
     <div style={{
@@ -938,24 +929,13 @@ function ResultOverlay({
         <button onClick={onRetry} style={overlayPrimaryBtn}>▶ もう一度</button>
         <button onClick={onMenu} style={overlaySecondaryBtn}>メニュー</button>
       </div>
-      <div style={{
-        display: 'flex', gap: 10, width: '100%',
-        maxWidth: 420,
-      }}>
-        <button onClick={onShareTweet} style={{
-          ...overlaySecondaryBtn,
-          background: 'rgba(29,155,240,0.20)',
-          border: '1px solid rgba(29,155,240,0.45)',
-          color: '#5fa9f7',
-          padding: '10px 12px',
-        }}>𝕏 でシェア</button>
-        <button onClick={onShareLine} style={{
-          ...overlaySecondaryBtn,
-          background: 'rgba(6,199,85,0.20)',
-          border: '1px solid rgba(6,199,85,0.45)',
-          color: '#6fdba0',
-          padding: '10px 12px',
-        }}>LINE でシェア</button>
+      <div style={{ width: '100%', maxWidth: 420 }}>
+        <GameShareButtons
+          shareText={shareText}
+          shareUrl={shareUrl}
+          onTrack={onTrack}
+          variant="compact"
+        />
       </div>
     </div>
   )
