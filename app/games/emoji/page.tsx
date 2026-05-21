@@ -5,27 +5,30 @@ import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { addPoints, POINT_CONFIG } from '../../lib/points'
 import { trackMinigameShared } from '../../lib/analytics'
+import { useTranslation } from '../../lib/i18n'
 import GameShareButtons from '../../components/GameShareButtons'
 
 const SHARE_URL = 'https://filmo.me/games/emoji'
 
-function buildTweetText(correctCount: number, score: number, results: AttemptResult[]) {
+type TFn = (key: string, params?: Record<string, string | number>) => string
+
+function buildTweetText(correctCount: number, score: number, results: AttemptResult[], t: TFn) {
   // 正解した問題の絵文字をティーザーとして1つ載せる。なければ最初の問題のものを使う。
   const teaserQuiz = results.find(r => r.isCorrect)?.quiz || results[0]?.quiz
   const emojis = teaserQuiz?.emojis.join('') || '🎬✨❓'
 
   let opener: string
   if (correctCount === 10) {
-    opener = `🎯 PERFECT! 絵文字タイトル当てで全問正解！(${score}点)`
+    opener = t('games.emoji.tweetPerfect', { score })
   } else if (correctCount >= 7) {
-    opener = `🎬 絵文字タイトル当てで${correctCount}/10正解！(${score}点)`
+    opener = t('games.emoji.tweetGood', { correct: correctCount, score })
   } else if (correctCount >= 4) {
-    opener = `🎬 絵文字タイトル当てで${correctCount}/10だった (${score}点)`
+    opener = t('games.emoji.tweetOk', { correct: correctCount, score })
   } else {
-    opener = `絵文字タイトル当て、${correctCount}/10で完敗…リベンジしたい`
+    opener = t('games.emoji.tweetBad', { correct: correctCount })
   }
 
-  return `${opener}\n\n${emojis} ← これ何の作品？\nあなたも挑戦してみて👇\n\n#Filmo #絵文字クイズ`
+  return opener + t('games.emoji.tweetTail', { emojis })
 }
 
 interface Quiz {
@@ -71,6 +74,7 @@ const RECENT_EXCLUDE_DAYS = 30
 const LEADERBOARD_LIMIT = 20
 
 export default function EmojiQuizPage() {
+  const { t } = useTranslation()
   const [userId, setUserId] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>('menu')
   const [stats, setStats] = useState<SessionStats | null>(null)
@@ -149,7 +153,7 @@ export default function EmojiQuizPage() {
         .limit(POOL_FETCH_SIZE)
       if (qErr) throw qErr
       if (!data || data.length < QUESTIONS_PER_SESSION + 3) {
-        setError('出題プールがまだ準備中です。少しお待ちください。')
+        setError(t('games.emoji.poolNotReady'))
         setPhase('menu')
         return
       }
@@ -182,7 +186,7 @@ export default function EmojiQuizPage() {
       setupQuestion(0, qs, dist)
       setPhase('playing')
     } catch (e) {
-      setError((e as Error).message || '読み込みに失敗しました')
+      setError((e as Error).message || t('games.emoji.loadFailed'))
       setPhase('menu')
     }
   }
@@ -259,7 +263,7 @@ export default function EmojiQuizPage() {
     if (correctCount === QUESTIONS_PER_SESSION) pts += POINT_CONFIG.MINIGAME_PERFECT
     pts = Math.min(pts, remaining)
     if (pts > 0) {
-      await addPoints(uid, pts, `🎮 ミニゲーム正解 ${correctCount}/${QUESTIONS_PER_SESSION}`)
+      await addPoints(uid, pts, t('games.emoji.awardReason', { correct: correctCount, total: QUESTIONS_PER_SESSION }))
     }
     return pts
   }
@@ -308,7 +312,7 @@ export default function EmojiQuizPage() {
   if (phase === 'menu') {
     return (
       <PageShell>
-        <HeaderBar title="🎮 絵文字タイトル当て" />
+        <HeaderBar title={t('games.emoji.title')} backAria={t('games.emoji.backAria')} />
         <div style={{ padding: 16, maxWidth: 600, margin: '0 auto' }}>
           <div style={{
             background: 'linear-gradient(135deg, rgba(108,92,231,0.18), rgba(0,192,48,0.10))',
@@ -317,8 +321,8 @@ export default function EmojiQuizPage() {
           }}>
             <div style={{ fontSize: 48, textAlign: 'center', marginBottom: 8 }}>🚢💎🥶</div>
             <p style={{ fontSize: 14, color: 'var(--fm-text-sub)', textAlign: 'center', lineHeight: 1.6 }}>
-              絵文字から映画・ドラマのタイトルを当てよう！<br />
-              全10問。正解するとポイントゲット。
+              {t('games.emoji.intro')}<br />
+              {t('games.emoji.introSub')}
             </p>
           </div>
 
@@ -326,9 +330,9 @@ export default function EmojiQuizPage() {
             <div style={{
               display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 16,
             }}>
-              <StatCard label="自己ベスト" value={stats.best_score} />
-              <StatCard label="挑戦回数" value={stats.total_played} />
-              <StatCard label="累計正解" value={stats.total_correct} />
+              <StatCard label={t('games.emoji.statsBest')} value={stats.best_score} />
+              <StatCard label={t('games.emoji.statsPlayed')} value={stats.total_played} />
+              <StatCard label={t('games.emoji.statsCorrect')} value={stats.total_correct} />
             </div>
           )}
 
@@ -349,23 +353,23 @@ export default function EmojiQuizPage() {
               color: '#fff', fontSize: 17, fontWeight: 800, cursor: 'pointer',
               letterSpacing: 0.5,
             }}>
-            ▶ ゲームスタート
+            {t('games.emoji.start')}
           </button>
 
           {!userId && (
             <p style={{ fontSize: 12, color: 'var(--fm-text-muted)', textAlign: 'center', marginTop: 12 }}>
-              ログインすると記録が保存されます
+              {t('games.emoji.loginHint')}
             </p>
           )}
 
           <div style={{ marginTop: 24, padding: 16, background: 'var(--fm-bg-card)', borderRadius: 12, border: '1px solid var(--fm-border)' }}>
-            <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>📖 ルール</h3>
+            <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>{t('games.emoji.rulesHeading')}</h3>
             <ul style={{ fontSize: 12, color: 'var(--fm-text-sub)', lineHeight: 1.8, paddingLeft: 18, margin: 0 }}>
-              <li>絵文字ヒントを見て、4択から作品を選ぶ</li>
-              <li>速く答えるほどスコア+5</li>
-              <li>ヒント未使用ならスコア+2</li>
-              <li>全問正解で+50ボーナス</li>
-              <li>1日のポイント上限: {POINT_CONFIG.MINIGAME_DAILY_CAP}pt</li>
+              <li>{t('games.emoji.rule1')}</li>
+              <li>{t('games.emoji.rule2')}</li>
+              <li>{t('games.emoji.rule3')}</li>
+              <li>{t('games.emoji.rule4')}</li>
+              <li>{t('games.emoji.rule5', { cap: POINT_CONFIG.MINIGAME_DAILY_CAP })}</li>
             </ul>
           </div>
         </div>
@@ -376,8 +380,8 @@ export default function EmojiQuizPage() {
   if (phase === 'loading') {
     return (
       <PageShell>
-        <HeaderBar title="🎮 絵文字タイトル当て" />
-        <FullCenter>準備中…</FullCenter>
+        <HeaderBar title={t('games.emoji.title')} backAria={t('games.emoji.backAria')} />
+        <FullCenter>{t('games.emoji.loading')}</FullCenter>
       </PageShell>
     )
   }
@@ -391,7 +395,7 @@ export default function EmojiQuizPage() {
 
     return (
       <PageShell>
-        <HeaderBar title={`${qIndex + 1} / ${QUESTIONS_PER_SESSION}`} />
+        <HeaderBar title={t('games.emoji.progress', { q: qIndex + 1, total: QUESTIONS_PER_SESSION })} backAria={t('games.emoji.backAria')} />
         <div style={{ padding: 16, maxWidth: 600, margin: '0 auto' }}>
           {/* Progress bar */}
           <div style={{ height: 6, background: 'var(--fm-bg-secondary)', borderRadius: 3, marginBottom: 24 }}>
@@ -412,7 +416,7 @@ export default function EmojiQuizPage() {
               {current.emojis.join('')}
             </div>
             <div style={{ fontSize: 11, color: 'var(--fm-text-muted)', marginTop: 12 }}>
-              {current.media_type === 'tv' ? 'ドラマ/TV' : '映画'} ・ 難易度 {'⭐'.repeat(current.difficulty)}
+              {t(current.media_type === 'tv' ? 'games.emoji.tagTv' : 'games.emoji.tagMovie')} ・ {t('games.emoji.difficultyLabel')} {'⭐'.repeat(current.difficulty)}
             </div>
           </div>
 
@@ -429,8 +433,8 @@ export default function EmojiQuizPage() {
                 cursor: hintShown ? 'default' : 'pointer',
               }}>
               {hintShown
-                ? `💡 ${hintGenre || '?'} ・ ${hintYear || '?'}年`
-                : '💡 ヒントを見る (スコア -2)'}
+                ? t('games.emoji.hintShown', { genre: hintGenre || '?', year: hintYear ?? '?' })
+                : t('games.emoji.hintShow')}
             </button>
           )}
 
@@ -497,7 +501,7 @@ export default function EmojiQuizPage() {
                     {current.release_year ?? '—'} ・ {(current.genres || [])[0] || ''}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--fm-accent)', marginTop: 6 }}>
-                    詳細を見る →
+                    {t('games.emoji.viewDetail')}
                   </div>
                 </div>
               </Link>
@@ -509,7 +513,7 @@ export default function EmojiQuizPage() {
                   background: 'var(--fm-accent)', color: '#fff', fontSize: 15, fontWeight: 700,
                   cursor: 'pointer',
                 }}>
-                {qIndex + 1 >= QUESTIONS_PER_SESSION ? '結果を見る' : '次の問題へ →'}
+                {qIndex + 1 >= QUESTIONS_PER_SESSION ? t('games.emoji.viewResult') : t('games.emoji.next')}
               </button>
             </div>
           )}
@@ -526,7 +530,7 @@ export default function EmojiQuizPage() {
 
   return (
     <PageShell>
-      <HeaderBar title="🏁 結果" />
+      <HeaderBar title={t('games.emoji.resultTitle')} backAria={t('games.emoji.backAria')} />
       <div style={{ padding: 16, maxWidth: 600, margin: '0 auto' }}>
         <div style={{
           background: isPerfect
@@ -535,21 +539,21 @@ export default function EmojiQuizPage() {
           borderRadius: 16, padding: 24, textAlign: 'center', marginBottom: 16,
           border: `1px solid ${isPerfect ? 'var(--fm-star,#ffd700)' : 'var(--fm-border)'}`,
         }}>
-          {isPerfect && <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--fm-star,#ffd700)', marginBottom: 4 }}>🎉 PERFECT!</div>}
-          {newBest && <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fm-accent)', marginBottom: 4 }}>🆕 自己ベスト更新!</div>}
+          {isPerfect && <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--fm-star,#ffd700)', marginBottom: 4 }}>{t('games.emoji.perfect')}</div>}
+          {newBest && <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fm-accent)', marginBottom: 4 }}>{t('games.emoji.newBest')}</div>}
           <div style={{ fontSize: 56, fontWeight: 900 }}>{score}</div>
-          <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginTop: 4 }}>スコア</div>
+          <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginTop: 4 }}>{t('games.emoji.scoreLabel')}</div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 16 }}>
-          <StatCard label="正解" value={`${correctCount}/${QUESTIONS_PER_SESSION}`} />
-          <StatCard label="所要時間" value={`${totalSec}s`} />
-          <StatCard label="獲得pt" value={`+${pointsAwarded}`} />
+          <StatCard label={t('games.emoji.correctLabel')} value={`${correctCount}/${QUESTIONS_PER_SESSION}`} />
+          <StatCard label={t('games.emoji.timeLabel')} value={`${totalSec}s`} />
+          <StatCard label={t('games.emoji.earnedLabel')} value={`+${pointsAwarded}`} />
         </div>
 
         {/* Question breakdown */}
         <div style={{ background: 'var(--fm-bg-card)', borderRadius: 12, padding: 12, border: '1px solid var(--fm-border)', marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: 'var(--fm-text-sub)' }}>振り返り</div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: 'var(--fm-text-sub)' }}>{t('games.emoji.breakdown')}</div>
           {results.map((r, i) => (
             <Link
               key={i}
@@ -572,7 +576,7 @@ export default function EmojiQuizPage() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <GameShareButtons
-            shareText={buildTweetText(correctCount, score, results)}
+            shareText={buildTweetText(correctCount, score, results, t)}
             shareUrl={SHARE_URL}
             onTrack={(channel) => trackMinigameShared(channel, correctCount, score)}
           />
@@ -583,7 +587,7 @@ export default function EmojiQuizPage() {
               background: 'linear-gradient(135deg, var(--fm-accent), var(--fm-accent-light))',
               color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer',
             }}>
-            🔄 もう一度
+            {t('games.emoji.replay')}
           </button>
           <button
             onClick={backToMenu}
@@ -592,7 +596,7 @@ export default function EmojiQuizPage() {
               background: 'transparent', border: '1px solid var(--fm-border)',
               color: 'var(--fm-text-sub)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
             }}>
-            メニューに戻る
+            {t('games.emoji.back')}
           </button>
         </div>
 
@@ -600,6 +604,7 @@ export default function EmojiQuizPage() {
           entries={leaderboard}
           loading={leaderboardLoading}
           currentUserId={userId}
+          t={t}
         />
       </div>
     </PageShell>
@@ -610,10 +615,12 @@ function Leaderboard({
   entries,
   loading,
   currentUserId,
+  t,
 }: {
   entries: LeaderboardEntry[]
   loading: boolean
   currentUserId: string | null
+  t: TFn
 }) {
   return (
     <div style={{
@@ -621,16 +628,16 @@ function Leaderboard({
       padding: 16, border: '1px solid var(--fm-border)',
     }}>
       <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>
-        🏆 ランキング (TOP {entries.length || ''})
+        {t('games.emoji.leaderboardTitle', { n: entries.length || '' })}
       </h3>
 
       {loading ? (
         <div style={{ padding: 20, textAlign: 'center', color: 'var(--fm-text-sub)', fontSize: 13 }}>
-          読み込み中...
+          {t('games.emoji.leaderboardLoading')}
         </div>
       ) : entries.length === 0 ? (
         <div style={{ padding: 20, textAlign: 'center', color: 'var(--fm-text-sub)', fontSize: 13 }}>
-          まだランキングがありません
+          {t('games.emoji.leaderboardEmpty')}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -688,7 +695,7 @@ function Leaderboard({
                     color: isSelf ? 'var(--fm-accent)' : 'var(--fm-text)',
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
-                    {e.user_name || '名無し'}{isSelf && ' (あなた)'}
+                    {e.user_name || t('games.emoji.anonymous')}{isSelf && ` ${t('games.emoji.you')}`}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--fm-text-muted)' }}>
                     {timeLabel}
@@ -716,7 +723,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
   )
 }
 
-function HeaderBar({ title }: { title: string }) {
+function HeaderBar({ title, backAria }: { title: string; backAria: string }) {
   return (
     <header style={{
       position: 'sticky', top: 0, zIndex: 10,
@@ -725,7 +732,7 @@ function HeaderBar({ title }: { title: string }) {
     }}>
       <Link
         href="/"
-        aria-label="戻る"
+        aria-label={backAria}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           width: 32, height: 32, borderRadius: 8,

@@ -8,6 +8,7 @@
 import Link from 'next/link'
 import { getMovieDetailCached, getUserWorkDetail } from '@/app/lib/tmdb-cache'
 import { getSupabaseAdmin } from '@/app/lib/supabase-admin'
+import type { ServerT } from '@/app/lib/i18n/server'
 import AuthGate from './AuthGate'
 import PublicShareButton from './PublicShareButton'
 import OpenInAppBar from './OpenInAppBar'
@@ -286,20 +287,22 @@ export async function fetchFilmoCommunity(workId: number): Promise<FilmoCommunit
 
 // ── Metadata helpers ────────────────────────────────────────────────────────
 
-export function buildWorkTitle(w: PublicWorkData): string {
+export function buildWorkTitle(w: PublicWorkData, t: ServerT): string {
   const year = w.release_date ? w.release_date.slice(0, 4) : null
-  const typeLabel = w.type === 'movie' ? '映画' : 'ドラマ・TV'
-  return year ? `『${w.title}』(${year}) ${typeLabel}` : `『${w.title}』 ${typeLabel}`
+  const typeLabel = t(w.type === 'movie' ? 'publicWork.movie' : 'publicWork.tv')
+  return year
+    ? t('publicWork.metaTitleWithYear', { title: w.title, year, typeLabel })
+    : t('publicWork.metaTitleNoYear', { title: w.title, typeLabel })
 }
 
-export function buildWorkDescription(w: PublicWorkData, community?: FilmoCommunityData): string {
+export function buildWorkDescription(w: PublicWorkData, t: ServerT, community?: FilmoCommunityData): string {
   const parts: string[] = []
-  if (w.director) parts.push(`監督: ${w.director.name}`)
-  if (w.cast.length > 0) parts.push(`出演: ${w.cast.slice(0, 3).map(c => c.name).join('・')}`)
-  if (w.genres.length > 0) parts.push(`ジャンル: ${w.genres.map(g => g.name).join('・')}`)
+  if (w.director) parts.push(t('publicWork.metaDirector', { name: w.director.name }))
+  if (w.cast.length > 0) parts.push(t('publicWork.metaCast', { names: w.cast.slice(0, 3).map(c => c.name).join('・') }))
+  if (w.genres.length > 0) parts.push(t('publicWork.metaGenre', { names: w.genres.map(g => g.name).join('・') }))
   // Filmo 独自の統計 (Google が TMDB/IMDb との差異として認識)
-  if (community?.avgScore != null) parts.push(`Filmo平均★${community.avgScore.toFixed(1)}`)
-  if (community && community.reviewCount > 0) parts.push(`${community.reviewCount}件のレビュー`)
+  if (community?.avgScore != null) parts.push(t('publicWork.metaFilmoAvg', { avg: community.avgScore.toFixed(1) }))
+  if (community && community.reviewCount > 0) parts.push(t('publicWork.metaFilmoReviews', { count: community.reviewCount }))
   const head = parts.join(' / ')
   const tail = w.overview ? ` ${w.overview}` : ''
   const desc = `${head}${tail}`.trim()
@@ -382,13 +385,13 @@ export function buildWorkJsonLd(w: PublicWorkData, community?: FilmoCommunityDat
 
 // ── View ────────────────────────────────────────────────────────────────────
 
-export function PublicWorkView({ work, community }: { work: PublicWorkData; community?: FilmoCommunityData }) {
+export function PublicWorkView({ work, community, t }: { work: PublicWorkData; community?: FilmoCommunityData; t: ServerT }) {
   const poster = buildPosterUrl(work.poster_path, 'w500')
   const backdrop = work.backdrop_path ? buildPosterUrl(work.backdrop_path, 'w780') : null
   const year = work.release_date?.slice(0, 4)
   const score = work.vote_average > 0 ? (work.vote_average / 2).toFixed(1) : null
   const workUrl = buildWorkUrl(work)
-  const shareTitle = buildWorkTitle(work)
+  const shareTitle = buildWorkTitle(work, t)
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--fm-bg)', color: 'var(--fm-text)', paddingBottom: 60 }}>
@@ -409,7 +412,7 @@ export function PublicWorkView({ work, community }: { work: PublicWorkData; comm
               background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
               textDecoration: 'none',
             }}>
-              無料で記録を始める
+              {t('publicWork.ctaCreateAccount')}
             </Link>
           </AuthGate>
         </div>
@@ -460,9 +463,9 @@ export function PublicWorkView({ work, community }: { work: PublicWorkData; comm
             )}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 12 }}>
               {year && <span>{year}</span>}
-              {work.runtime ? <span>{work.runtime}分</span> : null}
+              {work.runtime ? <span>{t('publicWork.minutes', { n: work.runtime })}</span> : null}
               {score && <span style={{ color: 'var(--fm-star)' }}>★ {score}</span>}
-              <span>{work.type === 'movie' ? '映画' : 'ドラマ・TV'}</span>
+              <span>{t(work.type === 'movie' ? 'publicWork.movie' : 'publicWork.tv')}</span>
             </div>
             {work.genres.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
@@ -477,14 +480,14 @@ export function PublicWorkView({ work, community }: { work: PublicWorkData; comm
             )}
             {work.director && (
               <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', marginBottom: 4 }}>
-                監督: <Link href={`/people/${work.director.id}`} style={{ color: 'var(--fm-text)', textDecoration: 'none' }}>
+                {t('publicWork.directorLabel')}: <Link href={`/people/${work.director.id}`} style={{ color: 'var(--fm-text)', textDecoration: 'none' }}>
                   {work.director.name}
                 </Link>
               </div>
             )}
             {work.writers.length > 0 && (
               <div style={{ fontSize: 13, color: 'var(--fm-text-sub)' }}>
-                脚本: {work.writers.map((w, i) => (
+                {t('publicWork.writersLabel')}: {work.writers.map((w, i) => (
                   <span key={w.id}>
                     {i > 0 ? '、' : ''}
                     <Link href={`/people/${w.id}`} style={{ color: 'var(--fm-text)', textDecoration: 'none' }}>
@@ -496,7 +499,7 @@ export function PublicWorkView({ work, community }: { work: PublicWorkData; comm
             )}
             {work.homepage && (
               <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', marginTop: 4 }}>
-                公式サイト:{' '}
+                {t('publicWork.officialSiteLabel')}:{' '}
                 <a
                   href={work.homepage}
                   target="_blank"
@@ -512,7 +515,7 @@ export function PublicWorkView({ work, community }: { work: PublicWorkData; comm
 
         {work.overview && (
           <section style={{ marginBottom: 28 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 8px', color: 'var(--fm-text)' }}>あらすじ</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 8px', color: 'var(--fm-text)' }}>{t('publicWork.overviewHeading')}</h2>
             <p style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--fm-text-sub)', margin: 0, whiteSpace: 'pre-wrap' }}>
               {work.overview}
             </p>
@@ -521,7 +524,7 @@ export function PublicWorkView({ work, community }: { work: PublicWorkData; comm
 
         {work.cast.length > 0 && (
           <section style={{ marginBottom: 28 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px' }}>キャスト</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px' }}>{t('publicWork.castHeading')}</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))', gap: 10 }}>
               {work.cast.slice(0, 8).map(c => (
                 <Link
@@ -549,21 +552,21 @@ export function PublicWorkView({ work, community }: { work: PublicWorkData; comm
         {/* ── Filmo コミュニティデータ ── */}
         {community && (community.watcherCount > 0 || community.reviewCount > 0) && (
           <section style={{ marginBottom: 28, padding: '20px 0', borderTop: '1px solid var(--fm-border)' }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 16px' }}>Filmo ユーザーの評価</h2>
+            <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 16px' }}>{t('publicWork.communityHeading')}</h2>
             <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 16 }}>
               {community.avgScore != null && (
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--fm-star)' }}>★ {community.avgScore.toFixed(1)}</div>
-                  <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginTop: 2 }}>Filmo 平均</div>
+                  <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginTop: 2 }}>{t('publicWork.communityAverage')}</div>
                 </div>
               )}
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--fm-text)' }}>{community.watcherCount}</div>
-                <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginTop: 2 }}>人が視聴</div>
+                <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginTop: 2 }}>{t('publicWork.communityWatchers')}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--fm-text)' }}>{community.reviewCount}</div>
-                <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginTop: 2 }}>件のレビュー</div>
+                <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginTop: 2 }}>{t('publicWork.communityReviews')}</div>
               </div>
             </div>
           </section>
@@ -571,7 +574,7 @@ export function PublicWorkView({ work, community }: { work: PublicWorkData; comm
 
         {community && community.reviews.length > 0 && (
           <section style={{ marginBottom: 28 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px' }}>ユーザーレビュー</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px' }}>{t('publicWork.reviewsHeading')}</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {community.reviews.map(r => (
                 <article key={r.id} style={{
@@ -600,7 +603,7 @@ export function PublicWorkView({ work, community }: { work: PublicWorkData; comm
 
         {community && community.lists.length > 0 && (
           <section style={{ marginBottom: 28 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px' }}>この作品を含むリスト</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px' }}>{t('publicWork.inListsHeading')}</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {community.lists.map(l => (
                 <Link key={l.id} href={`/lists/${l.slug || l.id}`} style={{
@@ -612,7 +615,7 @@ export function PublicWorkView({ work, community }: { work: PublicWorkData; comm
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fm-text)' }}>{l.title}</div>
                     <div style={{ fontSize: 12, color: 'var(--fm-text-muted)', marginTop: 2 }}>
-                      {l.user_name} · {l.items_count}本
+                      {l.user_name} · {l.items_count}{t('publicWork.listsItemsSuffix')}
                     </div>
                   </div>
                   <span style={{ fontSize: 16, color: 'var(--fm-text-muted)' }}>›</span>
@@ -630,17 +633,17 @@ export function PublicWorkView({ work, community }: { work: PublicWorkData; comm
             textAlign: 'center',
           }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px' }}>
-              『{work.title}』を Filmo で記録しよう
+              {t('publicWork.ctaPanelHeading', { title: work.title })}
             </h3>
             <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', margin: '0 0 16px' }}>
-              星評価・レビュー・配信情報をまとめて管理。完全無料。
+              {t('publicWork.ctaPanelSub')}
             </p>
             <Link href="/" style={{
               display: 'inline-block', padding: '10px 28px', borderRadius: 8,
               background: 'var(--fm-accent)', color: '#fff', fontSize: 14, fontWeight: 600,
               textDecoration: 'none',
             }}>
-              無料で始める
+              {t('publicWork.ctaStart')}
             </Link>
           </section>
         </AuthGate>
@@ -649,7 +652,7 @@ export function PublicWorkView({ work, community }: { work: PublicWorkData; comm
       {/* ログイン済み: sticky ボトムバー */}
       <OpenInAppBar
         href={`/?work=${work.id}&type=${work.type}`}
-        label="評価・レビューする"
+        label={t('publicWork.stickyLabel')}
       />
     </div>
   )

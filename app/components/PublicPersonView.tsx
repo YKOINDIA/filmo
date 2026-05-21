@@ -8,6 +8,7 @@
 import Link from 'next/link'
 import { getPersonDetailCached } from '@/app/lib/tmdb-cache'
 import { getSupabaseAdmin } from '@/app/lib/supabase-admin'
+import type { ServerT } from '@/app/lib/i18n/server'
 import PersonEditProposalTrigger from './PersonEditProposalTrigger'
 import PersonAddWorkTrigger from './PersonAddWorkTrigger'
 import AuthGate from './AuthGate'
@@ -130,6 +131,7 @@ function buildExternalLinks(ext: TmdbExternalIds | undefined, homepage: string |
   }
   if (homepage) {
     // 公式サイトは TMDB の person.homepage に入っているケースがある (映画と同じスキーマ風)。
+    // label は表示時に t('publicPerson.officialSite') で上書きする (ここではフォールバック用に ja)。
     links.push({ key: 'homepage', label: '公式サイト', url: homepage })
   }
   return links
@@ -236,41 +238,37 @@ export async function fetchPersonReviews(
 
 // ── Metadata helpers ────────────────────────────────────────────────────────
 
-const DEPARTMENT_JA: Record<string, string> = {
-  Directing: '監督',
-  Writing: '脚本家',
-  Acting: '俳優',
-  Production: 'プロデューサー',
-  Camera: '撮影',
-  Editing: '編集',
-  Sound: '音響',
-  Art: '美術',
+function deptLabel(t: ServerT, dept: string): string {
+  // 辞書に未登録の department は原文をそのまま返す
+  const v = t(`publicPerson.departments.${dept}`)
+  return v === `publicPerson.departments.${dept}` ? dept : v
 }
 
-export function buildPersonTitle(p: PublicPersonData): string {
-  const role = p.known_for_department ? DEPARTMENT_JA[p.known_for_department] || p.known_for_department : null
+export function buildPersonTitle(p: PublicPersonData, t: ServerT): string {
+  const role = p.known_for_department ? deptLabel(t, p.known_for_department) : null
   // 兼業の場合(監督 兼 脚本)は監督と脚本のフィルム数で補強
   const extras: string[] = []
-  if (p.director_works.length > 0 && p.known_for_department !== 'Directing') extras.push('監督')
-  if (p.writer_works.length > 0 && p.known_for_department !== 'Writing') extras.push('脚本家')
+  if (p.director_works.length > 0 && p.known_for_department !== 'Directing') extras.push(deptLabel(t, 'Directing'))
+  if (p.writer_works.length > 0 && p.known_for_department !== 'Writing') extras.push(deptLabel(t, 'Writing'))
   const combined = [role, ...extras].filter(Boolean).join('・')
-  return combined ? `${p.name}（${combined}）` : p.name
+  return combined
+    ? t('publicPerson.metaTitleWithRoles', { name: p.name, roles: combined })
+    : t('publicPerson.metaTitleNoRole', { name: p.name })
 }
 
-export function buildPersonDescription(p: PublicPersonData): string {
+export function buildPersonDescription(p: PublicPersonData, t: ServerT): string {
   const parts: string[] = []
   if (p.known_for_department) {
-    const role = DEPARTMENT_JA[p.known_for_department] || p.known_for_department
-    parts.push(`${role}`)
+    parts.push(deptLabel(t, p.known_for_department))
   }
-  if (p.birthday) parts.push(`${p.birthday.slice(0, 4)}年生まれ`)
-  if (p.place_of_birth) parts.push(`出身: ${p.place_of_birth}`)
+  if (p.birthday) parts.push(t('publicPerson.metaBirthYear', { year: p.birthday.slice(0, 4) }))
+  if (p.place_of_birth) parts.push(t('publicPerson.metaBirthplace', { place: p.place_of_birth }))
   if (p.director_works.length > 0) {
     const titles = p.director_works.slice(0, 3).map(c => c.title || c.name).filter(Boolean).join('・')
-    parts.push(`監督作品: ${titles}`)
+    parts.push(t('publicPerson.metaDirectorWorks', { titles }))
   } else if (p.cast.length > 0) {
     const titles = p.cast.slice(0, 3).map(c => c.title || c.name).filter(Boolean).join('・')
-    parts.push(`出演作品: ${titles}`)
+    parts.push(t('publicPerson.metaActorWorks', { titles }))
   }
   const head = parts.join(' / ')
   const tail = p.biography ? ` ${p.biography.replace(/\s+/g, ' ').trim()}` : ''
@@ -311,7 +309,9 @@ export function buildPersonJsonLd(
     jsonLd.birthPlace = { '@type': 'Place', name: p.place_of_birth }
   }
   if (p.known_for_department) {
-    jsonLd.jobTitle = DEPARTMENT_JA[p.known_for_department] || p.known_for_department
+    // JSON-LD は ja を採用 (Google は単一値を期待)。
+    const JA: Record<string, string> = { Directing: '監督', Writing: '脚本家', Acting: '俳優', Production: 'プロデューサー', Camera: '撮影', Editing: '編集', Sound: '音響', Art: '美術' }
+    jsonLd.jobTitle = JA[p.known_for_department] || p.known_for_department
   }
   // sameAs はエンティティ統合の手掛かりとして Google が重視する。
   // X / Instagram / IMDb / Wikidata / 公式サイトを並べる。
@@ -370,17 +370,17 @@ export function PublicPersonView({
   person,
   reviews = [],
   reviewStats = { count: 0, avg: null },
+  t,
 }: {
   person: PublicPersonData
   reviews?: PublicPersonReview[]
   reviewStats?: PersonReviewStats
+  t: ServerT
 }) {
   const profile = buildPersonImageUrl(person.profile_path, 'h632')
-  const role = person.known_for_department
-    ? DEPARTMENT_JA[person.known_for_department] || person.known_for_department
-    : null
+  const role = person.known_for_department ? deptLabel(t, person.known_for_department) : null
   const personUrl = buildPersonUrl(person)
-  const shareTitle = buildPersonTitle(person)
+  const shareTitle = buildPersonTitle(person, t)
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--fm-bg)', color: 'var(--fm-text)', paddingBottom: 60 }}>
@@ -401,7 +401,7 @@ export function PublicPersonView({
               background: 'var(--fm-accent)', color: '#fff', fontSize: 12, fontWeight: 600,
               textDecoration: 'none',
             }}>
-              無料で記録を始める
+              {t('publicPerson.ctaCreateAccount')}
             </Link>
           </AuthGate>
         </div>
@@ -431,24 +431,24 @@ export function PublicPersonView({
             )}
             {person.also_known_as.length > 0 && (
               <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginBottom: 8 }}>
-                別名: {person.also_known_as.slice(0, 3).join(' / ')}
+                {t('publicPerson.alsoKnownAs', { names: person.also_known_as.slice(0, 3).join(' / ') })}
               </div>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, color: 'var(--fm-text-sub)' }}>
-              {person.birthday && <div>生年月日: {person.birthday}{person.deathday ? ` 〜 ${person.deathday}` : ''}</div>}
-              {person.place_of_birth && <div>出身地: {person.place_of_birth}</div>}
+              {person.birthday && <div>{t('publicPerson.birthday', { date: `${person.birthday}${person.deathday ? ` 〜 ${person.deathday}` : ''}` })}</div>}
+              {person.place_of_birth && <div>{t('publicPerson.birthplace', { place: person.place_of_birth })}</div>}
               {(person.director_works.length > 0 || person.writer_works.length > 0 || person.cast.length > 0) && (
                 <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {person.director_works.length > 0 && <span>監督 {person.director_works.length}作品</span>}
-                  {person.writer_works.length > 0 && <span>脚本 {person.writer_works.length}作品</span>}
-                  {person.cast.length > 0 && <span>出演 {person.cast.length}作品</span>}
+                  {person.director_works.length > 0 && <span>{t('publicPerson.directorCount', { n: person.director_works.length })}</span>}
+                  {person.writer_works.length > 0 && <span>{t('publicPerson.writerCount', { n: person.writer_works.length })}</span>}
+                  {person.cast.length > 0 && <span>{t('publicPerson.actorCount', { n: person.cast.length })}</span>}
                 </div>
               )}
               {reviewStats.count > 0 && reviewStats.avg != null && (
                 <div style={{ marginTop: 8, fontSize: 13 }}>
                   <span style={{ color: 'var(--fm-star)', fontWeight: 700 }}>★ {reviewStats.avg.toFixed(1)}</span>
                   <span style={{ color: 'var(--fm-text-muted)', marginLeft: 6 }}>
-                    （Filmo {reviewStats.count}人の評価）
+                    {t('publicPerson.filmoRatingSuffix', { count: reviewStats.count })}
                   </span>
                 </div>
               )}
@@ -480,7 +480,7 @@ export function PublicPersonView({
 
         {person.biography && (
           <section style={{ marginBottom: 28 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 8px' }}>プロフィール</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 8px' }}>{t('publicPerson.biographyHeading')}</h2>
             <p style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--fm-text-sub)', margin: 0, whiteSpace: 'pre-wrap' }}>
               {person.biography}
             </p>
@@ -489,7 +489,7 @@ export function PublicPersonView({
 
         {person.external_links.length > 0 && (
           <section style={{ marginBottom: 28 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px' }}>リンク</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px' }}>{t('publicPerson.linksHeading')}</h2>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {person.external_links.map(l => (
                 <a
@@ -506,7 +506,7 @@ export function PublicPersonView({
                   }}
                 >
                   <ExternalIcon type={l.key} />
-                  {l.label}
+                  {l.key === 'homepage' ? t('publicPerson.officialSite') : l.label}
                 </a>
               ))}
             </div>
@@ -514,19 +514,20 @@ export function PublicPersonView({
         )}
 
         {person.director_works.length > 0 && (
-          <CreditSection title="監督作品" works={person.director_works} />
+          <CreditSection title={t('publicPerson.directorWorksHeading')} works={person.director_works} />
         )}
         {person.writer_works.length > 0 && (
-          <CreditSection title="脚本作品" works={person.writer_works} />
+          <CreditSection title={t('publicPerson.writerWorksHeading')} works={person.writer_works} />
         )}
         {person.cast.length > 0 && (
-          <CreditSection title="出演作品" works={person.cast.slice(0, 24)} />
+          <CreditSection title={t('publicPerson.castWorksHeading')} works={person.cast.slice(0, 24)} />
         )}
 
         <PersonReviewsSection
           personName={person.name}
           reviews={reviews}
           stats={reviewStats}
+          t={t}
         />
 
         {/* 未ログイン: サインアップ誘導 */}
@@ -537,17 +538,17 @@ export function PublicPersonView({
             textAlign: 'center',
           }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px' }}>
-              {person.name}の作品を Filmo で記録しよう
+              {t('publicPerson.ctaPanelHeading', { name: person.name })}
             </h3>
             <p style={{ fontSize: 13, color: 'var(--fm-text-sub)', margin: '0 0 16px' }}>
-              星評価・レビュー・配信情報をまとめて管理。完全無料。
+              {t('publicPerson.ctaPanelSub')}
             </p>
             <Link href="/" style={{
               display: 'inline-block', padding: '10px 28px', borderRadius: 8,
               background: 'var(--fm-accent)', color: '#fff', fontSize: 14, fontWeight: 600,
               textDecoration: 'none',
             }}>
-              無料で始める
+              {t('publicPerson.ctaStart')}
             </Link>
           </section>
         </AuthGate>
@@ -556,7 +557,7 @@ export function PublicPersonView({
       {/* ログイン済み: sticky ボトムバー */}
       <OpenInAppBar
         href={`/?person=${person.id}`}
-        label="FAN! / レビューを書く"
+        label={t('publicPerson.stickyLabel')}
       />
     </div>
   )
@@ -592,20 +593,22 @@ function PersonReviewsSection({
   personName,
   reviews,
   stats,
+  t,
 }: {
   personName: string
   reviews: PublicPersonReview[]
   stats: PersonReviewStats
+  t: ServerT
 }) {
   const hasReviews = reviews.length > 0
   return (
     <section style={{ marginTop: 36, marginBottom: 28 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
         <h2 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>
-          {personName} へのレビュー
+          {t('publicPerson.reviewsHeading', { name: personName })}
           {stats.count > 0 && (
             <span style={{ marginLeft: 8, fontSize: 13, color: 'var(--fm-text-muted)', fontWeight: 500 }}>
-              {stats.count}件
+              {t('publicPerson.reviewsCount', { count: stats.count })}
             </span>
           )}
         </h2>
@@ -622,8 +625,8 @@ function PersonReviewsSection({
           background: 'var(--fm-bg-card)', border: '1px dashed var(--fm-border)',
           textAlign: 'center', color: 'var(--fm-text-muted)', fontSize: 13,
         }}>
-          まだレビューはありません。<br />
-          ログインすると、あなたが最初のレビュアーになれます。
+          {t('publicPerson.noReviewsLine1')}<br />
+          {t('publicPerson.noReviewsLine2')}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
