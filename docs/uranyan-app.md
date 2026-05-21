@@ -1,107 +1,129 @@
-# うらにゃん 単独 iOS アプリのビルド・リリース手順
+# うらにゃん 単独 iOS アプリ — 配信運用ガイド
 
-Filmo 本体の Capacitor 構成を流用しつつ、`appId: jp.filmo.uranyan` / `appName: うらにゃん` で **App Store 上は別エントリ** として配信するための運用メモ。
+Filmo 本体の Capacitor 構成を流用し、**App Store 上は別エントリ** (`jp.filmo.uranyan` / 表示名「うらにゃん」) として配信するための運用メモ。
+
+## ゴール
+
+**ローカル Mac 不要・GitHub Actions だけで TestFlight / App Store までフル自動化** する。
 
 ## 設計概要
 
 - **Web コンテンツは同じ** — `https://filmo.me` をそのまま WKWebView でホスト
 - **エントリ URL を変える** — `https://filmo.me/games/uranyan?app=uranyan` で起動
-- **`?app=uranyan` で UI 分岐** — [app/lib/standaloneApp.ts](../app/lib/standaloneApp.ts) の `useStandaloneApp()` フックが URL クエリを検出し、localStorage に永続化する。検出時は:
-  - `TopBar` の「← ホーム」リンクを非表示 (`uranyan` の menu phase がアプリのホームになる)
-  - 「ログイン」リンクを非リンクのテキストに変換 (Filmo Dashboard に飛ばさないため)
-- **アカウントは Filmo と完全共通** — 同じ Supabase プロジェクトを使うため、Filmo で登録済みのユーザーは同じ ID/PW でうらにゃんアプリにもログイン可能。
+- **`?app=uranyan` で UI 分岐** — [app/lib/standaloneApp.ts](../app/lib/standaloneApp.ts) の `useStandaloneApp()` が検出して:
+  - `TopBar` の「← ホーム」を非表示 (menu phase がアプリのホーム)
+  - 「ログイン」リンクを非リンクテキスト化 (Filmo Dashboard に飛ばさない)
+- **アカウントは Filmo と完全共通** — 同じ Supabase。Filmo で登録済みのユーザーは同じ ID/PW でうらにゃんアプリにもログイン可能
+- **iOS ディレクトリは別** — `ios/` (Filmo) と `ios-uranyan/` (うらにゃん) が並存
 
-## 初回セットアップ手順 (まだ ios-uranyan/ が無い段階)
+## 初期セットアップ (1 回だけ)
 
-### 1. Capacitor 設定を切り替えて sync
+### ① Apple Developer Portal で App ID を登録
 
-```bash
-# 一時的に capacitor.config.ts を退避し、うらにゃん用設定で sync する
-mv capacitor.config.ts capacitor.config.ts.bak
-cp capacitor.uranyan.config.ts capacitor.config.ts
-npm run build           # webDir 用の Next.js ビルド (out/)
-npm run cap:sync:uranyan  # iOS / Android ディレクトリに sync
-```
+[Apple Developer Portal](https://developer.apple.com/account/resources/identifiers/list) →
+- Identifier: `jp.filmo.uranyan`
+- Description: `Uranyan`
+- Capabilities: 最小限 (Push Notifications を使うなら追加)
 
-`npx cap add ios` でまだ iOS プロジェクトを作っていない場合は、
+### ② Provisioning Profile を作成
 
-```bash
-npx cap add ios
-# 生成された ios/ を ios-uranyan/ にリネーム (Filmo 本体の ios/ と衝突回避)
-mv ios ios-uranyan
-```
+同 Portal → **Profiles** → **+** →
+- Type: App Store
+- App ID: `jp.filmo.uranyan`
+- Certificates: Filmo と同じ Distribution 証明書を選択 (Team 共通)
+- Name: `Uranyan App Store` (Fastfile の `URANYAN_PROFILE_NAME` と一致させる)
 
-### 2. Xcode で表示名・Bundle ID を確認
+ダウンロードした `.mobileprovision` を base64 化して GitHub Secrets に登録:
 
 ```bash
-open ios-uranyan/App.xcworkspace
+base64 -i Uranyan_App_Store.mobileprovision | pbcopy
 ```
 
-Xcode で:
-- Target **App** → **General** → **Identity**
-  - Display Name: `うらにゃん`
-  - Bundle Identifier: `jp.filmo.uranyan`
-- Target **App** → **General** → **App Icons and Launch Screen**
-  - App Icon Source: 専用アイコン (`Assets.xcassets/AppIcon.appiconset`) を差し替え
-  - Launch Screen: `LaunchScreen.storyboard` のロゴを差し替え
+→ GitHub Repository → Settings → Secrets and variables → Actions → New repository secret →
+- Name: `BUILD_PROVISION_PROFILE_URANYAN_BASE64`
+- Value: (ペースト)
 
-### 3. Info.plist (ios-uranyan/App/App/Info.plist)
+### ③ App Store Connect にアプリを登録
 
-- `CFBundleDisplayName` → `うらにゃん`
-- カメラ/写真関連の `NSCameraUsageDescription` 等はうらにゃんでは不要なら削除 OK
-  (App Store 審査で「使ってないなら消せ」と言われがち)
+[App Store Connect](https://appstoreconnect.apple.com/) → My Apps → **+** → New App →
+- Platform: iOS
+- Name: **うらにゃん** (12 文字以内 / Apple 制限)
+- Primary Language: Japanese
+- Bundle ID: `jp.filmo.uranyan` (Apple Developer Portal で登録済みのものが選択肢に出る)
+- SKU: `uranyan-001` (任意)
 
-### 4. 設定ファイルを元に戻す
+カテゴリ等の詳細は提出時に設定。
 
-sync が終わったら、
+### ④ ios-uranyan/ ディレクトリを CI で生成
+
+GitHub Actions → **iOS Init (うらにゃん)** → **Run workflow** を押す。
+
+完了後、自動生成される PR `chore(uranyan): init ios-uranyan/ via CI` をマージ。
+
+PR には:
+- `ios-uranyan/App.xcworkspace` (Bundle ID: `jp.filmo.uranyan`、表示名: うらにゃん)
+- Capacitor プラグイン sync 済み
+- 不要な usage description (カメラ/写真) は削除済み
+
+が含まれる。
+
+## 通常リリース手順
+
+### TestFlight (ベータ配信)
+
+GitHub Actions → **iOS Build & TestFlight (うらにゃん)** → Run workflow → lane: `beta_uranyan`
+
+完了するとビルドが TestFlight に上がる (処理待ち約 10〜30 分)。
+
+### App Store 本番提出
+
+同 workflow を `release_uranyan` lane で実行。
+ビルドが App Store Connect に上がったあと、Web UI から **手動でレビューに提出** する (メタデータ・スクショ・プライバシーラベルを設定後)。
+
+### タグでビルドトリガー
 
 ```bash
-rm capacitor.config.ts
-mv capacitor.config.ts.bak capacitor.config.ts
+git tag uranyan-v1.0.0-ios
+git push origin uranyan-v1.0.0-ios
 ```
 
-(Filmo 本体の sync を間違って実行しないように)
+→ 自動で `beta_uranyan` lane が実行される (Filmo 本体の `v*.*.*-ios` とは別タグ)。
 
-## 通常リリース時の流れ
+## GitHub Secrets 一覧 (うらにゃん専用に追加するもの)
 
-```bash
-# Filmo 本体のリリース
-npm run build && npm run cap:sync && npm run cap:ios
+| Secret 名 | 値 | 用途 |
+|---|---|---|
+| `BUILD_PROVISION_PROFILE_URANYAN_BASE64` | `Uranyan App Store.mobileprovision` を base64 化したもの | うらにゃん専用署名 |
 
-# うらにゃんアプリのリリース
-mv capacitor.config.ts capacitor.config.ts.bak
-cp capacitor.uranyan.config.ts capacitor.config.ts
-npm run build
-CAPACITOR_CONFIG_FILE=capacitor.uranyan.config.ts npx cap sync ios   # ios-uranyan/ に sync
-rm capacitor.config.ts
-mv capacitor.config.ts.bak capacitor.config.ts
-open ios-uranyan/App.xcworkspace                                       # Xcode で archive → App Store Connect
-```
-
-> **TODO**: 手作業を減らすため、`scripts/build-uranyan.sh` で自動化したい。Phase 2 で対応。
+他 (`KEYCHAIN_PASSWORD` / `BUILD_CERTIFICATE_BASE64` / `P12_PASSWORD` / `APP_STORE_CONNECT_API_KEY_*`) は Filmo 本体と共有 (同一 Apple Team)。
 
 ## App Store Connect 設定
 
-### 新規アプリ登録
-- バンドル ID: `jp.filmo.uranyan` (Apple Developer Portal で先に登録)
-- 名前: **うらにゃん** (12 文字以内 / Apple 制限)
-- プライマリ言語: 日本語
-- カテゴリ: **ライフスタイル** (占いは Lifestyle が主流。Entertainment より審査が緩い)
-- 価格: 無料
-
-### Apple 4.2 (Minimum Functionality) 対策
-- 申請ノートに以下を記載:
-  > このアプリは独自の占いロジック (相性計算・期間運勢・ファッション運勢・グループ相性、合計約 6,500 行のクライアントロジック) を提供します。Capacitor は配信フレームワークとして利用しており、コンテンツ自体は本アプリ独自のものです。
-- スクリーンショット: メニュー / 個別占い / 結果カード / 履歴 など 6 枚以上
-- プライバシーラベル: Filmo 本体と同じ設定 (Supabase 同居)
+| 項目 | 値 |
+|---|---|
+| カテゴリ | **ライフスタイル** (占いは Lifestyle が主流。Entertainment より審査が緩い) |
+| 価格 | 無料 |
+| プライバシーラベル | Filmo 本体と同じ (Supabase 同居) |
+| Apple 4.2 (Minimum Functionality) 対策 | 申請ノートに「独自占いロジック (相性計算・期間運勢・ファッション運勢・グループ相性、約 6,500 行のクライアントロジック) を本アプリ独自で実装。Capacitor は配信フレームワーク」と記載 |
 
 ### ASO キーワード候補
 - 主: `占い` `相性` `相性診断` `性格診断`
 - 副: `恋愛占い` `生年月日` `今日の運勢` `グループ` `友達` `カップル`
 
-## 既知の制約
+## 既知の制約・TODO
 
-- **iOS App ディレクトリが 2 つ並存する**: `ios/` (Filmo 本体) と `ios-uranyan/` (うらにゃん)。
-  - `.gitignore` に `ios-uranyan/App/Pods/` を追加するなどの整理が必要。
-- **Filmo 本体への遷移は完全に塞がない**: 例えば占い結果から作品リンクへの遷移は将来発生しうる。スタンドアロンモードでは `<a target="_blank">` で外部 Safari 起動が望ましい (今は未対応)。
-- **Universal Links** で Filmo と URL 衝突しないように、うらにゃんアプリは Universal Links を使わない方針 (`apple-app-site-association` には Filmo のみ列挙)。
+- **iOS ディレクトリが 2 つ並存** — `ios/` (Filmo) と `ios-uranyan/` (うらにゃん)。それぞれ独立した `App.xcworkspace`
+- **外部リンクの Safari 起動** — スタンドアロンモードで Filmo 本体への内部リンクが発生した場合、`window.open(url, '_system')` で外部 Safari にルートする処理が将来必要 (現状うらにゃんページから Filmo 他画面への遷移は無いので未対応)
+- **Universal Links** — `apple-app-site-association` は Filmo 本体だけ列挙し、うらにゃんは未使用 (URL 衝突回避)
+- **アプリアイコン / スプラッシュ素材** — `ios-uranyan/App/App/Assets.xcassets/AppIcon.appiconset` をピンク基調のうらにゃんブランド画像で差し替える必要あり (workflow_dispatch の init では未着手)
+
+## トラブルシューティング
+
+### `iOS Init` workflow が "ios-uranyan/ already exists" で失敗
+意図的に再生成したい場合は、ローカルで `ios-uranyan/` を削除してコミット → push してから再実行。
+
+### `iOS Build` で `URANYAN_PROFILE_NAME` が見つからないエラー
+Apple Developer Portal で Provisioning Profile の Name が Fastfile の `URANYAN_PROFILE_NAME` (= `Uranyan App Store`) と一致しているか確認。リネームしたら GitHub Secrets `BUILD_PROVISION_PROFILE_URANYAN_BASE64` も更新が必要。
+
+### Apple 4.2 でリジェクト
+申請ノート (前述) を強化し、スクショで「占いロジックが独自に動いている」ことが分かるように差し替える。
