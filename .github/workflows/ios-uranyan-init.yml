@@ -70,12 +70,24 @@ jobs:
         # capacitor.config.ts の webDir (out/) は存在しないと cap add ios が落ちる
         run: mkdir -p out
 
+      - name: Move Filmo's ios/ aside
+        # `npx cap add ios` は既存の ios/ ディレクトリがあると拒否する:
+        #   [error] ios platform already exists.
+        # Filmo 本体の ios/ を一時退避して新規プロジェクトを生成できるようにする。
+        run: |
+          if [ -d ios ]; then
+            mv ios ios.filmo.bak
+          fi
+
       - name: npx cap add ios (新規 iOS プロジェクト生成)
         run: npx cap add ios
 
-      - name: Rename ios/ -> ios-uranyan/
-        # Filmo 本体の ios/ ディレクトリと衝突しないようにリネーム
-        run: mv ios ios-uranyan
+      - name: Rename ios/ -> ios-uranyan/ and restore Filmo's ios/
+        run: |
+          mv ios ios-uranyan
+          if [ -d ios.filmo.bak ]; then
+            mv ios.filmo.bak ios
+          fi
 
       - name: Restore Filmo 本体の capacitor.config.ts
         run: |
