@@ -97,15 +97,20 @@ jobs:
       - name: Patch Info.plist (CFBundleDisplayName = うらにゃん)
         run: |
           plutil -replace CFBundleDisplayName -string "うらにゃん" ios-uranyan/App/App/Info.plist
-          # カメラ・写真関連の usage description はうらにゃんでは未使用なので削除して
-          # Apple の "purpose-string missing for unused API" 系の警告を予防
-          plutil -remove NSCameraUsageDescription ios-uranyan/App/App/Info.plist || true
-          plutil -remove NSPhotoLibraryUsageDescription ios-uranyan/App/App/Info.plist || true
-          plutil -remove NSPhotoLibraryAddUsageDescription ios-uranyan/App/App/Info.plist || true
           # 輸出コンプライアンス: 標準 HTTPS 以外の暗号化を使っていないので false。
           # これが無いと TestFlight で毎ビルド「Missing Compliance」になる。
           plutil -replace ITSAppUsesNonExemptEncryption -bool false ios-uranyan/App/App/Info.plist || \
             plutil -insert ITSAppUsesNonExemptEncryption -bool false ios-uranyan/App/App/Info.plist
+          # @capacitor/camera を npm 依存に持つため、Apple のバイナリ解析が
+          # Photos / AVFoundation API への参照を検出して purpose string を要求する
+          # (ITMS-90683)。3 種とも宣言。実機能としてはシェア結果画像の保存にのみ
+          # 写真ライブラリ書き込みを使う可能性がある。
+          plutil -replace NSCameraUsageDescription -string "占いシェアカードを撮影・編集する際にカメラを使用する場合があります。" ios-uranyan/App/App/Info.plist || \
+            plutil -insert NSCameraUsageDescription -string "占いシェアカードを撮影・編集する際にカメラを使用する場合があります。" ios-uranyan/App/App/Info.plist
+          plutil -replace NSPhotoLibraryUsageDescription -string "占い結果のシェア時に写真ライブラリにアクセスする場合があります。" ios-uranyan/App/App/Info.plist || \
+            plutil -insert NSPhotoLibraryUsageDescription -string "占い結果のシェア時に写真ライブラリにアクセスする場合があります。" ios-uranyan/App/App/Info.plist
+          plutil -replace NSPhotoLibraryAddUsageDescription -string "占い結果のシェア画像を写真ライブラリに保存する際に使用します。" ios-uranyan/App/App/Info.plist || \
+            plutil -insert NSPhotoLibraryAddUsageDescription -string "占い結果のシェア画像を写真ライブラリに保存する際に使用します。" ios-uranyan/App/App/Info.plist
 
       - name: Verify patches
         run: |
