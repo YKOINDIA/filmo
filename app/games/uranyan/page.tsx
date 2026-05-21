@@ -831,16 +831,16 @@ export default function UranyanPage() {
 // ====================================================
 // 部品: LoginLinkInline
 // ====================================================
-// 通常は Filmo の `/` (Dashboard 内の auth フォーム) に飛ばす。
-// うらにゃん単独アプリ (?app=uranyan) からは Filmo 本体に遷移したくないので、
-// プレーンテキストとして表示する (= 「ログイン」という単語だけ残してリンク無効化)。
-// 履歴保存などのアカウント必須機能は別途「Filmo アプリで作成可能」と案内している。
+// うらにゃん専用の認証ページ /games/uranyan/auth に飛ばす。
+// Filmo 本体の Dashboard には飛ばさないので、Apple 4.2 (Minimum Functionality)
+// 対策と「Filmo の中身を見せない」UX の両立ができる。
+// 認証成功後は /games/uranyan に戻る (?app=uranyan を維持してアプリモード継続)。
 function LoginLinkInline({ style, children }: { style?: React.CSSProperties; children: React.ReactNode }) {
   const mode = useStandaloneApp()
-  if (mode === 'uranyan') {
-    return <span style={style}>{children}</span>
-  }
-  return <Link href="/" style={style}>{children}</Link>
+  const href = mode === 'uranyan'
+    ? '/games/uranyan/auth?app=uranyan'
+    : '/games/uranyan/auth'
+  return <Link href={href} style={style}>{children}</Link>
 }
 
 // ====================================================
