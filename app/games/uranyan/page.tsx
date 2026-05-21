@@ -94,6 +94,20 @@ export default function UranyanPage() {
   const standaloneMode = useStandaloneApp()
   const isStandalone = standaloneMode === 'uranyan'
 
+  // Capacitor 環境なら splash を明示的に隠す (Filmo の app/page.tsx と同じパターン)。
+  // capacitor.uranyan.config.ts で launchAutoHide=false にしているため、
+  // ここで呼ばないと splash が消えず真っ白/ピンク画面のまま見える。
+  // うらにゃんアプリは / を経由せず /games/uranyan に直接行くので、
+  // Filmo 本体の app/page.tsx の hide() は呼ばれない。
+  useEffect(() => {
+    (async () => {
+      try {
+        const { SplashScreen } = await import('@capacitor/splash-screen')
+        await SplashScreen.hide()
+      } catch { /* not in Capacitor */ }
+    })()
+  }, [])
+
   const [phase, setPhase] = useState<Phase>('menu')
   const [mode, setMode] = useState<Mode>('life')
   const [me, setMe] = useState<MyProfile | null>(null)
