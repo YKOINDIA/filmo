@@ -51,6 +51,9 @@ const config: CapacitorConfig = {
     webContentsDebuggingEnabled: false,
   },
   ios: {
+    // iOS プロジェクトを Filmo 本体の `ios/` ではなく `ios-uranyan/` に配置する。
+    // これを指定しないと `npx cap sync ios` が Filmo の `ios/` を上書きしてしまう。
+    path: 'ios-uranyan',
     // うらにゃんアプリのセーフエリア背景もピンクに揃える。
     backgroundColor: '#FF7AAE',
     contentInset: 'automatic',

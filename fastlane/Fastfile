@@ -216,23 +216,19 @@ platform :ios do
     Dir.chdir("..") do
       sh("npm ci")
 
-      # capacitor.config.ts を一時退避し、うらにゃん用設定で sync する
+      # capacitor.config.ts を一時退避し、うらにゃん用設定で sync する。
+      # capacitor.uranyan.config.ts に `ios.path: 'ios-uranyan'` を指定済みなので、
+      # `cap sync ios` は ios-uranyan/ をターゲットに動作する。
       sh("cp capacitor.config.ts capacitor.config.ts.filmo_bak")
       sh("cp #{URANYAN_CAPACITOR_CFG} capacitor.config.ts")
 
       # webDir (out/) 実体チェック用
       sh("mkdir -p out")
 
-      # ios-uranyan/ 用に sync。--inline でディレクトリ指定する
-      # Capacitor 8 では `npx cap sync ios` は ios/ ディレクトリを見るので、
-      # 一時的に ios-uranyan/ -> ios/ の symlink を張る方法もあるが、
-      # ここでは Capacitor の `--target` を使わずに、sync 後に ios/ を破棄する方針。
-      # ……ではなく、シンプルに sync 対象を明示するために
-      # ディレクトリを直接指定する書き方を使う。
-      sh("npx cap copy ios-uranyan || npx cap copy ios")
-      sh("npx cap update ios-uranyan || npx cap update ios")
+      # ios.path が ios-uranyan を指しているため、これで ios-uranyan/ に sync される
+      sh("npx cap sync ios")
 
-      # config を元に戻す
+      # config を元に戻す (commit 対象にしないため)
       sh("rm capacitor.config.ts")
       sh("mv capacitor.config.ts.filmo_bak capacitor.config.ts")
 
