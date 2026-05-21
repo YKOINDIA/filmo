@@ -5,7 +5,6 @@ import "./globals.css";
 import { LocaleProviderWrapper } from "./components/LocaleProviderWrapper";
 import GoogleAnalytics from "./components/GoogleAnalytics";
 import MaintenanceCard from "./components/MaintenanceCard";
-import { getServerDictionary, toOgLocale, alternateOgLocales } from './lib/i18n/server'
 
 // 計画メンテナンス用キルスイッチ。Vercel の環境変数で `MAINTENANCE_MODE=1` を
 // セットしてデプロイすると、サイト全体がメンテナンス画面に切り替わる。
@@ -26,62 +25,55 @@ const geistMono = Geist_Mono({
 
 const APP_URL = 'https://filmo.me'
 
-// 多言語化のため metadata は cookies()/headers() を読む dynamic に切替。
-// 静的ルートのキャッシュはなくなるが、ルートレイアウトは元々 SPA シェルなので影響小。
-export async function generateMetadata(): Promise<Metadata> {
-  const { locale, t } = await getServerDictionary()
-  const title = t('layout.titleDefault')
-  const ogTitle = t('layout.titleOg')
-  const description = t('layout.description')
-  const descriptionShort = t('layout.descriptionShort')
-  return {
-    metadataBase: new URL(APP_URL),
-    title: {
-      default: title,
-      template: '%s | Filmo',
-    },
-    description,
-    keywords: [
-      '映画レビュー', 'ドラマレビュー', 'アニメレビュー', '鑑賞記録',
-      '映画アプリ', '配信情報', 'Netflix', 'Disney+', 'U-NEXT',
-      '映画ランキング', 'Filmo', 'フィルモ',
-      'movie review', 'film tracker', 'tv shows', 'anime', 'watch list',
-    ],
-    authors: [{ name: 'Filmo', url: APP_URL }],
-    creator: 'Filmo',
-    publisher: 'Filmo',
-    robots: { index: true, follow: true, googleBot: { index: true, follow: true, 'max-image-preview': 'large' } },
-    alternates: { canonical: APP_URL },
-    openGraph: {
-      type: 'website',
-      locale: toOgLocale(locale),
-      alternateLocale: alternateOgLocales(locale),
-      url: APP_URL,
-      siteName: 'Filmo',
-      title: ogTitle,
-      description: descriptionShort,
-      images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'Filmo' }],
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: ogTitle,
-      description: descriptionShort,
-      images: ['/og-image.png'],
-    },
-    manifest: '/manifest.json',
-    appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Filmo' },
-    formatDetection: { telephone: false },
-    // Google Search Console / Bing Webmaster Tools の所有権確認用。
-    // 値は環境変数で設定 (Vercel: Production / Preview 両方に登録)。
-    // 未設定なら meta tag 自体が出力されないので安全。
-    verification: {
-      google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || undefined,
-      other: process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION
-        ? { 'msvalidate.01': process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION }
-        : undefined,
-    },
-  }
-}
+// metadata は意図的に静的に保つ (cookies() を読まない)。
+// 多言語対応は client 側の LocaleProvider で UI 切替する設計に揃え、
+// サーバー側で全リクエストごとに dictionary を解決する Fluid CPU コストを避ける。
+// OG タグは ja 固定で許容 (Google も ja でインデックス)。
+export const metadata: Metadata = {
+  metadataBase: new URL(APP_URL),
+  title: {
+    default: 'Filmo - 映画・ドラマ・アニメの記録・レビューサービス【完全無料】',
+    template: '%s | Filmo',
+  },
+  description: '映画・ドラマ・アニメの鑑賞記録、レビュー、配信情報をまとめて管理。星評価、統計ビジュアライズ、ゲーミフィケーションで鑑賞体験をもっと楽しく。完全無料。',
+  keywords: [
+    '映画レビュー', 'ドラマレビュー', 'アニメレビュー', '鑑賞記録',
+    '映画アプリ', '配信情報', 'Netflix', 'Disney+', 'U-NEXT',
+    '映画ランキング', 'Filmo', 'フィルモ',
+  ],
+  authors: [{ name: 'Filmo', url: APP_URL }],
+  creator: 'Filmo',
+  publisher: 'Filmo',
+  robots: { index: true, follow: true, googleBot: { index: true, follow: true, 'max-image-preview': 'large' } },
+  alternates: { canonical: APP_URL },
+  openGraph: {
+    type: 'website',
+    locale: 'ja_JP',
+    url: APP_URL,
+    siteName: 'Filmo',
+    title: 'Filmo - 映画・ドラマ・アニメの記録・レビューサービス',
+    description: '映画・ドラマ・アニメの鑑賞記録、レビュー、配信情報をまとめて管理。完全無料。',
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'Filmo' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Filmo - 映画・ドラマ・アニメの記録・レビューサービス',
+    description: '映画・ドラマ・アニメの鑑賞記録、レビュー、配信情報をまとめて管理。完全無料。',
+    images: ['/og-image.png'],
+  },
+  manifest: '/manifest.json',
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Filmo' },
+  formatDetection: { telephone: false },
+  // Google Search Console / Bing Webmaster Tools の所有権確認用。
+  // 値は環境変数で設定 (Vercel: Production / Preview 両方に登録)。
+  // 未設定なら meta tag 自体が出力されないので安全。
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || undefined,
+    other: process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION
+      ? { 'msvalidate.01': process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION }
+      : undefined,
+  },
+};
 
 export const viewport: Viewport = {
   themeColor: '#08090d',
@@ -124,27 +116,17 @@ const jsonLd = {
   ],
 }
 
-const HTML_LANG_MAP: Record<string, string> = {
-  ja: 'ja',
-  en: 'en',
-  ko: 'ko',
-  zh: 'zh-CN',
-  es: 'es',
-}
-
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   const maintenanceMode = process.env.MAINTENANCE_MODE === '1'
-  const { locale } = await getServerDictionary()
-  const htmlLang = HTML_LANG_MAP[locale] || 'ja'
   return (
     // suppressHydrationWarning: 下の inline script が hydration 前に data-theme 属性を
     // セットするため React の hydration mismatch 警告を抑止する。
     // この警告は iOS WKWebView では稀に致命的になるため (本番黒画面の原因報告あり)。
-    <html lang={htmlLang} data-theme="dark" suppressHydrationWarning>
+    <html lang="ja" data-theme="dark" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('filmo_theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();` }} />
         <link rel="apple-touch-icon" href="/icon-192.png" />
