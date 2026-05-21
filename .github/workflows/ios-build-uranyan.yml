@@ -1,0 +1,133 @@
+name: iOS Build & TestFlight (うらにゃん)
+
+# Filmo 本体の ios-build.yml と同じ構造で、ターゲットを ios-uranyan/ に
+# 切り替えた版。BUNDLE_ID: jp.filmo.uranyan、Provisioning Profile も別。
+# 証明書 (.p12) は Filmo と同じ Apple Team なので共有可能。
+
+on:
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: "Fastlane lane (beta_uranyan = TestFlight / release_uranyan = App Store)"
+        required: true
+        default: "beta_uranyan"
+        type: choice
+        options:
+          - beta_uranyan
+          - release_uranyan
+  push:
+    tags:
+      - "uranyan-v*.*.*-ios"
+
+# Filmo 本体と同時に走らないよう concurrency を分ける (証明書 keychain は別物だが念のため)
+concurrency:
+  group: ios-build-uranyan
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build & Upload (うらにゃん)
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    env:
+      FASTLANE_SKIP_UPDATE_CHECK: "1"
+      FASTLANE_HIDE_CHANGELOG: "1"
+      FASTLANE_DISABLE_COLORS: "1"
+      LC_ALL: en_US.UTF-8
+      LANG: en_US.UTF-8
+
+      # ビルド署名 — 証明書は Filmo と同じ (同一 Apple Team)
+      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+      P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+      # Provisioning Profile はうらにゃん専用 (jp.filmo.uranyan 用)
+      BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_URANYAN_BASE64 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify ios-uranyan/ exists
+        run: |
+          if [ ! -d ios-uranyan ]; then
+            echo "::error::ios-uranyan/ does not exist. Run 'iOS Init (うらにゃん)' workflow first."
+            exit 1
+          fi
+
+      - name: Select Xcode 26.3
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.3.app
+          xcodebuild -version
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Setup Ruby + Bundler
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: ios-uranyan/App/Pods
+          key: ${{ runner.os }}-pods-uranyan-${{ hashFiles('ios-uranyan/App/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-uranyan-
+
+      - name: Write App Store Connect API Key JSON
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        run: |
+          mkdir -p $RUNNER_TEMP/appstore
+          echo "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > $RUNNER_TEMP/appstore/AuthKey.p8
+          cat > $RUNNER_TEMP/appstore/api_key.json <<EOF
+          {
+            "key_id": "$APP_STORE_CONNECT_API_KEY_ID",
+            "issuer_id": "$APP_STORE_CONNECT_API_ISSUER_ID",
+            "key": $(python3 -c "import json,sys; print(json.dumps(open('$RUNNER_TEMP/appstore/AuthKey.p8').read()))"),
+            "in_house": false
+          }
+          EOF
+          echo "APP_STORE_CONNECT_API_KEY_JSON_PATH=$RUNNER_TEMP/appstore/api_key.json" >> $GITHUB_ENV
+
+      - name: Install CocoaPods dependencies (if Podfile exists)
+        run: |
+          if [ -f ios-uranyan/App/Podfile ]; then
+            cd ios-uranyan/App && pod install --repo-update
+          else
+            echo "No Podfile present; skipping pod install."
+          fi
+
+      - name: Run Fastlane
+        env:
+          FASTLANE_LANE: ${{ github.event.inputs.lane || 'beta_uranyan' }}
+        run: |
+          bundle exec fastlane ios $FASTLANE_LANE
+
+      - name: Upload IPA artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Uranyan-ipa
+          path: build/ios-uranyan/*.ipa
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload Fastlane logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fastlane-logs-uranyan
+          path: |
+            fastlane/report.xml
+            ~/Library/Logs/gym/**/*.log
+          if-no-files-found: ignore
+          retention-days: 7

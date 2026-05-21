@@ -12,6 +12,8 @@
     "cap:ios": "npx cap open ios",
     "cap:build:android": "npx cap sync android",
     "cap:build:ios": "npx cap sync ios",
+    "cap:sync:uranyan": "CAPACITOR_CONFIG_FILE=capacitor.uranyan.config.ts npx cap sync",
+    "cap:ios:uranyan": "CAPACITOR_CONFIG_FILE=capacitor.uranyan.config.ts npx cap open ios",
     "seed:curated": "node scripts/seed-curated-lists.mjs",
     "seed:emoji-quizzes": "node scripts/seed-emoji-quizzes.mjs"
   },

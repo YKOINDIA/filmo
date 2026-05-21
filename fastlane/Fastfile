@@ -18,6 +18,15 @@ BUNDLE_ID        = "jp.filmo.app"
 PROFILE_NAME     = "Filmo App Store"
 CODE_SIGN_IDENT  = "Apple Distribution"
 
+# ── うらにゃん (jp.filmo.uranyan) 単独アプリ用の上書き定数 ──
+URANYAN_XCODE_PROJECT  = "ios-uranyan/App/App.xcodeproj"
+URANYAN_EXPORT_OPTIONS = "ios-uranyan/App/ExportOptions.plist"
+URANYAN_OUTPUT_DIR     = "build/ios-uranyan"
+URANYAN_IPA_NAME       = "Uranyan"
+URANYAN_BUNDLE_ID      = "jp.filmo.uranyan"
+URANYAN_PROFILE_NAME   = "Uranyan App Store"
+URANYAN_CAPACITOR_CFG  = "capacitor.uranyan.config.ts"
+
 platform :ios do
   desc "CI 用: 証明書をキーチェーンにインストール"
   private_lane :setup_ci_keychain do
@@ -191,6 +200,179 @@ platform :ios do
       skip_metadata: true,
       skip_screenshots: true,
       submit_for_review: false, # 手動でレビュー提出する
+      force: true
+    )
+  end
+
+  # ============================================================
+  # うらにゃん 単独アプリ (jp.filmo.uranyan) 用 lane
+  # ============================================================
+  # ios-build.yml と同じ keychain セットアップを使うが、Provisioning Profile
+  # だけ別 (URANYAN 用 GitHub Secret BUILD_PROVISION_PROFILE_URANYAN_BASE64)。
+  # 証明書 (.p12) は同一 Apple Team なので Filmo 本体と共有可能。
+
+  desc "うらにゃん用: 依存解決 + cap sync (capacitor.uranyan.config.ts を一時的に有効化)"
+  lane :prepare_web_uranyan do
+    Dir.chdir("..") do
+      sh("npm ci")
+
+      # capacitor.config.ts を一時退避し、うらにゃん用設定で sync する
+      sh("cp capacitor.config.ts capacitor.config.ts.filmo_bak")
+      sh("cp #{URANYAN_CAPACITOR_CFG} capacitor.config.ts")
+
+      # webDir (out/) 実体チェック用
+      sh("mkdir -p out")
+
+      # ios-uranyan/ 用に sync。--inline でディレクトリ指定する
+      # Capacitor 8 では `npx cap sync ios` は ios/ ディレクトリを見るので、
+      # 一時的に ios-uranyan/ -> ios/ の symlink を張る方法もあるが、
+      # ここでは Capacitor の `--target` を使わずに、sync 後に ios/ を破棄する方針。
+      # ……ではなく、シンプルに sync 対象を明示するために
+      # ディレクトリを直接指定する書き方を使う。
+      sh("npx cap copy ios-uranyan || npx cap copy ios")
+      sh("npx cap update ios-uranyan || npx cap update ios")
+
+      # config を元に戻す
+      sh("rm capacitor.config.ts")
+      sh("mv capacitor.config.ts.filmo_bak capacitor.config.ts")
+
+      sh("rm -rf ~/Library/Caches/org.swift.swiftpm/artifacts")
+    end
+  end
+
+  desc "うらにゃん用: 一時キーチェーンに証明書 + 専用 Provisioning Profile を配置"
+  private_lane :setup_ci_keychain_uranyan do
+    keychain_name     = "uranyan_ci.keychain-db"
+    keychain_password = ENV.fetch("KEYCHAIN_PASSWORD")
+
+    create_keychain(
+      name: keychain_name,
+      password: keychain_password,
+      default_keychain: true,
+      unlock: true,
+      timeout: 3600,
+      lock_when_sleeps: false
+    )
+
+    cert_path = "/tmp/build_cert_uranyan.p12"
+    cert_bytes = Base64.decode64(ENV.fetch("BUILD_CERTIFICATE_BASE64"))
+    File.binwrite(cert_path, cert_bytes)
+    if cert_bytes.bytesize < 100
+      UI.user_error!("BUILD_CERTIFICATE_BASE64 decoded to only #{cert_bytes.bytesize} bytes; secret is empty or corrupt")
+    end
+
+    import_certificate(
+      certificate_path: cert_path,
+      certificate_password: ENV.fetch("P12_PASSWORD"),
+      keychain_name: keychain_name,
+      keychain_password: keychain_password,
+      log_output: true
+    )
+
+    identity_output = `security find-identity -v -p codesigning "#{File.expand_path("~/Library/Keychains/#{keychain_name}")}"`
+    unless identity_output.include?(CODE_SIGN_IDENT)
+      UI.user_error!("'#{CODE_SIGN_IDENT}' identity not found in keychain after import")
+    end
+
+    File.delete(cert_path) if File.exist?(cert_path)
+
+    # うらにゃん専用 Provisioning Profile を配置
+    profile_bytes = Base64.decode64(ENV.fetch("BUILD_PROVISION_PROFILE_BASE64"))
+    profile_path  = File.expand_path("~/Library/MobileDevice/Provisioning Profiles/uranyan_appstore.mobileprovision")
+    FileUtils.mkdir_p(File.dirname(profile_path))
+    File.binwrite(profile_path, profile_bytes)
+    if profile_bytes.bytesize < 100
+      UI.user_error!("BUILD_PROVISION_PROFILE_BASE64 decoded to only #{profile_bytes.bytesize} bytes; secret is empty or corrupt")
+    end
+
+    profile_plist = `security cms -D -i "#{profile_path}" 2>/dev/null`
+    if profile_plist.empty?
+      UI.user_error!("Provisioning profile failed to decode via 'security cms -D'; file is corrupt")
+    end
+
+    UI.success("Uranyan CI keychain + provisioning profile setup complete")
+  end
+
+  desc "うらにゃん用: Xcode 署名設定を手動方式に書き換え"
+  private_lane :configure_manual_signing_uranyan do
+    update_code_signing_settings(
+      path: URANYAN_XCODE_PROJECT,
+      use_automatic_signing: false,
+      team_id: TEAM_ID,
+      bundle_identifier: URANYAN_BUNDLE_ID,
+      profile_name: URANYAN_PROFILE_NAME,
+      code_sign_identity: CODE_SIGN_IDENT,
+      targets: [TARGET]
+    )
+  end
+
+  desc "うらにゃん: TestFlight ベータ配信"
+  lane :beta_uranyan do
+    setup_ci_keychain_uranyan if is_ci
+    prepare_web_uranyan
+    configure_manual_signing_uranyan
+
+    build_number = ENV["GITHUB_RUN_NUMBER"] || Time.now.strftime("%Y%m%d%H%M")
+    increment_build_number(
+      xcodeproj: URANYAN_XCODE_PROJECT,
+      build_number: build_number
+    )
+
+    build_app(
+      project: URANYAN_XCODE_PROJECT,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      export_options: URANYAN_EXPORT_OPTIONS,
+      output_directory: URANYAN_OUTPUT_DIR,
+      output_name: "#{URANYAN_IPA_NAME}.ipa",
+      clean: true,
+      silent: false,
+      include_symbols: true,
+      include_bitcode: false
+    )
+
+    upload_to_testflight(
+      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"],
+      ipa: "#{URANYAN_OUTPUT_DIR}/#{URANYAN_IPA_NAME}.ipa",
+      app_identifier: URANYAN_BUNDLE_ID,
+      skip_waiting_for_build_processing: true,
+      skip_submission: true
+    )
+  end
+
+  desc "うらにゃん: App Store 本番提出 (審査キュー投入)"
+  lane :release_uranyan do
+    setup_ci_keychain_uranyan if is_ci
+    prepare_web_uranyan
+    configure_manual_signing_uranyan
+
+    build_number = ENV["GITHUB_RUN_NUMBER"] || Time.now.strftime("%Y%m%d%H%M")
+    increment_build_number(
+      xcodeproj: URANYAN_XCODE_PROJECT,
+      build_number: build_number
+    )
+
+    build_app(
+      project: URANYAN_XCODE_PROJECT,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      export_options: URANYAN_EXPORT_OPTIONS,
+      output_directory: URANYAN_OUTPUT_DIR,
+      output_name: "#{URANYAN_IPA_NAME}.ipa",
+      clean: true,
+      include_symbols: true,
+      include_bitcode: false
+    )
+
+    upload_to_app_store(
+      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"],
+      ipa: "#{URANYAN_OUTPUT_DIR}/#{URANYAN_IPA_NAME}.ipa",
+      app_identifier: URANYAN_BUNDLE_ID,
+      skip_metadata: true,
+      skip_screenshots: true,
+      submit_for_review: false,
       force: true
     )
   end
