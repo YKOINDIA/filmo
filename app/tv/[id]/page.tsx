@@ -11,20 +11,20 @@ import {
   buildWorkJsonLd,
   PublicWorkView,
 } from '@/app/components/PublicWorkView'
-import { getServerDictionary, toOgLocale, alternateOgLocales } from '@/app/lib/i18n/server'
+
+export const revalidate = 86400
 
 type Props = { params: Promise<{ id: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params
-  const { locale, t } = await getServerDictionary()
   const work = await fetchPublicWork(id, 'tv')
   if (!work) {
-    return { title: t('publicWork.notFoundTitle'), robots: { index: false, follow: false } }
+    return { title: '作品が見つかりません', robots: { index: false, follow: false } }
   }
   const community = await fetchFilmoCommunity(work.id)
-  const title = buildWorkTitle(work, t)
-  const description = buildWorkDescription(work, t, community)
+  const title = buildWorkTitle(work)
+  const description = buildWorkDescription(work, community)
   const url = buildWorkUrl(work)
   const image = buildPosterUrl(work.poster_path, 'w780')
 
@@ -37,12 +37,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       : { index: false, follow: true },
     openGraph: {
       type: 'video.tv_show',
+      locale: 'ja_JP',
       url,
       siteName: 'Filmo',
       title,
       description,
-      locale: toOgLocale(locale),
-      alternateLocale: alternateOgLocales(locale),
       images: image ? [{ url: image, width: 780, height: 1170, alt: work.title }] : undefined,
     },
     twitter: {
@@ -56,7 +55,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function TvPage({ params }: Props) {
   const { id } = await params
-  const { t } = await getServerDictionary()
   const work = await fetchPublicWork(id, 'tv')
   if (!work) notFound()
 
@@ -68,7 +66,7 @@ export default async function TvPage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
       />
-      <PublicWorkView work={work} community={community} t={t} />
+      <PublicWorkView work={work} community={community} />
     </>
   )
 }
