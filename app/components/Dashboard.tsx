@@ -665,6 +665,28 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
             </div>
           </Link>
           <Link
+            href="/games/filmappy"
+            style={{
+              display: 'block', padding: 16, borderRadius: 14,
+              background: 'linear-gradient(135deg, rgba(255,80,120,0.20), rgba(255,210,74,0.12))',
+              border: '1px solid var(--fm-border)',
+              textDecoration: 'none', color: 'inherit',
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 28 }}>🎞️🍿🏆</div>
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontSize: 15, fontWeight: 700, color: '#fff',
+                  fontFamily: 'monospace', letterSpacing: 2,
+                }}>FILMAPPY</div>
+                <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
+                  マッピーランド風アクション。映画館で泥棒を追え！
+                </div>
+              </div>
+              <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
+            </div>
+          </Link>
+          <Link
             href="/games/minesweeper"
             style={{
               display: 'block', padding: 16, borderRadius: 14,
