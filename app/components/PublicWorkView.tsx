@@ -285,6 +285,12 @@ export async function fetchFilmoCommunity(workId: number): Promise<FilmoCommunit
   }
 }
 
+// レビュー0件かつ視聴者5人未満は TMDB の薄いコピー扱いで noindex。
+// follow は残してリンク資産を流す。
+export function shouldIndexWork(community: FilmoCommunityData): boolean {
+  return community.reviewCount > 0 || community.watcherCount >= 5
+}
+
 // ── Metadata helpers ────────────────────────────────────────────────────────
 
 export function buildWorkTitle(w: PublicWorkData, t: ServerT): string {

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import {
   fetchPublicWork,
   fetchFilmoCommunity,
+  shouldIndexWork,
   buildWorkTitle,
   buildWorkDescription,
   buildWorkUrl,
@@ -34,6 +35,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title,
     description,
     alternates: { canonical: url },
+    robots: shouldIndexWork(community)
+      ? { index: true, follow: true }
+      : { index: false, follow: true },
     openGraph: {
       type: 'video.movie',
       url,
