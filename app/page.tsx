@@ -422,82 +422,26 @@ export default function Page() {
             />
             <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px' }}>
               <Statistics userId={user.id} onOpenWork={openWork} />
-              <Link
-                href="/games/uranyan"
+              {/* Filmo Universe へのショートカット (本体はホームに集約済み) */}
+              <button
+                onClick={() => { trackTabChanged(tab, 'home'); setTab('home') }}
                 style={{
-                  display: 'block', marginTop: 16, padding: 18, borderRadius: 16,
-                  background: 'linear-gradient(135deg, rgba(255,122,174,0.25), rgba(195,116,255,0.18))',
-                  border: '1px solid rgba(255,122,174,0.35)',
-                  textDecoration: 'none', color: 'inherit',
+                  display: 'block', width: '100%', marginTop: 16, padding: 18, borderRadius: 16,
+                  background: 'linear-gradient(135deg, #1a0b2e 0%, #2d1b4e 50%, #3d1a3d 100%)',
+                  border: '1px solid rgba(195,116,255,0.35)',
+                  textAlign: 'left', cursor: 'pointer', color: 'inherit',
                 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ fontSize: 32 }}>🔮</div>
+                  <div style={{ fontSize: 32 }}>🌌</div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>うらにゃん。占い</div>
-                    <div style={{ fontSize: 12, color: '#ddd', marginTop: 4, lineHeight: 1.5 }}>
-                      算命学 × 宿曜。毒舌な猫とおちゃめな犬が性格と相性をぶっちゃける
+                    <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>Filmo Universe</div>
+                    <div style={{ fontSize: 12, color: '#cfc6e0', marginTop: 4, lineHeight: 1.5 }}>
+                      うらにゃん。占い・ミニゲーム・新サービスはホームに集約しました
                     </div>
                   </div>
                   <div style={{ fontSize: 20, color: '#FFD24A' }}>→</div>
                 </div>
-              </Link>
-              <Link
-                href="/games/emoji"
-                style={{
-                  display: 'block', marginTop: 16, padding: 16, borderRadius: 14,
-                  background: 'linear-gradient(135deg, rgba(108,92,231,0.18), rgba(0,192,48,0.10))',
-                  border: '1px solid var(--fm-border)',
-                  textDecoration: 'none', color: 'inherit',
-                }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ fontSize: 28 }}>🎮</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700 }}>絵文字タイトル当て</div>
-                    <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginTop: 2 }}>
-                      🚢💎🥶 → ？　全10問でスコアを競おう
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
-                </div>
-              </Link>
-              <Link
-                href="/games/crystal-blast"
-                style={{
-                  display: 'block', marginTop: 8, padding: 16, borderRadius: 14,
-                  background: 'linear-gradient(135deg, rgba(255,87,87,0.18), rgba(195,116,255,0.14))',
-                  border: '1px solid var(--fm-border)',
-                  textDecoration: 'none', color: 'inherit',
-                }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ fontSize: 28 }}>💎</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700 }}>CRYSTAL BLAST</div>
-                    <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginTop: 2 }}>
-                      連鎖でぶっ飛ばせ！　ソロも対戦も
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
-                </div>
-              </Link>
-              <Link
-                href="/games/minesweeper"
-                style={{
-                  display: 'block', marginTop: 8, padding: 16, borderRadius: 14,
-                  background: 'linear-gradient(135deg, rgba(99,102,241,0.20), rgba(239,68,68,0.10))',
-                  border: '1px solid var(--fm-border)',
-                  textDecoration: 'none', color: 'inherit',
-                }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ fontSize: 28 }}>💣</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700 }}>Minesweeper</div>
-                    <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginTop: 2 }}>
-                      古典マインスイーパ。3難易度・ベストタイム争い
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
-                </div>
-              </Link>
+              </button>
               <Gamification userId={user.id} />
             </div>
           </div>

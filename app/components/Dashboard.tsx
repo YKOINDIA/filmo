@@ -559,154 +559,8 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
         </div>
       </section>
 
-      {/* うらにゃん。占い (算命学 × 宿曜) */}
-      <section style={{ padding: '0 24px', marginTop: 12, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-          <span style={{ fontSize: 22 }}>🔮</span>
-          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#fff', margin: 0 }}>
-            うらにゃん。
-          </h2>
-        </div>
-        <Link
-          href="/games/uranyan"
-          style={{
-            display: 'block', padding: 18, borderRadius: 16,
-            background: 'linear-gradient(135deg, rgba(255,122,174,0.25), rgba(195,116,255,0.18))',
-            border: '1px solid rgba(255,122,174,0.35)',
-            textDecoration: 'none', color: 'inherit',
-          }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ fontSize: 36 }}>🐱🐶</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>
-                毒舌な猫とおちゃめな犬の占い
-              </div>
-              <div style={{ fontSize: 12, color: '#ddd', marginTop: 4, lineHeight: 1.5 }}>
-                算命学で性格分析、宿曜で相性診断。<br />友達・家族・推しの生年月日を登録して占おう
-              </div>
-            </div>
-            <div style={{ fontSize: 22, color: '#FFD24A' }}>→</div>
-          </div>
-        </Link>
-      </section>
-
-      {/* Filmo ゲーム */}
-      <section style={{ padding: '0 24px', marginTop: 12, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-          <span style={{ fontSize: 22 }}>🎮</span>
-          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#fff', margin: 0 }}>
-            Filmo ゲーム
-          </h2>
-        </div>
-        <div style={{ display: 'grid', gap: 10 }}>
-          <Link
-            href="/games/emoji"
-            style={{
-              display: 'block', padding: 16, borderRadius: 14,
-              background: 'linear-gradient(135deg, rgba(108,92,231,0.18), rgba(0,192,48,0.10))',
-              border: '1px solid var(--fm-border)',
-              textDecoration: 'none', color: 'inherit',
-            }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 28 }}>🚢💎🥶</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>絵文字タイトル当て</div>
-                <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
-                  絵文字から作品名を当てよう。全10問でスコアを競おう
-                </div>
-              </div>
-              <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
-            </div>
-          </Link>
-          <Link
-            href="/games/crystal-blast"
-            style={{
-              display: 'block', padding: 16, borderRadius: 14,
-              background: 'linear-gradient(135deg, rgba(255,87,87,0.18), rgba(195,116,255,0.14))',
-              border: '1px solid var(--fm-border)',
-              textDecoration: 'none', color: 'inherit',
-            }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 28 }}>💎</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>CRYSTAL BLAST</div>
-                <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
-                  連鎖でぶっ飛ばせ！　ソロも対戦も
-                </div>
-                <div style={{
-                  fontSize: 11, color: '#ffd24a', marginTop: 6, fontWeight: 600,
-                }}>
-                  ⚔️ オンライン対戦はログインが必要です！
-                </div>
-              </div>
-              <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
-            </div>
-          </Link>
-          <Link
-            href="/games/filmius"
-            style={{
-              display: 'block', padding: 16, borderRadius: 14,
-              background: 'linear-gradient(135deg, rgba(255,210,74,0.18), rgba(108,242,255,0.10))',
-              border: '1px solid var(--fm-border)',
-              textDecoration: 'none', color: 'inherit',
-            }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 28 }}>🚀</div>
-              <div style={{ flex: 1 }}>
-                <div style={{
-                  fontSize: 15, fontWeight: 700, color: '#fff',
-                  fontFamily: 'monospace', letterSpacing: 2,
-                }}>FILMIUS</div>
-                <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
-                  横スクロール・シューティング。3ステージ+ボス戦
-                </div>
-              </div>
-              <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
-            </div>
-          </Link>
-          <Link
-            href="/games/filmappy"
-            style={{
-              display: 'block', padding: 16, borderRadius: 14,
-              background: 'linear-gradient(135deg, rgba(255,80,120,0.20), rgba(255,210,74,0.12))',
-              border: '1px solid var(--fm-border)',
-              textDecoration: 'none', color: 'inherit',
-            }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 28 }}>🎞️🍿🏆</div>
-              <div style={{ flex: 1 }}>
-                <div style={{
-                  fontSize: 15, fontWeight: 700, color: '#fff',
-                  fontFamily: 'monospace', letterSpacing: 2,
-                }}>FILMAPPY</div>
-                <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
-                  マッピーランド風アクション。映画館で泥棒を追え！
-                </div>
-              </div>
-              <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
-            </div>
-          </Link>
-          <Link
-            href="/games/minesweeper"
-            style={{
-              display: 'block', padding: 16, borderRadius: 14,
-              background: 'linear-gradient(135deg, rgba(99,102,241,0.20), rgba(239,68,68,0.10))',
-              border: '1px solid var(--fm-border)',
-              textDecoration: 'none', color: 'inherit',
-            }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 28 }}>💣</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Minesweeper</div>
-                <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
-                  古典マインスイーパ。3難易度・ベストタイム争い
-                </div>
-              </div>
-              <div style={{ fontSize: 18, color: 'var(--fm-accent)' }}>→</div>
-            </div>
-          </Link>
-        </div>
-      </section>
+      {/* 🌌 Filmo Universe — 占い・ミニゲーム・今後展開のサブサービス群を統合 */}
+      <FilmoUniverseSection />
 
       {/* ジャンルで探す */}
       <section style={{ padding: '0 24px', marginTop: 12, marginBottom: 32 }}>
@@ -759,6 +613,231 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
           ))}
         </div>
       </section>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Filmo Universe — 映画体験を広げるサブサービスのハブ                  */
+/* ------------------------------------------------------------------ */
+
+const UNIVERSE_COMING_SOON: { emoji: string; title: string; subtitle: string; accent: string }[] = [
+  {
+    emoji: '📚',
+    title: 'Filmo Study',
+    subtitle: '映画で英語・教養を学ぶ',
+    accent: 'rgba(59,130,246,0.5)',
+  },
+  {
+    emoji: '💄',
+    title: 'Filmo Beauty',
+    subtitle: '女優のメイク・衣装トレンド',
+    accent: 'rgba(236,72,153,0.5)',
+  },
+]
+
+function FilmoUniverseSection() {
+  return (
+    <section style={{ padding: '0 24px', marginTop: 28, marginBottom: 16 }}>
+      <style>{`
+        @keyframes universe-twinkle {
+          0%, 100% { opacity: 0.4; }
+          50% { opacity: 1; }
+        }
+        @keyframes universe-shimmer {
+          0% { background-position: -200% center; }
+          100% { background-position: 200% center; }
+        }
+        .universe-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .universe-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .universe-title {
+          background: linear-gradient(90deg, #fff 0%, #FFD24A 35%, #ff7aae 70%, #a29bfe 100%);
+          background-size: 200% auto;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          animation: universe-shimmer 6s linear infinite;
+        }
+        .universe-star {
+          position: absolute;
+          background: #fff;
+          border-radius: 50%;
+          animation: universe-twinkle 3s ease-in-out infinite;
+        }
+      `}</style>
+
+      {/* ===== Universe Banner Header ===== */}
+      <div style={{
+        borderRadius: 18,
+        padding: '22px 20px 20px',
+        marginBottom: 16,
+        background: 'linear-gradient(135deg, #1a0b2e 0%, #2d1b4e 45%, #3d1a3d 100%)',
+        border: '1px solid rgba(195,116,255,0.35)',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        {/* Star particles */}
+        <span className="universe-star" style={{ width: 2, height: 2, top: '20%', left: '12%', animationDelay: '0s' }} />
+        <span className="universe-star" style={{ width: 3, height: 3, top: '60%', left: '88%', animationDelay: '0.8s', background: '#FFD24A' }} />
+        <span className="universe-star" style={{ width: 2, height: 2, top: '35%', left: '55%', animationDelay: '1.5s' }} />
+        <span className="universe-star" style={{ width: 2, height: 2, top: '75%', left: '30%', animationDelay: '2.1s', background: '#ff7aae' }} />
+        <span className="universe-star" style={{ width: 2, height: 2, top: '15%', left: '78%', animationDelay: '1.2s' }} />
+
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <span style={{ fontSize: 28 }}>🌌</span>
+            <h2 className="universe-title" style={{
+              fontSize: 22,
+              fontWeight: 900,
+              margin: 0,
+              letterSpacing: 0.5,
+            }}>
+              Filmo Universe
+            </h2>
+          </div>
+          <div style={{ fontSize: 13, color: '#cfc6e0', lineHeight: 1.5 }}>
+            映画から広がる、もっと楽しい毎日。占い・ゲーム・学び・ビューティ。
+          </div>
+        </div>
+      </div>
+
+      {/* ===== うらにゃん。— featured 大カード ===== */}
+      <Link
+        href="/games/uranyan"
+        className="universe-card"
+        style={{
+          display: 'block',
+          padding: 18,
+          borderRadius: 16,
+          background: 'linear-gradient(135deg, rgba(255,122,174,0.28), rgba(195,116,255,0.22))',
+          border: '1px solid rgba(255,122,174,0.4)',
+          textDecoration: 'none',
+          color: 'inherit',
+          marginBottom: 18,
+        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ fontSize: 36 }}>🐱🐶</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <span style={{
+                fontSize: 10, fontWeight: 800, color: '#FFD24A',
+                background: 'rgba(255,210,74,0.15)',
+                border: '1px solid rgba(255,210,74,0.35)',
+                borderRadius: 4, padding: '2px 6px', letterSpacing: 0.5,
+              }}>🔮 占い</span>
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>
+              うらにゃん。
+            </div>
+            <div style={{ fontSize: 12, color: '#ddd', marginTop: 4, lineHeight: 1.5 }}>
+              算命学×宿曜で性格・相性診断。<br />友達・家族・推しの生年月日を登録して占おう
+            </div>
+          </div>
+          <div style={{ fontSize: 22, color: '#FFD24A' }}>→</div>
+        </div>
+      </Link>
+
+      {/* ===== Filmo Games — 4ゲームをハブ /games に集約 ===== */}
+      <Link
+        href="/games"
+        className="universe-card"
+        style={{
+          display: 'block',
+          padding: 18,
+          borderRadius: 16,
+          background: 'linear-gradient(135deg, rgba(108,92,231,0.22), rgba(255,210,74,0.16) 60%, rgba(99,102,241,0.20))',
+          border: '1px solid rgba(195,116,255,0.35)',
+          textDecoration: 'none',
+          color: 'inherit',
+          marginBottom: 18,
+        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ fontSize: 32 }}>🎮</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <span style={{
+                fontSize: 10, fontWeight: 800, color: '#a29bfe',
+                background: 'rgba(108,92,231,0.18)',
+                border: '1px solid rgba(108,92,231,0.4)',
+                borderRadius: 4, padding: '2px 6px', letterSpacing: 0.5,
+              }}>🎮 ゲーム</span>
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>
+              Filmo Games
+            </div>
+            <div style={{ fontSize: 12, color: '#ddd', marginTop: 4, lineHeight: 1.5 }}>
+              5種のミニゲームでスコアを競おう
+            </div>
+            <div style={{
+              display: 'flex', gap: 8, marginTop: 10,
+              fontSize: 20, opacity: 0.85,
+            }}>
+              <span title="絵文字タイトル当て">🚢💎</span>
+              <span title="CRYSTAL BLAST">💎</span>
+              <span title="FILMIUS">🚀</span>
+              <span title="FILMAPPY">🎞️</span>
+              <span title="Minesweeper">💣</span>
+            </div>
+          </div>
+          <div style={{ fontSize: 22, color: '#FFD24A' }}>→</div>
+        </div>
+      </Link>
+
+      {/* ===== Coming Soon ===== */}
+      <SubHeader emoji="✨" label="Coming Soon" />
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, 1fr)',
+        gap: 10,
+      }}>
+        {UNIVERSE_COMING_SOON.map(s => (
+          <div
+            key={s.title}
+            style={{
+              padding: 14,
+              borderRadius: 14,
+              background: 'rgba(20,22,40,0.6)',
+              border: `1px dashed ${s.accent}`,
+              textAlign: 'center',
+              opacity: 0.85,
+              position: 'relative',
+            }}>
+            <div style={{
+              position: 'absolute', top: 8, right: 8,
+              fontSize: 9, fontWeight: 800, color: '#fff',
+              background: s.accent, borderRadius: 4, padding: '2px 6px',
+              letterSpacing: 0.5,
+            }}>SOON</div>
+            <div style={{ fontSize: 32, marginBottom: 6, filter: 'grayscale(0.2)' }}>{s.emoji}</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>{s.title}</div>
+            <div style={{ fontSize: 11, color: '#aaa', marginTop: 3, lineHeight: 1.4 }}>
+              {s.subtitle}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function SubHeader({ emoji, label }: { emoji: string; label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+      <span style={{ fontSize: 16 }}>{emoji}</span>
+      <h3 style={{
+        fontSize: 14, fontWeight: 800, color: '#cfc6e0',
+        margin: 0, letterSpacing: 0.5, textTransform: 'uppercase',
+      }}>
+        {label}
+      </h3>
+      <div style={{
+        flex: 1, height: 1,
+        background: 'linear-gradient(90deg, rgba(195,116,255,0.25), transparent)',
+        marginLeft: 4,
+      }} />
     </div>
   )
 }
