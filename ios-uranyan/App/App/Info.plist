@@ -47,5 +47,10 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- 輸出コンプライアンス: 標準 HTTPS 以外の暗号化を使っていないので false。
+	     これが無いと TestFlight で「Missing Compliance」になり毎回 Web UI で
+	     「暗号化を使用していますか? → いいえ」と回答する必要が出る。 -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
