@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { addPoints, POINT_CONFIG } from '../lib/points'
+import { useTranslation } from '../lib/i18n'
 
 const W = 1080
 const H = 1080
@@ -71,9 +72,12 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
 // ── Mark! Review Card ──────────────────────────────────────────────────────
 
+type TFn = (key: string, params?: Record<string, string | number>) => string
+
 async function drawMarkCard(
   ctx: CanvasRenderingContext2D,
   data: { title: string; posterPath: string | null; score: number; reviewBody: string; comment: string },
+  t: TFn,
 ) {
   // Background
   const bg = ctx.createLinearGradient(0, 0, W, H)
@@ -102,7 +106,7 @@ async function drawMarkCard(
   badge.addColorStop(0, '#4a0e2e'); badge.addColorStop(0.5, '#e91e63'); badge.addColorStop(1, '#4a0e2e')
   ctx.fillStyle = badge; ctx.fill()
   ctx.font = 'bold 36px system-ui, -apple-system, sans-serif'; ctx.fillStyle = 'white'
-  ctx.fillText('✓  Watched', W / 2, 174)
+  ctx.fillText(t('shareCard.card.watchedBadge'), W / 2, 174)
 
   // Poster
   let posterY = 220
@@ -163,7 +167,7 @@ async function drawMarkCard(
   ctx.strokeStyle = '#e91e6328'; ctx.lineWidth = 1
   ctx.beginPath(); ctx.moveTo(60, H - 108); ctx.lineTo(W - 60, H - 108); ctx.stroke()
   ctx.font = '28px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#4fc3f7'; ctx.textAlign = 'center'
-  ctx.fillText('#映画レビュー  #Filmo  #Mark', W / 2, H - 64)
+  ctx.fillText(t('shareCard.card.tagsMark'), W / 2, H - 64)
   ctx.font = '20px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#444'
   ctx.fillText('filmo.me', W / 2, H - 30)
 }
@@ -173,6 +177,7 @@ async function drawMarkCard(
 async function drawClipCard(
   ctx: CanvasRenderingContext2D,
   data: { title: string; posterPath: string | null; score: number; memo: string; comment: string },
+  t: TFn,
 ) {
   // Background
   const bg = ctx.createLinearGradient(0, 0, W, H)
@@ -203,7 +208,7 @@ async function drawClipCard(
   badge.addColorStop(0, '#0e2a3d'); badge.addColorStop(0.5, '#3498db'); badge.addColorStop(1, '#0e2a3d')
   ctx.fillStyle = badge; ctx.fill()
   ctx.font = 'bold 36px system-ui, -apple-system, sans-serif'; ctx.fillStyle = 'white'
-  ctx.fillText('📌  Watchlist', W / 2, 174)
+  ctx.fillText(t('shareCard.card.watchlistBadge'), W / 2, 174)
 
   // Poster
   let posterY = 220
@@ -234,7 +239,7 @@ async function drawClipCard(
     drawStars(ctx, data.score, W / 2, posterY + 64, 40)
     ctx.font = '30px system-ui, -apple-system, sans-serif'
     ctx.fillStyle = '#888'; ctx.textAlign = 'center'
-    ctx.fillText('期待度', W / 2 + 160, posterY + 64)
+    ctx.fillText(t('shareCard.card.expectation'), W / 2 + 160, posterY + 64)
   }
 
   // Memo
@@ -244,7 +249,7 @@ async function drawClipCard(
 
     ctx.font = '28px system-ui, -apple-system, sans-serif'
     ctx.fillStyle = '#2ecc8a'; ctx.textAlign = 'left'
-    ctx.fillText('🎯 Watchlistの理由', 80, posterY + 130)
+    ctx.fillText(t('shareCard.card.watchlistReason'), 80, posterY + 130)
 
     ctx.font = '30px system-ui, -apple-system, sans-serif'
     ctx.fillStyle = '#ccc'
@@ -267,7 +272,7 @@ async function drawClipCard(
   ctx.strokeStyle = '#3498db28'; ctx.lineWidth = 1
   ctx.beginPath(); ctx.moveTo(60, H - 108); ctx.lineTo(W - 60, H - 108); ctx.stroke()
   ctx.font = '28px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#4fc3f7'; ctx.textAlign = 'center'
-  ctx.fillText('#Watchlist  #Filmo', W / 2, H - 64)
+  ctx.fillText(t('shareCard.card.tagsClip'), W / 2, H - 64)
   ctx.font = '20px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#444'
   ctx.fillText('filmo.me', W / 2, H - 30)
 }
@@ -278,6 +283,7 @@ function drawLevelUpCard(
   ctx: CanvasRenderingContext2D,
   data: { level: number; title: string; color: string; totalPoints: number },
   comment: string,
+  t: TFn,
 ) {
   // Background
   const bg = ctx.createLinearGradient(0, 0, W, H)
@@ -319,7 +325,7 @@ function drawLevelUpCard(
   ctx.fillStyle = bannerGrad; ctx.fill()
   ctx.strokeStyle = '#e91e6366'; ctx.lineWidth = 1; ctx.stroke()
   ctx.font = 'bold 56px system-ui, -apple-system, sans-serif'; ctx.fillStyle = 'white'
-  ctx.fillText('🎉  LEVEL UP!', W / 2, 228)
+  ctx.fillText(t('shareCard.card.levelUpBanner'), W / 2, 228)
 
   // Level number
   ctx.font = 'bold 220px system-ui, -apple-system, sans-serif'
@@ -329,7 +335,7 @@ function drawLevelUpCard(
   ctx.shadowBlur = 0
 
   ctx.font = '38px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#888'
-  ctx.fillText('LEVEL', W / 2, 600)
+  ctx.fillText(t('shareCard.card.levelLabel'), W / 2, 600)
 
   // Title badge
   const titleColor = data.color || '#e91e63'
@@ -343,7 +349,7 @@ function drawLevelUpCard(
 
   // Total points
   ctx.font = '34px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#666'
-  ctx.fillText(`累計 ${(data.totalPoints || 0).toLocaleString()} pt`, W / 2, 768)
+  ctx.fillText(t('shareCard.card.totalPoints', { n: (data.totalPoints || 0).toLocaleString() }), W / 2, 768)
 
   // Comment
   if (comment && comment.trim().length > 0) {
@@ -360,26 +366,26 @@ function drawLevelUpCard(
   ctx.strokeStyle = '#e91e6328'; ctx.lineWidth = 1
   ctx.beginPath(); ctx.moveTo(60, H - 128); ctx.lineTo(W - 60, H - 128); ctx.stroke()
   ctx.font = '30px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#4fc3f7'
-  ctx.fillText('#映画好き  #Filmo  #レベルアップ', W / 2, H - 78)
+  ctx.fillText(t('shareCard.card.tagsLevel'), W / 2, H - 78)
   ctx.font = '22px system-ui, -apple-system, sans-serif'; ctx.fillStyle = '#444'
   ctx.fillText('filmo.me', W / 2, H - 38)
 }
 
 // ── Share text builders ────────────────────────────────────────────────────
 
-function buildShareText(type: CardType, data: ShareCardData): string {
+function buildShareText(type: CardType, data: ShareCardData, t: TFn): string {
   if (type === 'mark') {
     const d = data as MarkData
     const stars = d.score > 0 ? ' ' + '★'.repeat(Math.round(d.score)) : ''
-    return `「${d.title}」を観ました！${stars}\n#Watched #Filmo`
+    return t('shareCard.tweetWatched', { title: d.title, stars })
   }
   if (type === 'clip') {
     const d = data as ClipData
-    return `「${d.title}」が気になる！\n#Watchlist #Filmo`
+    return t('shareCard.tweetClipped', { title: d.title })
   }
   // level_up
   const d = data as LevelUpData
-  return `Filmoでレベル${d.level}「${d.title}」に昇格しました！\n#映画好き #Filmo #レベルアップ`
+  return t('shareCard.tweetLevelUp', { level: d.level, title: d.title })
 }
 
 function buildXIntentUrl(text: string): string {
@@ -412,6 +418,7 @@ interface Props {
 // ── Main Component ─────────────────────────────────────────────────────────
 
 export default function ShareCard({ type, data, userId, onClose }: Props) {
+  const { t } = useTranslation()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [imgUrl, setImgUrl] = useState('')
   const [sharing, setSharing] = useState(false)
@@ -430,23 +437,23 @@ export default function ShareCard({ type, data, userId, onClose }: Props) {
     const draw = async () => {
       if (type === 'mark') {
         const d = data as MarkData
-        await drawMarkCard(ctx, { ...d, comment })
+        await drawMarkCard(ctx, { ...d, comment }, t)
       } else if (type === 'clip') {
         const d = data as ClipData
-        await drawClipCard(ctx, { ...d, comment })
+        await drawClipCard(ctx, { ...d, comment }, t)
       } else {
-        drawLevelUpCard(ctx, data as LevelUpData, comment)
+        drawLevelUpCard(ctx, data as LevelUpData, comment, t)
       }
       setImgUrl(canvas.toDataURL('image/png'))
       setDrawing(false)
     }
     draw()
-  }, [type, data, comment])
+  }, [type, data, comment, t])
 
   const awardSharePoints = async () => {
     if (shared) return
     setShared(true)
-    try { await addPoints(userId, POINT_CONFIG.REVIEW_SHORT, 'シェアボーナス') } catch {}
+    try { await addPoints(userId, POINT_CONFIG.REVIEW_SHORT, t('shareCard.shareReason')) } catch {}
   }
 
   const handleDownload = async () => {
@@ -464,7 +471,7 @@ export default function ShareCard({ type, data, userId, onClose }: Props) {
     try {
       const blob = await (await fetch(imgUrl)).blob()
       const file = new File([blob], `filmo_${type}.png`, { type: 'image/png' })
-      const text = buildShareText(type, data)
+      const text = buildShareText(type, data, t)
 
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], text })
@@ -479,13 +486,13 @@ export default function ShareCard({ type, data, userId, onClose }: Props) {
   }
 
   const handleShareX = async () => {
-    const text = buildShareText(type, data)
+    const text = buildShareText(type, data, t)
     window.open(buildXIntentUrl(text), '_blank', 'noopener,noreferrer')
     // Also trigger download so user can attach the image manually
     await handleDownload()
   }
 
-  const cardLabel = type === 'mark' ? '✓ Watched カード' : type === 'clip' ? '📌 Watchlist カード' : '🎉 レベルアップカード'
+  const cardLabel = type === 'mark' ? t('shareCard.markLabel') : type === 'clip' ? t('shareCard.clipLabel') : t('shareCard.levelLabel')
   const accentColor = type === 'mark' ? '#e91e63' : type === 'clip' ? '#3498db' : '#9b59b6'
 
   return (
@@ -512,12 +519,12 @@ export default function ShareCard({ type, data, userId, onClose }: Props) {
 
         {/* Comment input */}
         <div style={{ marginBottom: 10 }}>
-          <p style={{ color: '#888', fontSize: 12, margin: '0 0 4px' }}>💬 一言（カードに表示されます）</p>
+          <p style={{ color: '#888', fontSize: 12, margin: '0 0 4px' }}>{t('shareCard.commentLabel')}</p>
           <input
             type="text"
             value={comment}
             onChange={e => setComment(e.target.value)}
-            placeholder="例: 最高の映画体験でした！"
+            placeholder={t('shareCard.commentPlaceholder')}
             maxLength={60}
             style={{
               width: '100%', padding: '9px 12px', borderRadius: 8,
@@ -534,14 +541,14 @@ export default function ShareCard({ type, data, userId, onClose }: Props) {
           <img src={imgUrl} alt="share card" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />
         )}
         {drawing && (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 40, color: '#888' }}>生成中...</div>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 40, color: '#888' }}>{t('shareCard.generating')}</div>
         )}
 
         {/* Share bonus message */}
         {shared && (
           <div style={{ background: '#0d2a1a', borderRadius: 8, padding: '8px 12px', marginBottom: 10, textAlign: 'center' }}>
             <p style={{ color: '#2ecc8a', fontSize: 13, margin: 0 }}>
-              ✅ シェアボーナス +{POINT_CONFIG.REVIEW_SHORT}pt 獲得！
+              {t('shareCard.bonusEarned', { points: POINT_CONFIG.REVIEW_SHORT })}
             </p>
           </div>
         )}
@@ -558,7 +565,7 @@ export default function ShareCard({ type, data, userId, onClose }: Props) {
               justifyContent: 'center', gap: 6,
             }}
           >
-            <span style={{ fontSize: 16 }}>𝕏</span> ポストする
+            <span style={{ fontSize: 16 }}>𝕏</span> {t('shareCard.shareX')}
           </button>
           <button
             onClick={handleShareNative}
@@ -568,7 +575,7 @@ export default function ShareCard({ type, data, userId, onClose }: Props) {
               background: 'transparent', color: accentColor, fontSize: 13, cursor: 'pointer',
             }}
           >
-            {sharing ? '...' : '📤 シェア'}
+            {sharing ? t('shareCard.shareNativeLoading') : t('shareCard.shareNative')}
           </button>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -580,11 +587,11 @@ export default function ShareCard({ type, data, userId, onClose }: Props) {
               background: 'transparent', color: '#aaa', fontSize: 13, cursor: 'pointer',
             }}
           >
-            📥 画像を保存
+            {t('shareCard.download')}
           </button>
         </div>
         <p style={{ color: '#555', fontSize: 11, textAlign: 'center', margin: '8px 0 0' }}>
-          シェアまたは保存で +{POINT_CONFIG.REVIEW_SHORT}pt（1回のみ）
+          {t('shareCard.footnote', { points: POINT_CONFIG.REVIEW_SHORT })}
         </p>
       </div>
     </div>

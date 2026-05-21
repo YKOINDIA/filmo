@@ -1,25 +1,26 @@
 'use client'
 
-import { useState } from 'react'
+import { useTranslation } from '../lib/i18n'
 
-const FEATURES = [
-  { icon: '🎬', title: '映画・ドラマ・アニメ', desc: 'TMDBの膨大なデータベースから作品を検索。ジャンル、年代、評価で絞り込み。' },
-  { icon: '⭐', title: '0.5刻みレビュー', desc: '星0.5〜5.0の精密な評価。ネタバレフラグ付きで安心してレビュー。' },
-  { icon: '📊', title: '統計＆可視化', desc: 'ジャンル分布、月別鑑賞数、スコア分布をグラフで確認。Filmarks Premiumの機能が無料。' },
-  { icon: '🏆', title: 'ゲーミフィケーション', desc: 'レビュー・鑑賞でポイント獲得。レベルアップ＆称号コレクション。' },
-  { icon: '👥', title: 'ソーシャル', desc: 'フォロー、いいね、アクティビティフィード。映画好きとつながる。' },
-  { icon: '📱', title: 'モバイル対応', desc: 'PWA＆Capacitorでスマホでも快適。オフラインでも閲覧可能。' },
-]
+const FEATURE_KEYS = ['catalog', 'rating', 'stats', 'gamification', 'social', 'mobile'] as const
+const FEATURE_ICONS: Record<typeof FEATURE_KEYS[number], string> = {
+  catalog: '🎬',
+  rating: '⭐',
+  stats: '📊',
+  gamification: '🏆',
+  social: '👥',
+  mobile: '📱',
+}
 
-const STATS = [
-  { value: '100万+', label: '作品データ' },
-  { value: '無料', label: '全機能利用' },
-  { value: '0.5', label: '刻みの評価' },
-  { value: '50+', label: '称号コレクション' },
-]
+const STAT_KEYS = ['works', 'free', 'rating', 'badges'] as const
+
+const COMPARE_KEYS = [
+  'stats', 'gamification', 'ratingStep', 'spoiler',
+  'social', 'mobile', 'dark', 'ads',
+] as const
 
 export default function LandingPage() {
-  const [email, setEmail] = useState('')
+  const { t } = useTranslation()
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--fm-bg)', color: 'var(--fm-text)' }}>
@@ -39,8 +40,8 @@ export default function LandingPage() {
           Filmo
         </h1>
         <p style={{ fontSize: 'clamp(16px, 3vw, 22px)', color: 'var(--fm-text-sub)', maxWidth: 600, marginBottom: 32, lineHeight: 1.6 }}>
-          映画・ドラマ・アニメの記録・レビュー・発見を、もっと楽しく。<br />
-          統計もゲーミフィケーションも、すべて無料。
+          {t('landing.tagline')}<br />
+          {t('landing.subTagline')}
         </p>
 
         <a href="/" style={{
@@ -50,14 +51,14 @@ export default function LandingPage() {
           textDecoration: 'none', transition: 'transform 0.2s, box-shadow 0.2s',
           boxShadow: '0 4px 20px rgba(108,92,231,0.4)',
         }}>
-          今すぐ始める
+          {t('landing.ctaStart')}
         </a>
 
         <div style={{ marginTop: 48, display: 'flex', gap: 32, flexWrap: 'wrap', justifyContent: 'center' }}>
-          {STATS.map(s => (
-            <div key={s.label} style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--fm-accent)' }}>{s.value}</div>
-              <div style={{ fontSize: 13, color: 'var(--fm-text-muted)' }}>{s.label}</div>
+          {STAT_KEYS.map(k => (
+            <div key={k} style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--fm-accent)' }}>{t(`landing.stats.${k}.value`)}</div>
+              <div style={{ fontSize: 13, color: 'var(--fm-text-muted)' }}>{t(`landing.stats.${k}.label`)}</div>
             </div>
           ))}
         </div>
@@ -66,20 +67,20 @@ export default function LandingPage() {
       {/* Features */}
       <section style={{ padding: '80px 20px', maxWidth: 1000, margin: '0 auto' }}>
         <h2 style={{ textAlign: 'center', fontSize: 28, fontWeight: 800, marginBottom: 48 }}>
-          Filmoの特徴
+          {t('landing.featuresHeading')}
         </h2>
         <div style={{
           display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
           gap: 24,
         }}>
-          {FEATURES.map(f => (
-            <div key={f.title} style={{
+          {FEATURE_KEYS.map(k => (
+            <div key={k} style={{
               background: 'var(--fm-bg-card)', borderRadius: 16, padding: 24,
               border: '1px solid var(--fm-border)', transition: 'transform 0.2s',
             }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>{f.icon}</div>
-              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>{f.title}</h3>
-              <p style={{ fontSize: 14, color: 'var(--fm-text-sub)', lineHeight: 1.6 }}>{f.desc}</p>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>{FEATURE_ICONS[k]}</div>
+              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>{t(`landing.features.${k}.title`)}</h3>
+              <p style={{ fontSize: 14, color: 'var(--fm-text-sub)', lineHeight: 1.6 }}>{t(`landing.features.${k}.desc`)}</p>
             </div>
           ))}
         </div>
@@ -89,32 +90,23 @@ export default function LandingPage() {
       <section style={{ padding: '80px 20px', background: 'var(--fm-bg-card)' }}>
         <div style={{ maxWidth: 800, margin: '0 auto' }}>
           <h2 style={{ textAlign: 'center', fontSize: 28, fontWeight: 800, marginBottom: 48 }}>
-            Filmarks vs Filmo
+            {t('landing.compareHeading')}
           </h2>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
               <thead>
                 <tr>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '2px solid var(--fm-border)' }}>機能</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '2px solid var(--fm-border)', color: 'var(--fm-text-sub)' }}>Filmarks</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '2px solid var(--fm-border)', color: 'var(--fm-accent)', fontWeight: 700 }}>Filmo</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '2px solid var(--fm-border)' }}>{t('landing.compareCols.feature')}</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '2px solid var(--fm-border)', color: 'var(--fm-text-sub)' }}>{t('landing.compareCols.filmarks')}</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '2px solid var(--fm-border)', color: 'var(--fm-accent)', fontWeight: 700 }}>{t('landing.compareCols.filmo')}</th>
                 </tr>
               </thead>
               <tbody>
-                {[
-                  ['統計・グラフ', 'Premium (有料)', '無料'],
-                  ['ゲーミフィケーション', 'なし', '称号・レベル・ポイント'],
-                  ['評価刻み', '0.5刻み', '0.5刻み'],
-                  ['レビューネタバレ設定', 'あり', 'あり'],
-                  ['ソーシャル機能', 'フォロー・いいね', 'フォロー・いいね・フィード'],
-                  ['モバイルアプリ', 'iOS/Android', 'PWA + ネイティブ'],
-                  ['ダークモード', 'なし', '対応'],
-                  ['広告', 'あり', 'なし'],
-                ].map(([feature, filmarks, filmo]) => (
-                  <tr key={feature}>
-                    <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--fm-border)' }}>{feature}</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid var(--fm-border)', color: 'var(--fm-text-muted)' }}>{filmarks}</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid var(--fm-border)', color: 'var(--fm-accent)', fontWeight: 600 }}>{filmo}</td>
+                {COMPARE_KEYS.map(k => (
+                  <tr key={k}>
+                    <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--fm-border)' }}>{t(`landing.compareRows.${k}.feature`)}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid var(--fm-border)', color: 'var(--fm-text-muted)' }}>{t(`landing.compareRows.${k}.filmarks`)}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid var(--fm-border)', color: 'var(--fm-accent)', fontWeight: 600 }}>{t(`landing.compareRows.${k}.filmo`)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -128,9 +120,9 @@ export default function LandingPage() {
         padding: '80px 20px', textAlign: 'center',
         background: 'linear-gradient(180deg, var(--fm-bg) 0%, rgba(108,92,231,0.1) 100%)',
       }}>
-        <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 16 }}>映画体験を、もっと豊かに。</h2>
+        <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 16 }}>{t('landing.ctaPanelHeading')}</h2>
         <p style={{ color: 'var(--fm-text-sub)', marginBottom: 32, fontSize: 16 }}>
-          無料で全機能が使えます。今すぐアカウントを作成しましょう。
+          {t('landing.ctaPanelSub')}
         </p>
         <a href="/" style={{
           display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -138,7 +130,7 @@ export default function LandingPage() {
           background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)', color: '#fff',
           textDecoration: 'none', boxShadow: '0 4px 20px rgba(108,92,231,0.4)',
         }}>
-          無料で始める
+          {t('landing.ctaFree')}
         </a>
       </section>
 
@@ -148,10 +140,10 @@ export default function LandingPage() {
         textAlign: 'center', color: 'var(--fm-text-muted)', fontSize: 13,
       }}>
         <div style={{ marginBottom: 16, display: 'flex', gap: 24, justifyContent: 'center' }}>
-          <a href="/legal" style={{ color: 'var(--fm-text-sub)', textDecoration: 'none' }}>利用規約・プライバシーポリシー</a>
+          <a href="/legal" style={{ color: 'var(--fm-text-sub)', textDecoration: 'none' }}>{t('landing.footerLegal')}</a>
         </div>
-        <div>&copy; {new Date().getFullYear()} Filmo. All rights reserved.</div>
-        <div style={{ marginTop: 8 }}>映画データ提供: TMDB</div>
+        <div>{t('landing.footerCopyright', { year: new Date().getFullYear() })}</div>
+        <div style={{ marginTop: 8 }}>{t('landing.footerData')}</div>
       </footer>
     </div>
   )

@@ -10,21 +10,19 @@ import {
   buildPersonJsonLd,
   PublicPersonView,
 } from '@/app/components/PublicPersonView'
-
-// TMDB プロフィールは 48h、レビューは投稿で動く可能性があるので 1h で再生成。
-// 短い方を採用。
-export const revalidate = 3600
+import { getServerDictionary, toOgLocale, alternateOgLocales } from '@/app/lib/i18n/server'
 
 type Props = { params: Promise<{ id: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params
+  const { locale, t } = await getServerDictionary()
   const person = await fetchPublicPerson(id)
   if (!person) {
-    return { title: '人物が見つかりません', robots: { index: false, follow: false } }
+    return { title: t('publicPerson.notFoundTitle'), robots: { index: false, follow: false } }
   }
-  const title = buildPersonTitle(person)
-  const description = buildPersonDescription(person)
+  const title = buildPersonTitle(person, t)
+  const description = buildPersonDescription(person, t)
   const url = buildPersonUrl(person)
   const image = buildPersonImageUrl(person.profile_path, 'h632')
 
@@ -38,6 +36,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       siteName: 'Filmo',
       title,
       description,
+      locale: toOgLocale(locale),
+      alternateLocale: alternateOgLocales(locale),
       images: image ? [{ url: image, alt: person.name }] : undefined,
     },
     twitter: {
@@ -51,6 +51,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PersonPage({ params }: Props) {
   const { id } = await params
+  const { t } = await getServerDictionary()
   const person = await fetchPublicPerson(id)
   if (!person) notFound()
 
@@ -62,7 +63,7 @@ export default async function PersonPage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
       />
-      <PublicPersonView person={person} reviews={reviews} reviewStats={stats} />
+      <PublicPersonView person={person} reviews={reviews} reviewStats={stats} t={t} />
     </>
   )
 }
