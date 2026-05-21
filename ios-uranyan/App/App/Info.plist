@@ -52,5 +52,16 @@
 	     「暗号化を使用していますか? → いいえ」と回答する必要が出る。 -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- @capacitor/camera を npm 依存に持つ関係で、Apple のバイナリ解析は
+	     Photos / AVFoundation framework への参照を検出する。実際には
+	     うらにゃんは占い結果シェア (Save to Photos) 経由でのみ写真ライブラリへ
+	     書き込む可能性があるが、Apple は API リンクの時点で purpose string を
+	     必須化する (ITMS-90683)。3 種類とも宣言しておく。 -->
+	<key>NSCameraUsageDescription</key>
+	<string>占いシェアカードを撮影・編集する際にカメラを使用する場合があります。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>占い結果のシェア時に写真ライブラリにアクセスする場合があります。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>占い結果のシェア画像を写真ライブラリに保存する際に使用します。</string>
 </dict>
 </plist>
