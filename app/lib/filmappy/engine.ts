@@ -497,20 +497,28 @@ function updatePlayer(s: State, dtMs: number, input: Input): void {
       if (lx < 2) { p.x = 2 }
       else if (rx > LOGICAL_W - 2) { p.x = LOGICAL_W - 2 - PLAYER_W }
       else {
-        // 足元中心がトランポリン列に入ったかチェック
-        const footCx = nextX + PLAYER_W / 2
-        const ti = trampolineAtX(s, footCx)
-        if (ti >= 0) {
-          const t = s.trampolines[ti]
-          if (!t.broken && p.floorIdx >= t.topFloor && p.floorIdx <= t.bottomFloor) {
-            // トランポリンに乗った → バウンド開始
-            enterTrampoline(s, ti)
-            return
-          } else if (t.broken && p.floorIdx >= t.topFloor && p.floorIdx <= t.bottomFloor) {
-            // 壊れた穴に踏み込んだ → 落下死
-            p.x = nextX
-            startFall(s)
-            return
+        // 足元中心がトランポリン列に入ったかチェック (rising-edge のみで起動)。
+        // 中間フロアに着地した直後など、すでにトランポリン列上にいる時に
+        // 歩こうとして即再バウンドしてしまうのを避ける。
+        const prevFootCx = p.x + PLAYER_W / 2
+        const nextFootCx = nextX + PLAYER_W / 2
+        const prevTi = trampolineAtX(s, prevFootCx)
+        const nextTi = trampolineAtX(s, nextFootCx)
+        if (nextTi >= 0) {
+          const t = s.trampolines[nextTi]
+          const onActiveRange = p.floorIdx >= t.topFloor && p.floorIdx <= t.bottomFloor
+          if (onActiveRange) {
+            if (t.broken) {
+              // 壊れた穴に踏み込んだ → 落下死
+              p.x = nextX
+              startFall(s)
+              return
+            }
+            if (prevTi !== nextTi) {
+              // 新たにトランポリン列へ踏み込んだ → バウンド開始
+              enterTrampoline(s, nextTi, input)
+              return
+            }
           }
         }
         p.x = nextX
@@ -551,7 +559,7 @@ function updatePlayer(s: State, dtMs: number, input: Input): void {
 
     if (p.bouncePhaseMs >= PLAYER_BOUNCE_PERIOD_MS) {
       // バウンド着地
-      arriveBounceLanding(s)
+      arriveBounceLanding(s, input)
     }
     return
   }
@@ -567,7 +575,7 @@ function updatePlayer(s: State, dtMs: number, input: Input): void {
   }
 }
 
-function enterTrampoline(s: State, trampIdx: number): void {
+function enterTrampoline(s: State, trampIdx: number, input: Input): void {
   const p = s.player
   const tramp = s.trampolines[trampIdx]
   if (!tramp || tramp.broken) {
@@ -579,7 +587,8 @@ function enterTrampoline(s: State, trampIdx: number): void {
   p.bounceCount = 1
   tramp.bounces = Math.max(tramp.bounces, 1)
   p.bounceFromFloor = p.floorIdx
-  // 最下段なら上に、最上段なら下にバウンド。それ以外は前の歩行方向に依存しないので下優先。
+  // 端にいる時は内側へ。中間にいる時はユーザ入力 (Up/Down) を優先、
+  // 入力が無ければ上方向をデフォルトにする。
   if (p.floorIdx <= tramp.topFloor) {
     p.verticalIntent = 'down'
     p.bounceToFloor = Math.min(tramp.bottomFloor, p.floorIdx + 1)
@@ -587,19 +596,21 @@ function enterTrampoline(s: State, trampIdx: number): void {
     p.verticalIntent = 'up'
     p.bounceToFloor = Math.max(tramp.topFloor, p.floorIdx - 1)
   } else {
-    p.verticalIntent = 'up'
-    p.bounceToFloor = Math.max(tramp.topFloor, p.floorIdx - 1)
+    p.verticalIntent = input.down && !input.up ? 'down' : 'up'
+    p.bounceToFloor = p.verticalIntent === 'down'
+      ? Math.min(tramp.bottomFloor, p.floorIdx + 1)
+      : Math.max(tramp.topFloor, p.floorIdx - 1)
   }
   p.bouncePhaseMs = 0
 }
 
-function arriveBounceLanding(s: State): void {
+function arriveBounceLanding(s: State, input: Input): void {
   const p = s.player
   const tramp = p.trampIdx !== null ? s.trampolines[p.trampIdx] : null
   p.floorIdx = p.bounceToFloor
   // 次のバウンドを発生させるか?
-  // 着地先のフロアでトランポリン上にいるなら継続。フロアの実フロア (端) ならフロア歩行へ戻る。
-  // → ここでは「トランポリン列の x 範囲」+「目標フロアが解放されているか」を見る。
+  // 端 (top/bottom) では必ず歩行へ戻る。中間フロアでは Up/Down を押しっぱなしの時のみ
+  // バウンドを継続。それ以外はそのフロアに着地して歩ける。
   if (!tramp) {
     p.mode = 'walk'
     p.y = floorYFor(p.floorIdx) - PLAYER_H
@@ -607,27 +618,29 @@ function arriveBounceLanding(s: State): void {
     p.bounceCount = 0
     return
   }
-  // 着地先がトランポリンの可動範囲の "端" のフロアならフロア着地
   const atTop = p.floorIdx <= tramp.topFloor
   const atBottom = p.floorIdx >= tramp.bottomFloor
-  if (atTop || atBottom) {
-    // フロア端着地 → walk へ
+  const wantsContinue = input.up || input.down
+  if (atTop || atBottom || !wantsContinue) {
+    // 着地 → walk へ
     p.mode = 'walk'
     p.y = floorYFor(p.floorIdx) - PLAYER_H
     p.trampIdx = null
-    // 端から少し横にずらす (壁めり込み防止)
-    const cx = tramp.cx
-    if (p.x + PLAYER_W / 2 < cx) p.x = cx - PLAYER_W - 1
-    else                          p.x = cx + 1
     p.bounceCount = 0
+    // 端着地時のみ、壁めり込み防止に少し横へずらす
+    if (atTop || atBottom) {
+      const cx = tramp.cx
+      if (p.x + PLAYER_W / 2 < cx) p.x = cx - PLAYER_W - 1
+      else                          p.x = cx + 1
+    }
     return
   }
 
   // 中間フロアで通過 → さらに次の階へ続行
   p.bounceCount++
   tramp.bounces = Math.max(tramp.bounces, p.bounceCount)
-  if (p.bounceCount >= TRAMP_MAX_BOUNCES) {
-    // 4 回目 = 破壊
+  if (p.bounceCount > TRAMP_MAX_BOUNCES) {
+    // 上限超過 = 破壊
     tramp.broken = true
     tramp.rebuildAt = s.totalTimeMs + 4000
     startFall(s)
