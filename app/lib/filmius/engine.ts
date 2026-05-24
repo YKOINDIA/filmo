@@ -82,11 +82,13 @@ export const SHIPS: Record<ShipType, ShipConfig> = {
 //   2: MISSILE (B-Roll)
 //   3: DOUBLE FEATURE
 //   4: PROJECTOR BEAM (Laser、Double と排他)
-//   5: SEQUEL (Option)
-export const GAUGE_SLOTS = ['SPEED', 'MISSILE', 'DOUBLE', 'LASER', 'OPTION'] as const
+//   5: BARRIER (3 ヒット吸収シールド)
+//   6: SEQUEL (Option、最大 4)
+export const GAUGE_SLOTS = ['SPEED', 'MISSILE', 'DOUBLE', 'LASER', 'BARRIER', 'OPTION'] as const
 export type GaugeSlot = (typeof GAUGE_SLOTS)[number]
-export const MAX_OPTIONS = 2
-export const OPTION_TRAIL_GAP = 22 // 何フレームぶん遅れて追従するか
+export const MAX_OPTIONS = 4
+export const OPTION_TRAIL_GAP = 18 // 何フレームぶん遅れて追従するか
+export const MAX_BARRIER_HP = 3
 
 // 敵
 export type EnemyKind =
@@ -207,11 +209,12 @@ export interface State {
   particles: Particle[]
   stars: Star[]
 
-  gauge: number               // 0..5
+  gauge: number               // 0..GAUGE_SLOTS.length
   speedLevel: number          // 0..PLAYER_MAX_SPEED_LEVEL
   hasMissile: boolean
   hasDouble: boolean
   hasLaser: boolean
+  barrierHp: number           // 0..MAX_BARRIER_HP (残り吸収回数)
   optionCount: number         // 0..MAX_OPTIONS
 
   playerTrail: { x: number; y: number }[]  // 最大 OPTION_TRAIL_GAP*MAX_OPTIONS フレーム
@@ -264,6 +267,7 @@ export function initialState(
     hasMissile: false,
     hasDouble: false,
     hasLaser: false,
+    barrierHp: 0,
     optionCount: 0,
     playerTrail: [],
 
@@ -328,6 +332,14 @@ export function tryEquip(s: State): boolean {
         s.hasDouble = false
         equipped = true
         toast(s, '💡 PROJECTOR BEAM')
+      }
+      break
+    case 'BARRIER':
+      // 既にバリアがあっても再装備で残量を最大まで補充
+      if (s.barrierHp < MAX_BARRIER_HP) {
+        s.barrierHp = MAX_BARRIER_HP
+        equipped = true
+        toast(s, '🛡️ FORCE FIELD')
       }
       break
     case 'OPTION':
@@ -548,7 +560,7 @@ export function step(s: State, dtMs: number, input: Input, stage: StageRuntime):
   // ステージクリア演出から次ステージへ
   if (s.mode === 'stage-cleared' && s.stageClearedAt !== null) {
     if (s.totalTimeMs - s.stageClearedAt >= 2200) {
-      if (s.stageIdx >= 2) {
+      if (s.stageIdx >= stage.totalStages - 1) {
         s.mode = 'all-cleared'
       } else {
         s.stageIdx++
@@ -827,6 +839,7 @@ function collidePlayer(s: State) {
     if (aabb(b.x - b.r, b.y - b.r, b.r * 2, b.r * 2,
             s.player.x, s.player.y, PLAYER_W, PLAYER_H)) {
       s.ebullets.splice(i, 1)
+      if (absorbHitWithBarrier(s)) return
       killPlayer(s)
       return
     }
@@ -834,10 +847,31 @@ function collidePlayer(s: State) {
   // 敵本体 vs 自機
   for (const e of s.enemies) {
     if (aabb(e.x, e.y, e.w, e.h, s.player.x, s.player.y, PLAYER_W, PLAYER_H)) {
+      // バリアあり: ザコは一撃で破壊しつつバリアも 1 消費。ボスはすり抜けず吸収のみ。
+      if (absorbHitWithBarrier(s)) {
+        if (e.kind !== 'boss1' && e.kind !== 'boss2' && e.kind !== 'boss3') {
+          e.hp = 0
+          onEnemyDestroyed(s, e)
+          const idx = s.enemies.indexOf(e)
+          if (idx >= 0) s.enemies.splice(idx, 1)
+        }
+        return
+      }
       killPlayer(s)
       return
     }
   }
+}
+
+// バリアが残っていれば 1 消費して true。短時間の被弾無敵も付与し、連続吸収を防ぐ。
+function absorbHitWithBarrier(s: State): boolean {
+  if (s.barrierHp <= 0) return false
+  s.barrierHp--
+  s.flashLife = 120
+  s.player.invincibleUntil = s.totalTimeMs + 280
+  spawnSparks(s, s.player.x + PLAYER_W / 2, s.player.y + PLAYER_H / 2, '#6cf2ff', 10)
+  if (s.barrierHp === 0) toast(s, '🛡️ BARRIER BROKEN')
+  return true
 }
 
 function collideCapsule(s: State) {
@@ -905,4 +939,6 @@ export interface StageRuntime {
   advance(s: State): void
   /** 各ステージ開始時に呼ばれる。バナー表示などに使う。 */
   onStageStart(s: State): void
+  /** 全ステージ数。all-cleared 判定に使う。 */
+  totalStages: number
 }
