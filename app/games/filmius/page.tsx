@@ -67,10 +67,17 @@ function fmtScore(n: number) {
 function stageLabel(stageReached: number, cleared: boolean): string {
   if (cleared) return '★ ALL CLEAR ★'
   switch (stageReached) {
-    case 1: return 'STAGE 1 / GALACTIC PREMIERE'
-    case 2: return 'STAGE 2 / ASTEROID OF MEMORIES'
-    case 3: return 'STAGE 3 / THE FINAL CUT'
-    case 4: return '★ ALL CLEAR ★'
+    case 1:  return 'STAGE 1 / GALACTIC PREMIERE'
+    case 2:  return 'STAGE 2 / ASTEROID OF MEMORIES'
+    case 3:  return 'STAGE 3 / THE FINAL CUT'
+    case 4:  return 'STAGE 4 / NEBULA OF TRIALS'
+    case 5:  return "STAGE 5 / DIRECTOR'S CUT"
+    case 6:  return 'STAGE 6 / SEQUEL FATIGUE'
+    case 7:  return 'STAGE 7 / REEL OF SHADOWS'
+    case 8:  return "STAGE 8 / CRITIC'S NIGHTMARE"
+    case 9:  return 'STAGE 9 / WRAP PARTY'
+    case 10: return 'STAGE 10 / GOLDEN CURTAIN'
+    case 11: return '★ ALL CLEAR ★'
     default: return 'STAGE 1'
   }
 }
@@ -636,14 +643,15 @@ function MenuView({
         border: '1px solid rgba(255,210,74,0.25)',
       }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: '#ffd24a', marginBottom: 8 }}>
-          ▸ パワーアップ (5スロット)
+          ▸ パワーアップ (6スロット)
         </div>
         <div style={{ display: 'grid', gap: 4, fontSize: 12, color: '#ddd' }}>
           <div><b>1. SPEED</b> ⏩ — 移動速度UP (最大3段)</div>
           <div><b>2. MISSILE</b> 🎞️ — B-ROLL 追加弾</div>
           <div><b>3. DOUBLE FEATURE</b> 🎬 — 2way 弾</div>
           <div><b>4. PROJECTOR BEAM</b> 💡 — 貫通レーザー (DOUBLE と排他)</div>
-          <div><b>5. SEQUEL</b> 🎟️ — 軌跡追従オプション (最大2)</div>
+          <div><b>5. BARRIER</b> 🛡️ — 被弾を3回吸収するフォースフィールド</div>
+          <div><b>6. SEQUEL</b> 🎟️ — 軌跡追従オプション (最大4)</div>
         </div>
       </div>
 

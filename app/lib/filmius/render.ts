@@ -11,6 +11,7 @@ import {
   LASER_LEN,
   LOGICAL_H,
   LOGICAL_W,
+  MAX_BARRIER_HP,
   OPTION_TRAIL_GAP,
   PLAYER_H,
   PLAYER_W,
@@ -18,6 +19,7 @@ import {
 } from './engine'
 import { STAGES } from './stages'
 const COLOR_OPTION = '#ffd24a'
+const COLOR_BARRIER = '#6cf2ff'
 
 export function render(ctx: CanvasRenderingContext2D, s: State, viewW: number, viewH: number, dpr: number) {
   // ロジカル -> ビューのスケール
@@ -101,6 +103,43 @@ function drawPlayer(ctx: CanvasRenderingContext2D, s: State) {
   const ship = SHIPS[s.ship]
   drawShip(ctx, s.player.x, s.player.y, ship.color, ship.trim)
   ctx.globalAlpha = 1
+  if (s.barrierHp > 0) drawBarrier(ctx, s)
+}
+
+// 自機の周囲に円形のフォースフィールドを描く。残量で色味と濃さが変化。
+function drawBarrier(ctx: CanvasRenderingContext2D, s: State) {
+  const cx = s.player.x + PLAYER_W / 2
+  const cy = s.player.y + PLAYER_H / 2
+  const ratio = s.barrierHp / MAX_BARRIER_HP
+  const baseR = 14
+  const pulse = Math.sin(s.totalTimeMs / 110) * 0.8
+  const r = baseR + pulse
+  // 外側のグロー (残量で色が遷移: 青 → 黄 → 赤)
+  const tint = ratio > 0.66 ? COLOR_BARRIER : ratio > 0.33 ? '#ffd24a' : '#ff6188'
+  ctx.save()
+  ctx.globalAlpha = 0.35 + ratio * 0.25
+  ctx.strokeStyle = tint
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.arc(cx, cy, r, 0, Math.PI * 2)
+  ctx.stroke()
+  // 内側のうっすらした塗り
+  ctx.globalAlpha = 0.08 + ratio * 0.08
+  ctx.fillStyle = tint
+  ctx.beginPath()
+  ctx.arc(cx, cy, r - 1, 0, Math.PI * 2)
+  ctx.fill()
+  // 残量ピップ (上部に小ドット)
+  ctx.globalAlpha = 1
+  ctx.fillStyle = tint
+  for (let i = 0; i < MAX_BARRIER_HP; i++) {
+    const angle = -Math.PI / 2 + (i - (MAX_BARRIER_HP - 1) / 2) * 0.32
+    const px = cx + Math.cos(angle) * (r + 2.5)
+    const py = cy + Math.sin(angle) * (r + 2.5)
+    ctx.globalAlpha = i < s.barrierHp ? 0.95 : 0.2
+    ctx.fillRect(px - 1, py - 1, 2, 2)
+  }
+  ctx.restore()
 }
 
 // 自機・Option 共用の小さな宇宙船 (映写機モチーフ)
@@ -434,7 +473,8 @@ function slotEquipped(s: State, slot: number): boolean {
     case 2: return s.hasMissile
     case 3: return s.hasDouble
     case 4: return s.hasLaser
-    case 5: return s.optionCount > 0
+    case 5: return s.barrierHp > 0
+    case 6: return s.optionCount > 0
   }
   return false
 }
@@ -445,7 +485,8 @@ function slotLabel(slot: number, s: State): string {
     case 2: return 'MISSILE'
     case 3: return 'DOUBLE'
     case 4: return 'LASER'
-    case 5: return s.optionCount > 0 ? `OPT x${s.optionCount}` : 'OPTION'
+    case 5: return s.barrierHp > 0 ? `BAR x${s.barrierHp}` : 'BARRIER'
+    case 6: return s.optionCount > 0 ? `OPT x${s.optionCount}` : 'OPTION'
   }
   return ''
 }

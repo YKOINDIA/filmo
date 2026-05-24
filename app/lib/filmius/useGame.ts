@@ -12,12 +12,12 @@ import {
   initialState,
   step,
 } from './engine'
-import { makeStageRuntime } from './stages'
+import { STAGES, makeStageRuntime } from './stages'
 import { render } from './render'
 
 export interface FilmiusResult {
   score: number
-  stageReached: number   // 1..3 (途中で死亡) または 4 (全クリ)
+  stageReached: number   // 1..STAGES.length (途中で死亡) または STAGES.length+1 (全クリ)
   cleared: boolean
   noMiss: boolean
   enemiesKilled: number
@@ -105,7 +105,7 @@ export function useFilmius(
     const s = stateRef.current
     const result: FilmiusResult = {
       score: s.score,
-      stageReached: s.mode === 'all-cleared' ? 4 : s.stageIdx + 1,
+      stageReached: s.mode === 'all-cleared' ? STAGES.length + 1 : s.stageIdx + 1,
       cleared: s.mode === 'all-cleared',
       noMiss: s.noMiss && s.mode === 'all-cleared',
       enemiesKilled: s.enemiesKilled,
