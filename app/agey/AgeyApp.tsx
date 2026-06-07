@@ -14,6 +14,7 @@ import {
 interface Person {
   id: string
   name: string
+  nickname: string | null
   reading: string | null
   relation: string | null
   birth_year: number | null
@@ -50,6 +51,7 @@ type AgeMode = 'exact' | 'approx' | 'none'
 interface Draft {
   id: string | null // null = 新規
   name: string
+  nickname: string
   reading: string
   relation: string
   ageMode: AgeMode
@@ -63,7 +65,7 @@ interface Draft {
 
 function emptyDraft(): Draft {
   return {
-    id: null, name: '', reading: '', relation: '',
+    id: null, name: '', nickname: '', reading: '', relation: '',
     ageMode: 'exact', birthDate: '', approxAge: '',
     note: '', tags: [], emoji: null, color: null,
   }
@@ -117,7 +119,7 @@ export default function AgeyApp() {
   const loadPeople = useCallback(async (uid: string) => {
     const { data, error } = await supabase
       .from('agey_people')
-      .select('id, name, reading, relation, birth_year, birth_month, birth_day, approx_age, approx_age_as_of, note, tags, emoji, color_tag')
+      .select('id, name, nickname, reading, relation, birth_year, birth_month, birth_day, approx_age, approx_age_as_of, note, tags, emoji, color_tag')
       .eq('user_id', uid)
       .order('created_at', { ascending: false })
     if (error) {
@@ -167,7 +169,7 @@ export default function AgeyApp() {
     let list = people.filter(p => {
       if (activeTag && !p.tags.includes(activeTag)) return false
       if (!q) return true
-      const hay = [p.name, p.reading, p.relation, p.note, ...p.tags]
+      const hay = [p.name, p.nickname, p.reading, p.relation, p.note, ...p.tags]
         .filter(Boolean).join(' ').toLowerCase()
       return hay.includes(q)
     })
@@ -214,6 +216,7 @@ export default function AgeyApp() {
     setDraft({
       id: p.id,
       name: p.name,
+      nickname: p.nickname ?? '',
       reading: p.reading ?? '',
       relation: p.relation ?? '',
       ageMode, birthDate, approxAge,
@@ -258,6 +261,7 @@ export default function AgeyApp() {
     const payload = {
       user_id: userId,
       name,
+      nickname: draft.nickname.trim() || null,
       reading: draft.reading.trim() || null,
       relation: draft.relation.trim() || null,
       birth_year, birth_month, birth_day,
@@ -359,7 +363,7 @@ export default function AgeyApp() {
             <input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="名前・ふりがな・間柄・メモ・グループで検索"
+              placeholder="名前・あだ名・ふりがな・間柄・メモ・グループで検索"
               style={inputStyle}
             />
           </section>
@@ -538,6 +542,9 @@ function PersonCard({
             <span style={{ fontSize: 16, fontWeight: 800, color: '#fff', wordBreak: 'break-word' }}>
               {person.name}
             </span>
+            {person.nickname && (
+              <span style={{ fontSize: 13, fontWeight: 700, color: accent }}>「{person.nickname}」</span>
+            )}
             {person.relation && (
               <span style={{ fontSize: 11, color: '#9fb0c8' }}>{person.relation}</span>
             )}
@@ -664,6 +671,16 @@ function EditModal({
           value={draft.name}
           onChange={e => setDraft({ ...draft, name: e.target.value })}
           placeholder="例: 田中 たろう"
+          maxLength={60}
+          style={inputStyle}
+        />
+
+        {/* ニックネーム */}
+        <label style={{ ...labelStyle, marginTop: 14 }}>ニックネーム・あだ名</label>
+        <input
+          value={draft.nickname}
+          onChange={e => setDraft({ ...draft, nickname: e.target.value })}
+          placeholder="例: ゆうくん"
           maxLength={60}
           style={inputStyle}
         />
