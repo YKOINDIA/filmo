@@ -786,6 +786,42 @@ function FilmoUniverseSection() {
         </div>
       </Link>
 
+      {/* ===== Filmo Agey — 年齢メモ ===== */}
+      <Link
+        href="/agey"
+        className="universe-card"
+        style={{
+          display: 'block',
+          padding: 18,
+          borderRadius: 16,
+          background: 'linear-gradient(135deg, rgba(124,196,255,0.22), rgba(162,155,254,0.20))',
+          border: '1px solid rgba(124,196,255,0.4)',
+          textDecoration: 'none',
+          color: 'inherit',
+          marginBottom: 18,
+        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ fontSize: 32 }}>👶</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <span style={{
+                fontSize: 10, fontWeight: 800, color: '#7cc4ff',
+                background: 'rgba(124,196,255,0.15)',
+                border: '1px solid rgba(124,196,255,0.4)',
+                borderRadius: 4, padding: '2px 6px', letterSpacing: 0.5,
+              }}>👶 人物メモ</span>
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>
+              Filmo Agey
+            </div>
+            <div style={{ fontSize: 12, color: '#ddd', marginTop: 4, lineHeight: 1.5 }}>
+              仲間や子供の友達の名前・間柄・年齢をメモ。<br />誕生日がわかる人は正確な年齢を自動計算
+            </div>
+          </div>
+          <div style={{ fontSize: 22, color: '#7cc4ff' }}>→</div>
+        </div>
+      </Link>
+
       {/* ===== Coming Soon ===== */}
       <SubHeader emoji="✨" label="Coming Soon" />
       <div style={{
