@@ -69,31 +69,57 @@ function userOf(row: { users?: UserLite | UserLite[] | null }): UserLite {
 const STAMP = '👏'
 
 // ====================================================
-// 画像圧縮 (アスペクト比維持・最大辺 1080・WebP)
+// 画像圧縮 (アスペクト比維持・最大辺 1080・WebP / 非対応端末は JPEG)
 // ====================================================
+// 一部のモバイルブラウザでは onload/onerror/toBlob のいずれも発火せず
+// Promise が永久に未解決のまま「投稿中…」で固まることがある。
+// タイムアウトと WebP→JPEG フォールバックで必ず解決/失敗するようにする。
 function compressImage(file: File, maxDim = 1080, quality = 0.8): Promise<Blob> {
   return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
     const img = new Image()
-    img.onload = () => {
-      let { width, height } = img
-      if (width > height && width > maxDim) {
-        height = Math.round((height * maxDim) / width); width = maxDim
-      } else if (height >= width && height > maxDim) {
-        width = Math.round((width * maxDim) / height); height = maxDim
-      }
-      const canvas = document.createElement('canvas')
-      canvas.width = width; canvas.height = height
-      const ctx = canvas.getContext('2d')
-      if (!ctx) { reject(new Error('canvas unavailable')); return }
-      ctx.imageSmoothingQuality = 'high'
-      ctx.drawImage(img, 0, 0, width, height)
-      canvas.toBlob(
-        b => b ? resolve(b) : reject(new Error('compress failed')),
-        'image/webp', quality,
-      )
+    let settled = false
+    const finish = (b: Blob) => {
+      if (settled) return
+      settled = true; window.clearTimeout(timer); URL.revokeObjectURL(url); resolve(b)
     }
-    img.onerror = () => reject(new Error('image load failed'))
-    img.src = URL.createObjectURL(file)
+    const abort = (e: Error) => {
+      if (settled) return
+      settled = true; window.clearTimeout(timer); URL.revokeObjectURL(url); reject(e)
+    }
+    const timer = window.setTimeout(() => abort(new Error('image processing timed out')), 20000)
+
+    img.onload = () => {
+      try {
+        let { width, height } = img
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width); width = maxDim
+        } else if (height >= width && height > maxDim) {
+          width = Math.round((width * maxDim) / height); height = maxDim
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width; canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { abort(new Error('canvas unavailable')); return }
+        ctx.imageSmoothingQuality = 'high'
+        ctx.drawImage(img, 0, 0, width, height)
+        canvas.toBlob(
+          b => {
+            if (b) { finish(b); return }
+            // WebP 非対応端末は JPEG で再試行。
+            canvas.toBlob(
+              b2 => b2 ? finish(b2) : abort(new Error('compress failed')),
+              'image/jpeg', quality,
+            )
+          },
+          'image/webp', quality,
+        )
+      } catch (e) {
+        abort(e instanceof Error ? e : new Error('compress failed'))
+      }
+    }
+    img.onerror = () => abort(new Error('image load failed'))
+    img.src = url
   })
 }
 
@@ -403,10 +429,11 @@ export default function FastingApp() {
     try {
       if (file) {
         const blob = await compressImage(file)
-        const path = `${userId}/${Date.now()}.webp`
+        const ext = blob.type === 'image/jpeg' ? 'jpg' : 'webp'
+        const path = `${userId}/${Date.now()}.${ext}`
         const { error: upErr } = await supabase.storage
           .from('fasting')
-          .upload(path, blob, { contentType: 'image/webp', cacheControl: '3600' })
+          .upload(path, blob, { contentType: blob.type || 'image/webp', cacheControl: '3600' })
         if (upErr) throw upErr
         const { data: urlData } = supabase.storage.from('fasting').getPublicUrl(path)
         photo_url = urlData.publicUrl
