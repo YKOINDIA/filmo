@@ -177,3 +177,97 @@ export const TARGET_PRESETS: { hours: number; label: string; note: string }[] = 
 /** target_hours の許容範囲 (DB の CHECK と一致させる)。 */
 export const TARGET_HOURS_MIN = 1
 export const TARGET_HOURS_MAX = 168 // 7 日
+
+// ── ファスティング・スタイル (やり方) ────────────────────────────────────
+// 「毎日16:8」「毎日1日1食(OMAD)」など、繰り返し前提のスタイル。
+// defaultHours: そのスタイルを選んだときの既定の目標時間 (h)。
+export interface FastingStyle {
+  key: string
+  label: string
+  note: string
+  emoji: string
+  defaultHours: number
+}
+
+export const FASTING_STYLES: FastingStyle[] = [
+  { key: '16_8',   label: '16:8 (毎日16時間)',   note: '定番。8時間の間に食事',        emoji: '🕗', defaultHours: 16 },
+  { key: '18_6',   label: '18:6',                note: 'しっかりオートファジー',        emoji: '🔥', defaultHours: 18 },
+  { key: '20_4',   label: '20:4 (ウォリアー)',   note: '4時間だけ食べる',              emoji: '⚔️', defaultHours: 20 },
+  { key: 'omad',   label: '1日1食 (OMAD)',       note: '1日の食事は1回だけ',           emoji: '🍽', defaultHours: 23 },
+  { key: 'alt',    label: '隔日断食',            note: '1日おきに24時間断食',          emoji: '🔄', defaultHours: 24 },
+  { key: 'multi',  label: '連日ファスティング',  note: '2〜3日以上の長期断食',         emoji: '🏔', defaultHours: 48 },
+  { key: 'custom', label: 'カスタム',            note: '自分のやり方で',               emoji: '✨', defaultHours: 16 },
+]
+
+export function styleOf(key: string | null | undefined): FastingStyle | null {
+  if (!key) return null
+  return FASTING_STYLES.find(s => s.key === key) ?? null
+}
+
+// ── 食事の種類 (複数選択可) ──────────────────────────────────────────────
+export interface FoodType {
+  key: string
+  label: string
+  emoji: string
+}
+
+export const FOOD_TYPES: FoodType[] = [
+  { key: 'anything',     label: '何でも食べる',          emoji: '🍱' },
+  { key: 'vegetarian',   label: 'ベジタリアン (野菜・豆腐など)', emoji: '🥗' },
+  { key: 'vegan',        label: 'ヴィーガン (動物性なし)',  emoji: '🌱' },
+  { key: 'no_processed', label: '加工食品は除く',         emoji: '🚫' },
+  { key: 'no_sugar',     label: '砂糖・甘いものを除く',    emoji: '🍬' },
+  { key: 'liquid_only',  label: '固形物をとらない (液体のみ)', emoji: '🥤' },
+]
+
+export function foodTypeOf(key: string): FoodType | null {
+  return FOOD_TYPES.find(f => f.key === key) ?? null
+}
+
+// ── 運動の種目 ────────────────────────────────────────────────────────
+// unit: 量の単位。'min'=時間(分)系, 'reps'=回数系, 'km'=距離, null=量なし。
+export interface ExerciseType {
+  key: string
+  label: string
+  emoji: string
+  unit: 'min' | 'reps' | 'km' | null
+}
+
+export const EXERCISE_TYPES: ExerciseType[] = [
+  { key: 'stretch',  label: 'ストレッチ',   emoji: '🤸', unit: 'min' },
+  { key: 'walk',     label: 'ウォーキング', emoji: '🚶', unit: 'min' },
+  { key: 'run',      label: 'ランニング',   emoji: '🏃', unit: 'km' },
+  { key: 'cycle',    label: 'サイクリング', emoji: '🚴', unit: 'min' },
+  { key: 'strength', label: '筋トレ',       emoji: '💪', unit: 'reps' },
+  { key: 'yoga',     label: 'ヨガ',         emoji: '🧘', unit: 'min' },
+  { key: 'swim',     label: '水泳',         emoji: '🏊', unit: 'min' },
+  { key: 'other',    label: 'その他',       emoji: '🏷', unit: null },
+]
+
+export function exerciseTypeOf(key: string): ExerciseType | null {
+  return EXERCISE_TYPES.find(e => e.key === key) ?? null
+}
+
+export const EXERCISE_UNIT_LABEL: Record<'min' | 'reps' | 'km', string> = {
+  min: '分', reps: '回', km: 'km',
+}
+
+// ── プラン継続日数の算出 ──────────────────────────────────────────────
+// プラン開始日からの「経過日数」と、達成日(セッション完了日)の数を返す。
+export interface PlanProgress {
+  /** プラン開始からの経過日数 (開始当日を 1 日目とする) */
+  elapsedDays: number
+  /** 達成した日数 (完了セッションのあった日) */
+  achievedDays: number
+}
+
+export function computePlanProgress(
+  startedOn: string,
+  achievedDayKeys: Set<string>,
+  now: Date = new Date(),
+): PlanProgress {
+  const start = new Date(`${startedOn}T00:00:00`)
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const elapsedDays = Math.max(1, Math.floor((today.getTime() - start.getTime()) / 86_400_000) + 1)
+  return { elapsedDays, achievedDays: achievedDayKeys.size }
+}
