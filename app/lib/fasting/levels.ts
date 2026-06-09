@@ -165,9 +165,15 @@ export function earnedCommunityTitles(c: CommunityCounts): CommunityTitle[] {
 
 // ── 目標時間プリセット ────────────────────────────────────────────────
 export const TARGET_PRESETS: { hours: number; label: string; note: string }[] = [
-  { hours: 12, label: '12時間',  note: '入門・夜だけ断食' },
-  { hours: 16, label: '16時間',  note: '定番 16:8' },
-  { hours: 18, label: '18時間',  note: 'しっかりオートファジー' },
-  { hours: 24, label: '24時間',  note: '1日1食・上級' },
-  { hours: 36, label: '36時間',  note: 'ガチ勢' },
+  { hours: 12,  label: '12時間',      note: '入門・夜だけ断食' },
+  { hours: 16,  label: '16時間',      note: '定番 16:8' },
+  { hours: 18,  label: '18時間',      note: 'しっかりオートファジー' },
+  { hours: 24,  label: '24時間',      note: '1日1食・上級' },
+  { hours: 36,  label: '36時間',      note: 'ガチ勢' },
+  { hours: 48,  label: '48時間 (2日)', note: '本格ファスティング' },
+  { hours: 72,  label: '72時間 (3日)', note: '上級者向け' },
 ]
+
+/** target_hours の許容範囲 (DB の CHECK と一致させる)。 */
+export const TARGET_HOURS_MIN = 1
+export const TARGET_HOURS_MAX = 168 // 7 日
