@@ -7,7 +7,9 @@ import LoginPrompt from '../components/LoginPrompt'
 import {
   computeStats, levelForHours, earnedCommunityTitles,
   TARGET_PRESETS, TARGET_HOURS_MIN, TARGET_HOURS_MAX,
-  type FastingStats, type LevelProgress, type CommunityTitle,
+  FASTING_STYLES, styleOf, FOOD_TYPES, foodTypeOf,
+  EXERCISE_TYPES, exerciseTypeOf, EXERCISE_UNIT_LABEL, computePlanProgress,
+  type FastingStats, type LevelProgress, type CommunityTitle, type PlanProgress,
 } from '../lib/fasting/levels'
 
 // ====================================================
@@ -64,6 +66,26 @@ interface BodyLog {
 interface MealWindow {
   eat_start: string
   eat_end: string
+}
+
+// マイプラン (やり方・食事の種類・継続目標)。本人のみ・非公開。
+interface Plan {
+  style: string
+  target_hours: number
+  goal_days: number | null
+  food_types: string[]
+  food_note: string | null
+  started_on: string
+}
+
+// 運動の記録。本人のみ・非公開。
+interface ExerciseLog {
+  id: string
+  logged_on: string
+  type: string
+  amount: number | null
+  unit: 'min' | 'reps' | 'km' | null
+  note: string | null
 }
 
 function userOf(row: { users?: UserLite | UserLite[] | null }): UserLite {
@@ -156,6 +178,12 @@ function fmtHm(time: string): string {
   return time.slice(0, 5)
 }
 
+// ローカル日付の 'YYYY-MM-DD'。
+function localDayKey(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
 // ミリ秒を「○時間○分」表記に。1 時間未満は「○分」。
 function fmtUntil(ms: number): string {
   const totalMin = Math.max(0, Math.ceil(ms / 60000))
@@ -232,6 +260,9 @@ export default function FastingApp() {
   const [cheersGiven, setCheersGiven] = useState(0)
   const [bodyLogs, setBodyLogs] = useState<BodyLog[]>([])
   const [mealWindow, setMealWindow] = useState<MealWindow | null>(null)
+  const [plan, setPlan] = useState<Plan | null>(null)
+  const [achievedDays, setAchievedDays] = useState<Set<string>>(new Set())
+  const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([])
 
   // コミュニティ
   const [activeCount, setActiveCount] = useState(0)
@@ -246,6 +277,8 @@ export default function FastingApp() {
   const [postModal, setPostModal] = useState<null | { sessionId: string | null; fastedHours: number | null }>(null)
   const [bodyModal, setBodyModal] = useState<null | { edit: BodyLog | null }>(null)
   const [mealModal, setMealModal] = useState(false)
+  const [planModal, setPlanModal] = useState(false)
+  const [exerciseModal, setExerciseModal] = useState<null | { edit: ExerciseLog | null }>(null)
   const [starting, setStarting] = useState(false)
   const [ending, setEnding] = useState(false)
   const [changingTarget, setChangingTarget] = useState(false)
@@ -333,7 +366,7 @@ export default function FastingApp() {
       .maybeSingle()
     setMySession((active as SessionRow) ?? null)
 
-    // 達成履歴 → 統計
+    // 達成履歴 → 統計 + 達成日 (プラン継続用)
     const { data: history } = await supabase
       .from('fasting_sessions')
       .select('started_at, ended_at')
@@ -341,10 +374,10 @@ export default function FastingApp() {
       .eq('result', 'completed')
       .order('started_at', { ascending: false })
       .limit(1000)
-    setStats(computeStats(
-      ((history ?? []) as { started_at: string; ended_at: string }[])
-        .filter(h => h.ended_at),
-    ))
+    const completed = ((history ?? []) as { started_at: string; ended_at: string }[])
+      .filter(h => h.ended_at)
+    setStats(computeStats(completed))
+    setAchievedDays(new Set(completed.map(h => localDayKey(new Date(h.started_at)))))
 
     // コミュニティ称号用カウント
     const [{ count: pc }, { count: cg }] = await Promise.all([
@@ -381,6 +414,32 @@ export default function FastingApp() {
   }, [])
 
   // ────────────────────────────
+  // マイプラン (本人のみ・非公開)
+  // ────────────────────────────
+  const loadPlan = useCallback(async (uid: string) => {
+    const { data } = await supabase
+      .from('fasting_plans')
+      .select('style, target_hours, goal_days, food_types, food_note, started_on')
+      .eq('user_id', uid)
+      .maybeSingle()
+    setPlan((data as Plan) ?? null)
+  }, [])
+
+  // ────────────────────────────
+  // 運動の記録 (本人のみ・非公開)
+  // ────────────────────────────
+  const loadExercise = useCallback(async (uid: string) => {
+    const { data } = await supabase
+      .from('fasting_exercise_logs')
+      .select('id, logged_on, type, amount, unit, note')
+      .eq('user_id', uid)
+      .order('logged_on', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(120)
+    setExerciseLogs((data ?? []) as ExerciseLog[])
+  }, [])
+
+  // ────────────────────────────
   // 初期化
   // ────────────────────────────
   useEffect(() => {
@@ -393,7 +452,9 @@ export default function FastingApp() {
         setAuthed(!!session?.user)
         setUserId(uid)
         await loadCommunity(uid)
-        if (uid) await Promise.all([loadMine(uid), loadBody(uid), loadMealWindow(uid)])
+        if (uid) await Promise.all([
+          loadMine(uid), loadBody(uid), loadMealWindow(uid), loadPlan(uid), loadExercise(uid),
+        ])
       } catch (e) {
         console.error('[fasting] init failed', e)
       } finally {
@@ -401,7 +462,7 @@ export default function FastingApp() {
       }
     })()
     return () => { cancelled = true }
-  }, [loadCommunity, loadMine, loadBody, loadMealWindow])
+  }, [loadCommunity, loadMine, loadBody, loadMealWindow, loadPlan, loadExercise])
 
   // ────────────────────────────
   // 時計: 実行中は 1 秒、そうでなければ 30 秒
@@ -529,6 +590,81 @@ export default function FastingApp() {
     }
   }, [userId, loadMealWindow])
 
+  // マイプランを登録/更新する (1 ユーザー 1 件・upsert)。
+  const savePlan = useCallback(async (input: {
+    style: string; targetHours: number; goalDays: number | null
+    foodTypes: string[]; foodNote: string | null; startedOn: string
+  }) => {
+    if (!userId) return
+    const { error } = await supabase
+      .from('fasting_plans')
+      .upsert({
+        user_id: userId,
+        style: input.style,
+        target_hours: input.targetHours,
+        goal_days: input.goalDays,
+        food_types: input.foodTypes,
+        food_note: input.foodNote,
+        started_on: input.startedOn,
+      }, { onConflict: 'user_id' })
+    if (error) throw error
+    setPlan({
+      style: input.style, target_hours: input.targetHours, goal_days: input.goalDays,
+      food_types: input.foodTypes, food_note: input.foodNote, started_on: input.startedOn,
+    })
+    setPlanModal(false)
+  }, [userId])
+
+  const clearPlan = useCallback(async () => {
+    if (!userId) return
+    setPlan(null)
+    try {
+      await supabase.from('fasting_plans').delete().eq('user_id', userId)
+    } catch (e) {
+      console.error('[fasting] plan delete failed', e)
+      loadPlan(userId)
+    }
+  }, [userId, loadPlan])
+
+  // 運動の記録を追加/更新する。
+  const saveExercise = useCallback(async (input: {
+    id: string | null; loggedOn: string; type: string
+    amount: number | null; unit: 'min' | 'reps' | 'km' | null; note: string | null
+  }) => {
+    if (!userId) return
+    if (input.id) {
+      const { error } = await supabase
+        .from('fasting_exercise_logs')
+        .update({
+          logged_on: input.loggedOn, type: input.type,
+          amount: input.amount, unit: input.unit, note: input.note,
+        })
+        .eq('id', input.id).eq('user_id', userId)
+      if (error) throw error
+    } else {
+      const { error } = await supabase
+        .from('fasting_exercise_logs')
+        .insert({
+          user_id: userId, logged_on: input.loggedOn, type: input.type,
+          amount: input.amount, unit: input.unit, note: input.note,
+        })
+      if (error) throw error
+    }
+    setExerciseModal(null)
+    await loadExercise(userId)
+  }, [userId, loadExercise])
+
+  const deleteExercise = useCallback(async (id: string) => {
+    if (!userId) return
+    setExerciseLogs(prev => prev.filter(e => e.id !== id))
+    try {
+      await supabase.from('fasting_exercise_logs').delete().eq('id', id).eq('user_id', userId)
+    } catch (e) {
+      console.error('[fasting] exercise delete failed', e)
+      loadExercise(userId)
+    }
+  }, [userId, loadExercise])
+
   const toggleCheer = useCallback(async (post: PostRow) => {
     if (!userId) { setAuthed(false); return }
     const already = myCheers.has(post.id)
@@ -639,6 +775,18 @@ export default function FastingApp() {
   const meal = useMemo(() => computeMeal(mealWindow, now), [mealWindow, now])
 
   // ────────────────────────────
+  // 派生値: マイプランの継続状況
+  // ────────────────────────────
+  const planProgress: PlanProgress | null = useMemo(() => {
+    if (!plan) return null
+    // プラン開始日以降の達成日だけを数える。
+    const since = new Set(
+      [...achievedDays].filter(k => k >= plan.started_on),
+    )
+    return computePlanProgress(plan.started_on, since, new Date(now))
+  }, [plan, achievedDays, now])
+
+  // ────────────────────────────
   // レンダリング
   // ────────────────────────────
   return (
@@ -687,6 +835,8 @@ export default function FastingApp() {
               <StartCard
                 onStart={() => setPickerMode('start')}
                 starting={starting}
+                plan={plan}
+                progress={planProgress}
               />
             ) : (
               <GuestCallout onLogin={() => setAuthed(false)} />
@@ -707,7 +857,9 @@ export default function FastingApp() {
                   setUserId(uid)
                   setLoading(true)
                   await loadCommunity(uid)
-                  await Promise.all([loadMine(uid), loadBody(uid), loadMealWindow(uid)])
+                  await Promise.all([
+                    loadMine(uid), loadBody(uid), loadMealWindow(uid), loadPlan(uid), loadExercise(uid),
+                  ])
                   setLoading(false)
                 }}
               />
@@ -718,6 +870,25 @@ export default function FastingApp() {
           {authed && (
             <section style={{ padding: '8px 16px' }}>
               <LevelCard level={level} stats={stats} titles={communityTitles} />
+            </section>
+          )}
+
+          {/* ===== マイプラン (ログイン時・非公開) ===== */}
+          {authed && (
+            <section style={{ padding: '8px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <SectionTitle emoji="🗓" title="マイプラン" sub="やり方・食事の種類・継続目標（自分だけが見られます）" noMargin />
+                <button
+                  onClick={() => setPlanModal(true)}
+                  style={{
+                    padding: '7px 14px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                    background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`, color: '#06231a',
+                    fontSize: 13, fontWeight: 800, flexShrink: 0,
+                  }}>
+                  {plan ? '変更' : '＋ 設定'}
+                </button>
+              </div>
+              <MyPlanSection plan={plan} progress={planProgress} onSetup={() => setPlanModal(true)} />
             </section>
           )}
 
@@ -760,6 +931,29 @@ export default function FastingApp() {
                 </button>
               </div>
               <MealSection meal={meal} mealWindow={mealWindow} />
+            </section>
+          )}
+
+          {/* ===== 運動の記録 (ログイン時・非公開) ===== */}
+          {authed && (
+            <section style={{ padding: '8px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <SectionTitle emoji="🏃" title="運動の記録" sub="ストレッチ・ウォーキング・筋トレなど（自分だけが見られます）" noMargin />
+                <button
+                  onClick={() => setExerciseModal({ edit: null })}
+                  style={{
+                    padding: '7px 14px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                    background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`, color: '#06231a',
+                    fontSize: 13, fontWeight: 800, flexShrink: 0,
+                  }}>
+                  ＋ 記録
+                </button>
+              </div>
+              <ExerciseSection
+                logs={exerciseLogs}
+                onEdit={log => setExerciseModal({ edit: log })}
+                onDelete={deleteExercise}
+              />
             </section>
           )}
 
@@ -819,7 +1013,7 @@ export default function FastingApp() {
       {pickerMode && (
         <TargetPicker
           mode={pickerMode}
-          initialTarget={pickerMode === 'change' && mySession ? mySession.target_hours : 16}
+          initialTarget={pickerMode === 'change' && mySession ? mySession.target_hours : (plan?.target_hours ?? 16)}
           onPick={startFast}
           onChange={changeTarget}
           onClose={() => setPickerMode(null)}
@@ -853,6 +1047,25 @@ export default function FastingApp() {
           onSave={saveMealWindow}
           onClear={mealWindow ? clearMealWindow : undefined}
           onClose={() => setMealModal(false)}
+        />
+      )}
+
+      {/* ===== マイプラン モーダル ===== */}
+      {planModal && (
+        <PlanModal
+          current={plan}
+          onSave={savePlan}
+          onClear={plan ? clearPlan : undefined}
+          onClose={() => setPlanModal(false)}
+        />
+      )}
+
+      {/* ===== 運動の記録 モーダル ===== */}
+      {exerciseModal && (
+        <ExerciseModal
+          edit={exerciseModal.edit}
+          onSave={saveExercise}
+          onClose={() => setExerciseModal(null)}
         />
       )}
     </div>
@@ -892,20 +1105,46 @@ function SectionTitle({ emoji, title, sub, noMargin }: { emoji: string; title: s
   )
 }
 
-function StartCard({ onStart, starting }: { onStart: () => void; starting: boolean }) {
+function StartCard({ onStart, starting, plan, progress }: {
+  onStart: () => void
+  starting: boolean
+  plan: Plan | null
+  progress: PlanProgress | null
+}) {
+  const style = plan ? styleOf(plan.style) : null
   return (
     <div style={{
       padding: '28px 20px', borderRadius: 20, textAlign: 'center',
       background: `radial-gradient(120% 120% at 50% 0%, ${ACCENT}1f, rgba(20,30,26,0.6))`,
       border: `1px solid ${ACCENT}33`,
     }}>
-      <div style={{ fontSize: 40, marginBottom: 6 }}>🍃</div>
-      <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginBottom: 4 }}>
-        さあ、ファスティングを始めよう
-      </div>
-      <div style={{ fontSize: 12, color: '#9fb8ad', marginBottom: 18, lineHeight: 1.6 }}>
-        いま頑張っている仲間がいます。<br />ワンタップで開始、いつでも終了できます。
-      </div>
+      <div style={{ fontSize: 40, marginBottom: 6 }}>{style?.emoji ?? '🍃'}</div>
+      {plan && style ? (
+        <>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginBottom: 4 }}>
+            {style.label} を継続中
+          </div>
+          <div style={{ fontSize: 12, color: '#9fb8ad', marginBottom: 16, lineHeight: 1.6 }}>
+            {progress && (
+              <>
+                {progress.elapsedDays}日目
+                {plan.goal_days ? ` / 目標 ${plan.goal_days}日` : ''}
+                ・これまで <strong style={{ color: ACCENT }}>{progress.achievedDays}回</strong>達成<br />
+              </>
+            )}
+            目標 {plan.target_hours}h でワンタップ開始できます。
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginBottom: 4 }}>
+            さあ、ファスティングを始めよう
+          </div>
+          <div style={{ fontSize: 12, color: '#9fb8ad', marginBottom: 18, lineHeight: 1.6 }}>
+            いま頑張っている仲間がいます。<br />ワンタップで開始、いつでも終了できます。
+          </div>
+        </>
+      )}
       <button
         onClick={onStart}
         disabled={starting}
@@ -916,7 +1155,7 @@ function StartCard({ onStart, starting }: { onStart: () => void; starting: boole
           fontSize: 17, fontWeight: 900, letterSpacing: 1,
           boxShadow: `0 8px 24px ${ACCENT}44`,
         }}>
-        ▶ 開始する
+        ▶ {plan ? `${plan.target_hours}h で開始` : '開始する'}
       </button>
     </div>
   )
@@ -1956,6 +2195,510 @@ function MealWindowModal({ current, onSave, onClear, onClose }: {
           登録を削除する
         </button>
       )}
+    </BottomSheet>
+  )
+}
+
+// ====================================================
+// マイプラン セクション (本人のみ・非公開)
+// ====================================================
+function MyPlanSection({ plan, progress, onSetup }: {
+  plan: Plan | null
+  progress: PlanProgress | null
+  onSetup: () => void
+}) {
+  if (!plan) {
+    return (
+      <button
+        onClick={onSetup}
+        style={{
+          width: '100%', padding: 24, textAlign: 'center', color: '#789', fontSize: 13,
+          border: `1px dashed ${ACCENT}33`, borderRadius: 16, cursor: 'pointer',
+          background: 'none', lineHeight: 1.6,
+        }}>
+        「毎日16:8」「1日1食を1年」など、続けたいやり方を設定しよう。<br />
+        食事の種類や継続目標も登録できます。
+      </button>
+    )
+  }
+  const style = styleOf(plan.style)
+  const ratio = plan.goal_days && progress
+    ? Math.min(1, progress.elapsedDays / plan.goal_days)
+    : null
+  return (
+    <div style={{
+      padding: 16, borderRadius: 16,
+      background: 'rgba(18,28,24,0.7)', border: '1px solid rgba(255,255,255,0.08)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{
+          fontSize: 24, width: 48, height: 48, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          borderRadius: 14, background: `${ACCENT}1f`, border: `1px solid ${ACCENT}44`,
+        }}>{style?.emoji ?? '🗓'}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 16, fontWeight: 900, color: '#fff', lineHeight: 1.2 }}>
+            {style?.label ?? plan.style}
+          </div>
+          <div style={{ fontSize: 11.5, color: '#8aa79b', marginTop: 2 }}>
+            目標 {plan.target_hours}h
+            {progress && <>・{progress.elapsedDays}日目（{progress.achievedDays}回達成）</>}
+          </div>
+        </div>
+      </div>
+
+      {/* 継続目標の進捗バー */}
+      {plan.goal_days && progress && ratio != null && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ height: 9, borderRadius: 999, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+            <div style={{
+              width: `${Math.round(ratio * 100)}%`, height: '100%',
+              background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT2})`, transition: 'width 0.6s',
+            }} />
+          </div>
+          <div style={{ fontSize: 11, color: '#8aa79b', marginTop: 6 }}>
+            継続目標 {plan.goal_days}日 まで あと{' '}
+            <strong style={{ color: '#fff' }}>{Math.max(0, plan.goal_days - progress.elapsedDays)}日</strong>
+          </div>
+        </div>
+      )}
+
+      {/* 食事の種類 */}
+      {plan.food_types.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 14 }}>
+          {plan.food_types.map(k => {
+            const f = foodTypeOf(k)
+            if (!f) return null
+            return (
+              <span key={k} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '4px 11px', borderRadius: 999, fontSize: 11.5, fontWeight: 700,
+                background: `${ACCENT2}14`, border: `1px solid ${ACCENT2}40`, color: '#cfe',
+              }}>
+                <span>{f.emoji}</span>{f.label}
+              </span>
+            )
+          })}
+        </div>
+      )}
+
+      {plan.food_note && (
+        <div style={{
+          fontSize: 12.5, color: '#bcd', marginTop: 12, lineHeight: 1.6,
+          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+          padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)',
+        }}>
+          🍴 {plan.food_note}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ====================================================
+// マイプラン 入力モーダル
+// ====================================================
+function PlanModal({ current, onSave, onClear, onClose }: {
+  current: Plan | null
+  onSave: (input: {
+    style: string; targetHours: number; goalDays: number | null
+    foodTypes: string[]; foodNote: string | null; startedOn: string
+  }) => Promise<void>
+  onClear?: () => void
+  onClose: () => void
+}) {
+  const todayKey = () => {
+    const d = new Date()
+    const p = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  }
+  const [styleKey, setStyleKey] = useState(current?.style ?? '16_8')
+  const [targetHours, setTargetHours] = useState(
+    current?.target_hours ?? (styleOf('16_8')?.defaultHours ?? 16),
+  )
+  const [goalDays, setGoalDays] = useState(current?.goal_days != null ? String(current.goal_days) : '')
+  const [foodTypes, setFoodTypes] = useState<string[]>(current?.food_types ?? [])
+  const [foodNote, setFoodNote] = useState(current?.food_note ?? '')
+  const [startedOn, setStartedOn] = useState(current?.started_on ?? todayKey())
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  // スタイルを選ぶと既定の目標時間を反映 (ユーザーが後から微調整可)。
+  const pickStyle = (key: string) => {
+    setStyleKey(key)
+    const def = styleOf(key)?.defaultHours
+    if (def != null) setTargetHours(def)
+  }
+
+  const toggleFood = (key: string) => {
+    setFoodTypes(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
+  }
+
+  const submit = async () => {
+    const g = goalDays.trim() === '' ? null : Math.round(Number(goalDays))
+    if (g != null && (!Number.isFinite(g) || g < 1 || g > 3650)) {
+      setErr('継続目標は 1〜3650 日の範囲で入力してください'); return
+    }
+    if (!Number.isFinite(targetHours) || targetHours < TARGET_HOURS_MIN || targetHours > TARGET_HOURS_MAX) {
+      setErr(`目標時間は ${TARGET_HOURS_MIN}〜${TARGET_HOURS_MAX} 時間の範囲で入力してください`); return
+    }
+    setBusy(true); setErr(null)
+    try {
+      await onSave({
+        style: styleKey, targetHours, goalDays: g,
+        foodTypes, foodNote: foodNote.trim() || null, startedOn,
+      })
+    } catch (e) {
+      console.error('[fasting] plan save failed', e)
+      setErr('保存に失敗しました。時間をおいて再度お試しください。')
+      setBusy(false)
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '12px 14px', borderRadius: 12, boxSizing: 'border-box',
+    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)',
+    color: '#fff', fontSize: 16, outline: 'none',
+  }
+
+  return (
+    <BottomSheet onClose={busy ? undefined : onClose} title={current ? 'マイプランを変更' : 'マイプランを設定'}>
+      <div style={{
+        marginBottom: 14, padding: '8px 12px', borderRadius: 10, fontSize: 11.5,
+        background: 'rgba(124,196,255,0.08)', border: '1px solid rgba(124,196,255,0.25)', color: '#bcd', lineHeight: 1.6,
+      }}>
+        🔒 続けたいやり方・食事の種類・継続目標を登録します。あなただけが見られます。
+      </div>
+
+      {/* スタイル */}
+      <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 6 }}>やり方</label>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 16 }}>
+        {FASTING_STYLES.map(s => {
+          const sel = styleKey === s.key
+          return (
+            <button
+              key={s.key}
+              onClick={() => pickStyle(s.key)}
+              style={{
+                display: 'block', padding: '11px 12px', borderRadius: 14, cursor: 'pointer',
+                background: sel ? `${ACCENT}22` : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${sel ? ACCENT : `${ACCENT}33`}`,
+                color: '#dfe9e4', textAlign: 'left',
+              }}>
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#fff' }}>{s.emoji} {s.label}</div>
+              <div style={{ fontSize: 10.5, color: '#8aa79b', marginTop: 2 }}>{s.note}</div>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* 目標時間・継続目標 */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 4 }}>1回の目標 (時間)</label>
+          <input
+            type="number" inputMode="numeric"
+            value={targetHours}
+            min={TARGET_HOURS_MIN} max={TARGET_HOURS_MAX}
+            onChange={e => setTargetHours(Math.round(Number(e.target.value)))}
+            style={inputStyle}
+          />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 4 }}>継続目標 (日・任意)</label>
+          <input
+            type="number" inputMode="numeric"
+            value={goalDays}
+            onChange={e => setGoalDays(e.target.value)}
+            placeholder="例: 365"
+            style={inputStyle}
+          />
+        </div>
+      </div>
+
+      {/* 開始日 */}
+      <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 4 }}>始めた日（継続日数の起点）</label>
+      <input
+        type="date"
+        value={startedOn}
+        max={todayKey()}
+        onChange={e => setStartedOn(e.target.value)}
+        style={{ ...inputStyle, fontSize: 15, colorScheme: 'dark', marginBottom: 16 }}
+      />
+
+      {/* 食事の種類 (複数選択) */}
+      <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 6 }}>食事の種類（複数選択可）</label>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 16 }}>
+        {FOOD_TYPES.map(f => {
+          const sel = foodTypes.includes(f.key)
+          return (
+            <button
+              key={f.key}
+              onClick={() => toggleFood(f.key)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '8px 13px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+                background: sel ? `${ACCENT}22` : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${sel ? ACCENT : 'rgba(255,255,255,0.14)'}`,
+                color: sel ? '#fff' : '#bcd',
+              }}>
+              <span>{f.emoji}</span>{f.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* 食事メモ */}
+      <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 4 }}>食事の自由メモ（任意）</label>
+      <textarea
+        value={foodNote}
+        onChange={e => setFoodNote(e.target.value)}
+        placeholder="例: 1日1食は野菜と豆腐中心。週末は固形物なしで水と塩だけ。"
+        maxLength={300}
+        rows={3}
+        style={{ ...inputStyle, fontSize: 15, resize: 'vertical', fontFamily: 'inherit' }}
+      />
+
+      {err && (
+        <div style={{
+          marginTop: 12, padding: '9px 12px', borderRadius: 8, fontSize: 13,
+          background: 'rgba(255,107,107,0.12)', border: '1px solid rgba(255,107,107,0.35)', color: '#ffb3b3',
+        }}>{err}</div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button onClick={onClose} disabled={busy} style={{
+          flex: 1, padding: '12px', borderRadius: 12, cursor: busy ? 'default' : 'pointer',
+          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)',
+          color: '#bcd', fontSize: 14, fontWeight: 700,
+        }}>キャンセル</button>
+        <button onClick={submit} disabled={busy} style={{
+          flex: 2, padding: '12px', borderRadius: 12, border: 'none',
+          cursor: busy ? 'default' : 'pointer',
+          background: busy ? `${ACCENT}66` : `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`,
+          color: '#06231a', fontSize: 14, fontWeight: 800,
+        }}>{busy ? '保存中…' : '保存する'}</button>
+      </div>
+
+      {onClear && (
+        <button
+          onClick={() => { if (confirm('マイプランを削除しますか？')) { onClear(); onClose() } }}
+          disabled={busy}
+          style={{
+            width: '100%', marginTop: 10, padding: '11px', borderRadius: 12,
+            background: 'none', border: 'none', cursor: busy ? 'default' : 'pointer',
+            color: '#ff9b9b', fontSize: 13, fontWeight: 700,
+          }}>
+          プランを削除する
+        </button>
+      )}
+    </BottomSheet>
+  )
+}
+
+// ====================================================
+// 運動の記録 セクション (本人のみ・非公開)
+// ====================================================
+function ExerciseSection({ logs, onEdit, onDelete }: {
+  logs: ExerciseLog[]
+  onEdit: (log: ExerciseLog) => void
+  onDelete: (id: string) => void
+}) {
+  if (logs.length === 0) {
+    return (
+      <div style={{
+        padding: 24, textAlign: 'center', color: '#789', fontSize: 13,
+        border: `1px dashed ${ACCENT}33`, borderRadius: 16,
+      }}>
+        まだ記録がありません。ストレッチ・ウォーキング・筋トレなど、今日動いたことを記録しよう。
+      </div>
+    )
+  }
+  return (
+    <div style={{ display: 'grid', gap: 8 }}>
+      {logs.slice(0, 20).map(l => {
+        const t = exerciseTypeOf(l.type)
+        const unitLabel = l.unit ? EXERCISE_UNIT_LABEL[l.unit] : ''
+        return (
+          <div key={l.id} style={{
+            display: 'flex', alignItems: 'flex-start', gap: 12, padding: '11px 13px', borderRadius: 12,
+            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+          }}>
+            <div style={{ fontSize: 12, color: '#8aa79b', fontWeight: 700, width: 44, flexShrink: 0, paddingTop: 2 }}>
+              {fmtDate(l.logged_on)}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>
+                  {t?.emoji ?? '🏷'} {t?.label ?? l.type}
+                </span>
+                {l.amount != null && (
+                  <span style={{ fontSize: 13, color: ACCENT, fontWeight: 800 }}>
+                    {l.amount}{unitLabel}
+                  </span>
+                )}
+              </div>
+              {l.note && (
+                <div style={{ fontSize: 12.5, color: '#bcd', marginTop: 4, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {l.note}
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+              <button onClick={() => onEdit(l)} aria-label="編集" style={{
+                background: 'none', border: 'none', cursor: 'pointer', color: '#789', fontSize: 15, padding: 4,
+              }}>✏️</button>
+              <button onClick={() => { if (confirm('この記録を削除しますか？')) onDelete(l.id) }} aria-label="削除" style={{
+                background: 'none', border: 'none', cursor: 'pointer', color: '#789', fontSize: 15, padding: 4,
+              }}>🗑️</button>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ====================================================
+// 運動の記録 入力モーダル
+// ====================================================
+function ExerciseModal({ edit, onSave, onClose }: {
+  edit: ExerciseLog | null
+  onSave: (input: {
+    id: string | null; loggedOn: string; type: string
+    amount: number | null; unit: 'min' | 'reps' | 'km' | null; note: string | null
+  }) => Promise<void>
+  onClose: () => void
+}) {
+  const todayKey = () => {
+    const d = new Date()
+    const p = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  }
+  const [loggedOn, setLoggedOn] = useState(edit?.logged_on ?? todayKey())
+  const [typeKey, setTypeKey] = useState(edit?.type ?? 'walk')
+  const [amount, setAmount] = useState(edit?.amount != null ? String(edit.amount) : '')
+  const [note, setNote] = useState(edit?.note ?? '')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const type = exerciseTypeOf(typeKey)
+  const unit = type?.unit ?? null
+  const unitLabel = unit ? EXERCISE_UNIT_LABEL[unit] : null
+
+  const submit = async () => {
+    const a = amount.trim() === '' ? null : Number(amount)
+    if (a != null && (!Number.isFinite(a) || a < 0)) { setErr('量は 0 以上の数値で入力してください'); return }
+    if (!note.trim() && a == null) { setErr('量かメモのどちらかを入力してください'); return }
+    setBusy(true); setErr(null)
+    try {
+      await onSave({
+        id: edit?.id ?? null, loggedOn, type: typeKey,
+        amount: unit ? a : null, unit: unit, note: note.trim() || null,
+      })
+    } catch (e) {
+      console.error('[fasting] exercise save failed', e)
+      setErr('保存に失敗しました。時間をおいて再度お試しください。')
+      setBusy(false)
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '12px 14px', borderRadius: 12, boxSizing: 'border-box',
+    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)',
+    color: '#fff', fontSize: 16, outline: 'none',
+  }
+
+  return (
+    <BottomSheet onClose={busy ? undefined : onClose} title={edit ? '運動の記録を編集' : '運動を記録'}>
+      <div style={{
+        marginBottom: 14, padding: '8px 12px', borderRadius: 10, fontSize: 11.5,
+        background: 'rgba(124,196,255,0.08)', border: '1px solid rgba(124,196,255,0.25)', color: '#bcd', lineHeight: 1.6,
+      }}>
+        🔒 運動の記録はあなただけが見られます。1 日に何件でも登録できます。
+      </div>
+
+      {/* 種目 */}
+      <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 6 }}>種目</label>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 16 }}>
+        {EXERCISE_TYPES.map(t => {
+          const sel = typeKey === t.key
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTypeKey(t.key)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '8px 13px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+                background: sel ? `${ACCENT}22` : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${sel ? ACCENT : 'rgba(255,255,255,0.14)'}`,
+                color: sel ? '#fff' : '#bcd',
+              }}>
+              <span>{t.emoji}</span>{t.label}
+            </button>
+          )
+        })}
+      </div>
+
+      <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 4 }}>日付</label>
+      <input
+        type="date"
+        value={loggedOn}
+        max={todayKey()}
+        onChange={e => setLoggedOn(e.target.value)}
+        style={{ ...inputStyle, fontSize: 15, colorScheme: 'dark', marginBottom: 14 }}
+      />
+
+      {/* 量 (単位がある種目のみ) */}
+      {unit && (
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 4 }}>
+            量（{unitLabel}・任意）
+          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="number" inputMode="decimal"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              placeholder={unit === 'reps' ? '例: 30' : unit === 'km' ? '例: 5' : '例: 60'}
+              step={unit === 'km' ? '0.1' : '1'}
+              style={inputStyle}
+            />
+            <span style={{ fontSize: 14, color: '#bcd', fontWeight: 700, flexShrink: 0 }}>{unitLabel}</span>
+          </div>
+        </div>
+      )}
+
+      <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 4 }}>メモ（任意）</label>
+      <textarea
+        value={note}
+        onChange={e => setNote(e.target.value)}
+        placeholder="例: 懸垂30回・腕立て20回。久しぶりでもキツくなかった。"
+        maxLength={300}
+        rows={3}
+        style={{ ...inputStyle, fontSize: 15, resize: 'vertical', fontFamily: 'inherit' }}
+      />
+
+      {err && (
+        <div style={{
+          marginTop: 12, padding: '9px 12px', borderRadius: 8, fontSize: 13,
+          background: 'rgba(255,107,107,0.12)', border: '1px solid rgba(255,107,107,0.35)', color: '#ffb3b3',
+        }}>{err}</div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button onClick={onClose} disabled={busy} style={{
+          flex: 1, padding: '12px', borderRadius: 12, cursor: busy ? 'default' : 'pointer',
+          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)',
+          color: '#bcd', fontSize: 14, fontWeight: 700,
+        }}>キャンセル</button>
+        <button onClick={submit} disabled={busy} style={{
+          flex: 2, padding: '12px', borderRadius: 12, border: 'none',
+          cursor: busy ? 'default' : 'pointer',
+          background: busy ? `${ACCENT}66` : `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`,
+          color: '#06231a', fontSize: 14, fontWeight: 800,
+        }}>{busy ? '保存中…' : '保存する'}</button>
+      </div>
     </BottomSheet>
   )
 }
