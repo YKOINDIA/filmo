@@ -96,15 +96,35 @@ function userOf(row: { users?: UserLite | UserLite[] | null }): UserLite {
 
 const STAMP = '👏'
 
+// iPhone 標準の HEIC/HEIF か判定 (MIME か拡張子で)。
+function isHeic(file: File): boolean {
+  return /image\/hei[cf]/i.test(file.type) || /\.(heic|heif)$/i.test(file.name)
+}
+
+// HEIC/HEIF は多くのブラウザの <img> がデコードできず投稿が失敗するため、
+// libheif (heic2any) で JPEG に変換してから圧縮に回す。HEIC でなければそのまま返す。
+// 変換に失敗したら 'heic decode failed' を投げて呼び出し側でメッセージ分岐する。
+async function normalizeForCanvas(file: File): Promise<Blob> {
+  if (!isHeic(file)) return file
+  try {
+    const { default: heic2any } = await import('heic2any')
+    const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 })
+    return Array.isArray(out) ? out[0] : out
+  } catch (e) {
+    console.error('[fasting] heic convert failed', e)
+    throw new Error('heic decode failed')
+  }
+}
+
 // ====================================================
 // 画像圧縮 (アスペクト比維持・最大辺 1080・WebP / 非対応端末は JPEG)
 // ====================================================
 // 一部のモバイルブラウザでは onload/onerror/toBlob のいずれも発火せず
 // Promise が永久に未解決のまま「投稿中…」で固まることがある。
 // タイムアウトと WebP→JPEG フォールバックで必ず解決/失敗するようにする。
-function compressImage(file: File, maxDim = 1080, quality = 0.8): Promise<Blob> {
+function compressImage(source: Blob, maxDim = 1080, quality = 0.8): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file)
+    const url = URL.createObjectURL(source)
     const img = new Image()
     let settled = false
     const finish = (b: Blob) => {
@@ -149,6 +169,17 @@ function compressImage(file: File, maxDim = 1080, quality = 0.8): Promise<Blob> 
     img.onerror = () => abort(new Error('image load failed'))
     img.src = url
   })
+}
+
+// ネットワーク待ち (storage アップロード・DB) が永遠に終わらず
+// 「投稿中…」のまま固まるのを防ぐ。指定時間で必ず reject する。
+function withTimeout<T>(work: PromiseLike<T>, ms: number, label: string): Promise<T> {
+  let timer = 0
+  const timeout = new Promise<never>((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error(`${label} timed out`)), ms)
+  })
+  return Promise.race([Promise.resolve(work), timeout])
+    .finally(() => window.clearTimeout(timer))
 }
 
 // ====================================================
@@ -697,30 +728,44 @@ export default function FastingApp() {
     let photo_url: string | null = null
     try {
       if (file) {
-        const blob = await compressImage(file)
+        const normalized = await normalizeForCanvas(file)
+        const blob = await compressImage(normalized)
         const ext = blob.type === 'image/jpeg' ? 'jpg' : 'webp'
         const path = `${userId}/${Date.now()}.${ext}`
-        const { error: upErr } = await supabase.storage
-          .from('fasting')
-          .upload(path, blob, { contentType: blob.type || 'image/webp', cacheControl: '3600' })
+        const { error: upErr } = await withTimeout(
+          supabase.storage
+            .from('fasting')
+            .upload(path, blob, { contentType: blob.type || 'image/webp', cacheControl: '3600' }),
+          30000, 'upload',
+        )
         if (upErr) throw upErr
         const { data: urlData } = supabase.storage.from('fasting').getPublicUrl(path)
         photo_url = urlData.publicUrl
       }
-      const { error } = await supabase.from('fasting_posts').insert({
-        user_id: userId,
-        session_id: postModal.sessionId,
-        body: body.trim() || null,
-        photo_url,
-        fasted_hours: postModal.fastedHours,
-      })
+      const { error } = await withTimeout(
+        supabase.from('fasting_posts').insert({
+          user_id: userId,
+          session_id: postModal.sessionId,
+          body: body.trim() || null,
+          photo_url,
+          fasted_hours: postModal.fastedHours,
+        }),
+        20000, 'insert',
+      )
       if (error) throw error
       setPostModal(null)
       setPostCount(c => c + 1)
       loadCommunity(userId)
     } catch (e) {
       console.error('[fasting] post failed', e)
-      alert('投稿に失敗しました。写真サイズを下げるか、時間をおいて再度お試しください。')
+      const msg = e instanceof Error ? e.message : ''
+      if (msg.includes('timed out')) {
+        alert('通信に時間がかかり中断しました。電波の良い場所で、もう一度お試しください。')
+      } else if (msg.includes('heic decode') || msg.includes('image load') || msg.includes('compress')) {
+        alert('この写真の形式に対応できませんでした。\niPhone をお使いの場合は「設定 ＞ カメラ ＞ フォーマット」を「互換性優先」にすると改善します。別の写真でもお試しください。')
+      } else {
+        alert('投稿に失敗しました。写真サイズを下げるか、時間をおいて再度お試しください。')
+      }
     }
   }, [userId, postModal, loadCommunity])
 
