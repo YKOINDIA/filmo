@@ -6,7 +6,8 @@ import { supabase } from '../lib/supabase'
 import LoginPrompt from '../components/LoginPrompt'
 import {
   computeStats, levelForHours, earnedCommunityTitles,
-  TARGET_PRESETS, type FastingStats, type LevelProgress, type CommunityTitle,
+  TARGET_PRESETS, TARGET_HOURS_MIN, TARGET_HOURS_MAX,
+  type FastingStats, type LevelProgress, type CommunityTitle,
 } from '../lib/fasting/levels'
 
 // ====================================================
@@ -49,6 +50,14 @@ interface FeedEvent {
   name: string
   avatar: string | null
   targetHours: number
+}
+
+interface BodyLog {
+  id: string
+  logged_on: string
+  weight_kg: number | null
+  body_fat: number | null
+  note: string | null
 }
 
 function userOf(row: { users?: UserLite | UserLite[] | null }): UserLite {
@@ -123,6 +132,7 @@ export default function FastingApp() {
   const [stats, setStats] = useState<FastingStats>({ totalHours: 0, completedCount: 0, streakDays: 0, longestHours: 0 })
   const [postCount, setPostCount] = useState(0)
   const [cheersGiven, setCheersGiven] = useState(0)
+  const [bodyLogs, setBodyLogs] = useState<BodyLog[]>([])
 
   // コミュニティ
   const [activeCount, setActiveCount] = useState(0)
@@ -134,6 +144,7 @@ export default function FastingApp() {
   const [now, setNow] = useState<number>(() => Date.now())
   const [showTargetPicker, setShowTargetPicker] = useState(false)
   const [postModal, setPostModal] = useState<null | { sessionId: string | null; fastedHours: number | null }>(null)
+  const [bodyModal, setBodyModal] = useState<null | { edit: BodyLog | null }>(null)
   const [starting, setStarting] = useState(false)
   const [ending, setEnding] = useState(false)
 
@@ -243,6 +254,19 @@ export default function FastingApp() {
   }, [])
 
   // ────────────────────────────
+  // からだの記録 (本人のみ・非公開)
+  // ────────────────────────────
+  const loadBody = useCallback(async (uid: string) => {
+    const { data } = await supabase
+      .from('fasting_body_logs')
+      .select('id, logged_on, weight_kg, body_fat, note')
+      .eq('user_id', uid)
+      .order('logged_on', { ascending: false })
+      .limit(90)
+    setBodyLogs((data ?? []) as BodyLog[])
+  }, [])
+
+  // ────────────────────────────
   // 初期化
   // ────────────────────────────
   useEffect(() => {
@@ -255,7 +279,7 @@ export default function FastingApp() {
         setAuthed(!!session?.user)
         setUserId(uid)
         await loadCommunity(uid)
-        if (uid) await loadMine(uid)
+        if (uid) await Promise.all([loadMine(uid), loadBody(uid)])
       } catch (e) {
         console.error('[fasting] init failed', e)
       } finally {
@@ -263,7 +287,7 @@ export default function FastingApp() {
       }
     })()
     return () => { cancelled = true }
-  }, [loadCommunity, loadMine])
+  }, [loadCommunity, loadMine, loadBody])
 
   // ────────────────────────────
   // 時計: 実行中は 1 秒、そうでなければ 30 秒
@@ -291,13 +315,17 @@ export default function FastingApp() {
   // ────────────────────────────
   // アクション
   // ────────────────────────────
-  const startFast = useCallback(async (targetHours: number) => {
+  const startFast = useCallback(async (targetHours: number, startedAtISO?: string) => {
     if (!userId || mySession) return
     setStarting(true)
     try {
+      const payload: { user_id: string; target_hours: number; started_at?: string } = {
+        user_id: userId, target_hours: targetHours,
+      }
+      if (startedAtISO) payload.started_at = startedAtISO
       const { data, error } = await supabase
         .from('fasting_sessions')
-        .insert({ user_id: userId, target_hours: targetHours })
+        .insert(payload)
         .select('id, user_id, started_at, target_hours, ended_at, result')
         .single()
       if (error) throw error
@@ -400,6 +428,35 @@ export default function FastingApp() {
     }
   }, [userId, postModal, loadCommunity])
 
+  const saveBody = useCallback(async (input: {
+    loggedOn: string; weightKg: number | null; bodyFat: number | null; note: string | null
+  }) => {
+    if (!userId) return
+    const { error } = await supabase
+      .from('fasting_body_logs')
+      .upsert({
+        user_id: userId,
+        logged_on: input.loggedOn,
+        weight_kg: input.weightKg,
+        body_fat: input.bodyFat,
+        note: input.note,
+      }, { onConflict: 'user_id,logged_on' })
+    if (error) throw error
+    setBodyModal(null)
+    await loadBody(userId)
+  }, [userId, loadBody])
+
+  const deleteBody = useCallback(async (id: string) => {
+    if (!userId) return
+    setBodyLogs(prev => prev.filter(b => b.id !== id))
+    try {
+      await supabase.from('fasting_body_logs').delete().eq('id', id).eq('user_id', userId)
+    } catch (e) {
+      console.error('[fasting] body delete failed', e)
+      loadBody(userId)
+    }
+  }, [userId, loadBody])
+
   // ────────────────────────────
   // 派生値: タイマー表示
   // ────────────────────────────
@@ -481,7 +538,7 @@ export default function FastingApp() {
                   setUserId(uid)
                   setLoading(true)
                   await loadCommunity(uid)
-                  await loadMine(uid)
+                  await Promise.all([loadMine(uid), loadBody(uid)])
                   setLoading(false)
                 }}
               />
@@ -492,6 +549,29 @@ export default function FastingApp() {
           {authed && (
             <section style={{ padding: '8px 16px' }}>
               <LevelCard level={level} stats={stats} titles={communityTitles} />
+            </section>
+          )}
+
+          {/* ===== からだの記録 (ログイン時・非公開) ===== */}
+          {authed && (
+            <section style={{ padding: '8px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <SectionTitle emoji="📉" title="からだの記録" sub="体重・体の変化（自分だけが見られます）" noMargin />
+                <button
+                  onClick={() => setBodyModal({ edit: null })}
+                  style={{
+                    padding: '7px 14px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                    background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`, color: '#06231a',
+                    fontSize: 13, fontWeight: 800, flexShrink: 0,
+                  }}>
+                  ＋ 記録
+                </button>
+              </div>
+              <BodySection
+                logs={bodyLogs}
+                onEdit={log => setBodyModal({ edit: log })}
+                onDelete={deleteBody}
+              />
             </section>
           )}
 
@@ -547,6 +627,7 @@ export default function FastingApp() {
           onPick={startFast}
           onClose={() => setShowTargetPicker(false)}
           starting={starting}
+          now={now}
         />
       )}
 
@@ -556,6 +637,15 @@ export default function FastingApp() {
           fastedHours={postModal.fastedHours}
           onSubmit={submitPost}
           onClose={() => setPostModal(null)}
+        />
+      )}
+
+      {/* ===== からだの記録 モーダル ===== */}
+      {bodyModal && (
+        <BodyModal
+          edit={bodyModal.edit}
+          onSave={saveBody}
+          onClose={() => setBodyModal(null)}
         />
       )}
     </div>
@@ -925,32 +1015,189 @@ function PostCard({ post, cheered, now, onCheer }: { post: PostRow; cheered: boo
 
 // ====================================================
 // 目標時間ピッカー (ボトムシート)
+// すでに始めている人は開始時刻をさかのぼって登録できる。
 // ====================================================
-function TargetPicker({ onPick, onClose, starting }: {
-  onPick: (h: number) => void; onClose: () => void; starting: boolean
+// datetime-local 用にローカル時刻の 'YYYY-MM-DDTHH:mm' を作る。
+function toLocalInput(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+const BACKDATE_CHIPS: { label: string; hoursAgo: number }[] = [
+  { label: '6時間前', hoursAgo: 6 },
+  { label: '12時間前', hoursAgo: 12 },
+  { label: '1日前', hoursAgo: 24 },
+  { label: '2日前', hoursAgo: 48 },
+  { label: '3日前', hoursAgo: 72 },
+  { label: '4日前', hoursAgo: 96 },
+]
+
+function TargetPicker({ onPick, onClose, starting, now }: {
+  onPick: (h: number, startedAtISO?: string) => void; onClose: () => void; starting: boolean; now: number
 }) {
+  const [target, setTarget] = useState<number>(16)
+  const [customMode, setCustomMode] = useState(false)
+  const [customHours, setCustomHours] = useState('')
+  const [backdate, setBackdate] = useState(false)
+  const [startLocal, setStartLocal] = useState<string>(() => toLocalInput(new Date(now)))
+
+  const effectiveTarget = customMode
+    ? Math.round(Number(customHours))
+    : target
+  const validTarget = Number.isFinite(effectiveTarget)
+    && effectiveTarget >= TARGET_HOURS_MIN && effectiveTarget <= TARGET_HOURS_MAX
+
+  const startDate = backdate ? new Date(startLocal) : null
+  const startInvalid = backdate && (!startLocal || isNaN(startDate!.getTime()) || startDate!.getTime() > now)
+
+  const elapsedNote = backdate && startDate && !startInvalid
+    ? (() => {
+        const h = (now - startDate.getTime()) / 3_600_000
+        return h >= 1 ? `すでに約 ${Math.floor(h)} 時間が経過した状態で記録します` : 'ほぼ今から開始します'
+      })()
+    : null
+
+  const setChip = (hoursAgo: number) => {
+    setStartLocal(toLocalInput(new Date(now - hoursAgo * 3_600_000)))
+  }
+
+  const submit = () => {
+    if (!validTarget || startInvalid || starting) return
+    onPick(effectiveTarget, startDate ? startDate.toISOString() : undefined)
+  }
+
   return (
     <BottomSheet onClose={onClose} title="目標時間を選ぶ">
-      <div style={{ display: 'grid', gap: 10 }}>
-        {TARGET_PRESETS.map(p => (
-          <button
-            key={p.hours}
-            onClick={() => onPick(p.hours)}
-            disabled={starting}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '14px 16px', borderRadius: 14, cursor: starting ? 'default' : 'pointer',
-              background: 'rgba(255,255,255,0.04)', border: `1px solid ${ACCENT}33`,
-              color: '#dfe9e4', textAlign: 'left',
-            }}>
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{p.label}</div>
-              <div style={{ fontSize: 11, color: '#8aa79b', marginTop: 2 }}>{p.note}</div>
-            </div>
-            <span style={{ fontSize: 18, color: ACCENT }}>▶</span>
-          </button>
-        ))}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+        {TARGET_PRESETS.map(p => {
+          const sel = !customMode && target === p.hours
+          return (
+            <button
+              key={p.hours}
+              onClick={() => { setCustomMode(false); setTarget(p.hours) }}
+              style={{
+                display: 'block', padding: '12px 12px', borderRadius: 14, cursor: 'pointer',
+                background: sel ? `${ACCENT}22` : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${sel ? ACCENT : `${ACCENT}33`}`,
+                color: '#dfe9e4', textAlign: 'left',
+              }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{p.label}</div>
+              <div style={{ fontSize: 10.5, color: '#8aa79b', marginTop: 2 }}>{p.note}</div>
+            </button>
+          )
+        })}
+        {/* カスタム */}
+        <button
+          onClick={() => setCustomMode(true)}
+          style={{
+            display: 'block', padding: '12px 12px', borderRadius: 14, cursor: 'pointer',
+            background: customMode ? `${ACCENT}22` : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${customMode ? ACCENT : `${ACCENT}33`}`,
+            color: '#dfe9e4', textAlign: 'left',
+          }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>カスタム</div>
+          <div style={{ fontSize: 10.5, color: '#8aa79b', marginTop: 2 }}>自分で時間を決める</div>
+        </button>
       </div>
+
+      {customMode && (
+        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={customHours}
+            onChange={e => setCustomHours(e.target.value)}
+            placeholder="例: 20"
+            min={TARGET_HOURS_MIN}
+            max={TARGET_HOURS_MAX}
+            style={{
+              flex: 1, padding: '12px 14px', borderRadius: 12, boxSizing: 'border-box',
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)',
+              color: '#fff', fontSize: 16, outline: 'none',
+            }}
+          />
+          <span style={{ fontSize: 14, color: '#bcd', fontWeight: 700 }}>時間</span>
+        </div>
+      )}
+      {customMode && customHours !== '' && !validTarget && (
+        <div style={{ fontSize: 11, color: '#ffb3b3', marginTop: 6 }}>
+          {TARGET_HOURS_MIN}〜{TARGET_HOURS_MAX} 時間の範囲で入力してください。
+        </div>
+      )}
+
+      {/* すでに始めている (途中参加) */}
+      <label style={{
+        display: 'flex', alignItems: 'center', gap: 10, marginTop: 18, cursor: 'pointer',
+        padding: '12px 14px', borderRadius: 12,
+        background: backdate ? `${ACCENT2}14` : 'rgba(255,255,255,0.03)',
+        border: `1px solid ${backdate ? `${ACCENT2}55` : 'rgba(255,255,255,0.08)'}`,
+      }}>
+        <input
+          type="checkbox"
+          checked={backdate}
+          onChange={e => setBackdate(e.target.checked)}
+          style={{ width: 18, height: 18, accentColor: ACCENT }}
+        />
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>すでに始めている</div>
+          <div style={{ fontSize: 11, color: '#8aa79b', marginTop: 2 }}>
+            断食中の方も、開始時刻をさかのぼって記録できます
+          </div>
+        </div>
+      </label>
+
+      {backdate && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+            {BACKDATE_CHIPS.map(c => (
+              <button
+                key={c.hoursAgo}
+                onClick={() => setChip(c.hoursAgo)}
+                style={{
+                  padding: '7px 12px', borderRadius: 999, cursor: 'pointer',
+                  background: 'rgba(255,255,255,0.05)', border: `1px solid ${ACCENT2}40`,
+                  color: '#cfe', fontSize: 12.5, fontWeight: 700,
+                }}>
+                {c.label}
+              </button>
+            ))}
+          </div>
+          <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 4 }}>開始した日時</label>
+          <input
+            type="datetime-local"
+            value={startLocal}
+            max={toLocalInput(new Date(now))}
+            onChange={e => setStartLocal(e.target.value)}
+            style={{
+              width: '100%', padding: '12px 14px', borderRadius: 12, boxSizing: 'border-box',
+              background: 'rgba(255,255,255,0.06)', border: `1px solid ${startInvalid ? 'rgba(255,107,107,0.5)' : 'rgba(255,255,255,0.14)'}`,
+              color: '#fff', fontSize: 15, outline: 'none', colorScheme: 'dark',
+            }}
+          />
+          {startInvalid ? (
+            <div style={{ fontSize: 11, color: '#ffb3b3', marginTop: 6 }}>
+              未来の時刻は指定できません。
+            </div>
+          ) : elapsedNote && (
+            <div style={{ fontSize: 11, color: '#9fb8ad', marginTop: 6 }}>{elapsedNote}</div>
+          )}
+        </div>
+      )}
+
+      <button
+        onClick={submit}
+        disabled={!validTarget || startInvalid || starting}
+        style={{
+          width: '100%', marginTop: 18, padding: '15px 0', borderRadius: 999, border: 'none',
+          cursor: (!validTarget || startInvalid || starting) ? 'default' : 'pointer',
+          background: (!validTarget || startInvalid || starting)
+            ? `${ACCENT}55`
+            : `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`,
+          color: '#06231a', fontSize: 16, fontWeight: 900, letterSpacing: 1,
+        }}>
+        {starting ? '開始中…' : `▶ ${validTarget ? `${effectiveTarget}h で` : ''}開始する`}
+      </button>
+
       <div style={{ fontSize: 11, color: '#789', marginTop: 14, lineHeight: 1.6, textAlign: 'center' }}>
         いつでも途中で終了できます。無理のない範囲で。
       </div>
@@ -1054,6 +1301,246 @@ function PostModal({ fastedHours, onSubmit, onClose }: {
         }}>
           {busy ? '投稿中…' : '投稿する'}
         </button>
+      </div>
+    </BottomSheet>
+  )
+}
+
+// ====================================================
+// からだの記録セクション (本人のみ・非公開)
+// 体重スパークライン + 直近の記録リスト
+// ====================================================
+function fmtDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`)
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
+
+function BodySection({ logs, onEdit, onDelete }: {
+  logs: BodyLog[]
+  onEdit: (log: BodyLog) => void
+  onDelete: (id: string) => void
+}) {
+  // 体重のある記録のみで推移を見る (古い→新しい)。
+  const weighted = useMemo(
+    () => logs.filter(l => l.weight_kg != null).slice().reverse(),
+    [logs],
+  )
+
+  const summary = useMemo(() => {
+    if (weighted.length === 0) return null
+    const first = weighted[0].weight_kg!
+    const last = weighted[weighted.length - 1].weight_kg!
+    const delta = Math.round((last - first) * 10) / 10
+    return { first, last, delta }
+  }, [weighted])
+
+  if (logs.length === 0) {
+    return (
+      <div style={{
+        padding: 24, textAlign: 'center', color: '#789', fontSize: 13,
+        border: `1px dashed ${ACCENT}33`, borderRadius: 16,
+      }}>
+        まだ記録がありません。体重や体の変化を記録して、ファスティングの効果を実感しよう。
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      {/* サマリー + スパークライン */}
+      {summary && (
+        <div style={{
+          padding: 16, borderRadius: 16,
+          background: 'rgba(18,28,24,0.7)', border: '1px solid rgba(255,255,255,0.08)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+            <div>
+              <span style={{ fontSize: 28, fontWeight: 900, color: '#fff' }}>{summary.last}</span>
+              <span style={{ fontSize: 13, color: '#8aa79b', marginLeft: 3 }}>kg</span>
+            </div>
+            {weighted.length >= 2 && (
+              <span style={{
+                fontSize: 13, fontWeight: 800,
+                color: summary.delta < 0 ? ACCENT : summary.delta > 0 ? '#ffb86b' : '#8aa79b',
+              }}>
+                {summary.delta < 0 ? '▼' : summary.delta > 0 ? '▲' : '±'}
+                {Math.abs(summary.delta)}kg
+                <span style={{ fontSize: 10.5, color: '#789', fontWeight: 600 }}>（記録開始から）</span>
+              </span>
+            )}
+          </div>
+          {weighted.length >= 2 && <Sparkline points={weighted.map(w => w.weight_kg!)} />}
+        </div>
+      )}
+
+      {/* 記録リスト */}
+      <div style={{ display: 'grid', gap: 8 }}>
+        {logs.slice(0, 10).map(l => (
+          <div key={l.id} style={{
+            display: 'flex', alignItems: 'flex-start', gap: 12, padding: '11px 13px', borderRadius: 12,
+            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+          }}>
+            <div style={{ fontSize: 12, color: '#8aa79b', fontWeight: 700, width: 44, flexShrink: 0, paddingTop: 2 }}>
+              {fmtDate(l.logged_on)}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                {l.weight_kg != null && (
+                  <span style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>
+                    {l.weight_kg}<span style={{ fontSize: 11, color: '#8aa79b' }}>kg</span>
+                  </span>
+                )}
+                {l.body_fat != null && (
+                  <span style={{ fontSize: 13, color: ACCENT2, fontWeight: 700 }}>
+                    体脂肪 {l.body_fat}%
+                  </span>
+                )}
+              </div>
+              {l.note && (
+                <div style={{ fontSize: 12.5, color: '#bcd', marginTop: 4, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {l.note}
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+              <button onClick={() => onEdit(l)} aria-label="編集" style={{
+                background: 'none', border: 'none', cursor: 'pointer', color: '#789', fontSize: 15, padding: 4,
+              }}>✏️</button>
+              <button onClick={() => { if (confirm('この記録を削除しますか？')) onDelete(l.id) }} aria-label="削除" style={{
+                background: 'none', border: 'none', cursor: 'pointer', color: '#789', fontSize: 15, padding: 4,
+              }}>🗑️</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function Sparkline({ points }: { points: number[] }) {
+  const w = 280, h = 48, pad = 4
+  const min = Math.min(...points)
+  const max = Math.max(...points)
+  const span = max - min || 1
+  const stepX = points.length > 1 ? (w - pad * 2) / (points.length - 1) : 0
+  const coords = points.map((v, i) => {
+    const x = pad + i * stepX
+    const y = pad + (h - pad * 2) * (1 - (v - min) / span)
+    return [x, y] as const
+  })
+  const d = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(' ')
+  const last = coords[coords.length - 1]
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} style={{ marginTop: 10, display: 'block' }} preserveAspectRatio="none">
+      <path d={d} fill="none" stroke={ACCENT} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={last[0]} cy={last[1]} r={3} fill={ACCENT} />
+    </svg>
+  )
+}
+
+// ====================================================
+// からだの記録 入力モーダル
+// ====================================================
+function BodyModal({ edit, onSave, onClose }: {
+  edit: BodyLog | null
+  onSave: (input: { loggedOn: string; weightKg: number | null; bodyFat: number | null; note: string | null }) => Promise<void>
+  onClose: () => void
+}) {
+  const todayKey = () => {
+    const d = new Date()
+    const p = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  }
+  const [loggedOn, setLoggedOn] = useState(edit?.logged_on ?? todayKey())
+  const [weight, setWeight] = useState(edit?.weight_kg != null ? String(edit.weight_kg) : '')
+  const [bodyFat, setBodyFat] = useState(edit?.body_fat != null ? String(edit.body_fat) : '')
+  const [note, setNote] = useState(edit?.note ?? '')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const submit = async () => {
+    const w = weight.trim() === '' ? null : Number(weight)
+    const f = bodyFat.trim() === '' ? null : Number(bodyFat)
+    const n = note.trim() === '' ? null : note.trim()
+    if (w == null && f == null && !n) { setErr('体重・体脂肪・メモのいずれかを入力してください'); return }
+    if (w != null && (!Number.isFinite(w) || w <= 0 || w >= 500)) { setErr('体重は 0〜500kg の範囲で入力してください'); return }
+    if (f != null && (!Number.isFinite(f) || f < 0 || f > 100)) { setErr('体脂肪率は 0〜100% の範囲で入力してください'); return }
+    setBusy(true); setErr(null)
+    try {
+      await onSave({ loggedOn, weightKg: w, bodyFat: f, note: n })
+    } catch (e) {
+      console.error('[fasting] body save failed', e)
+      setErr('保存に失敗しました。時間をおいて再度お試しください。')
+      setBusy(false)
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '12px 14px', borderRadius: 12, boxSizing: 'border-box',
+    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)',
+    color: '#fff', fontSize: 16, outline: 'none',
+  }
+
+  return (
+    <BottomSheet onClose={busy ? undefined : onClose} title={edit ? '記録を編集' : 'からだの記録'}>
+      <div style={{
+        marginBottom: 14, padding: '8px 12px', borderRadius: 10, fontSize: 11.5,
+        background: 'rgba(124,196,255,0.08)', border: '1px solid rgba(124,196,255,0.25)', color: '#bcd', lineHeight: 1.6,
+      }}>
+        🔒 からだの記録はあなただけが見られます。コミュニティには表示されません。
+      </div>
+
+      <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 4 }}>日付</label>
+      <input
+        type="date"
+        value={loggedOn}
+        max={todayKey()}
+        onChange={e => setLoggedOn(e.target.value)}
+        style={{ ...inputStyle, fontSize: 15, colorScheme: 'dark', marginBottom: 14 }}
+      />
+
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 4 }}>体重 (kg)</label>
+          <input type="number" inputMode="decimal" value={weight} onChange={e => setWeight(e.target.value)}
+            placeholder="例: 58.5" step="0.1" style={inputStyle} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 4 }}>体脂肪率 (%・任意)</label>
+          <input type="number" inputMode="decimal" value={bodyFat} onChange={e => setBodyFat(e.target.value)}
+            placeholder="例: 22.0" step="0.1" style={inputStyle} />
+        </div>
+      </div>
+
+      <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 4 }}>体の変化メモ（任意）</label>
+      <textarea
+        value={note}
+        onChange={e => setNote(e.target.value)}
+        placeholder="肌の調子、お腹のすっきり感、体調、気づきなど…"
+        maxLength={500}
+        rows={3}
+        style={{ ...inputStyle, fontSize: 15, resize: 'vertical', fontFamily: 'inherit' }}
+      />
+
+      {err && (
+        <div style={{
+          marginTop: 12, padding: '9px 12px', borderRadius: 8, fontSize: 13,
+          background: 'rgba(255,107,107,0.12)', border: '1px solid rgba(255,107,107,0.35)', color: '#ffb3b3',
+        }}>{err}</div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button onClick={onClose} disabled={busy} style={{
+          flex: 1, padding: '12px', borderRadius: 12, cursor: busy ? 'default' : 'pointer',
+          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)',
+          color: '#bcd', fontSize: 14, fontWeight: 700,
+        }}>キャンセル</button>
+        <button onClick={submit} disabled={busy} style={{
+          flex: 2, padding: '12px', borderRadius: 12, border: 'none',
+          cursor: busy ? 'default' : 'pointer',
+          background: busy ? `${ACCENT}66` : `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`,
+          color: '#06231a', fontSize: 14, fontWeight: 800,
+        }}>{busy ? '保存中…' : '保存する'}</button>
       </div>
     </BottomSheet>
   )
