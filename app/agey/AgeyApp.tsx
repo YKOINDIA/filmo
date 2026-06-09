@@ -26,6 +26,7 @@ interface Person {
   tags: string[]
   emoji: string | null
   color_tag: string | null
+  linked_to: string | null
 }
 
 type SortMode = 'recent' | 'oldest' | 'youngest' | 'name'
@@ -40,6 +41,9 @@ const SORT_OPTIONS: { key: SortMode; label: string }[] = [
 const EMOJI_PRESETS = ['👶', '🧒', '👦', '👧', '🧑', '👨', '👩', '👴', '👵', '🧑‍💼', '🐱', '🎂']
 const COLOR_PRESETS = ['#ff7aae', '#ffd24a', '#6cf2ff', '#a29bfe', '#7bed9f', '#ff9f43', '#ff6b6b', '#54a0ff']
 const RELATION_PRESETS = ['会社の同僚', 'ママ友', '子の友達', '兄弟', '親戚', 'ご近所']
+// 親カードに紐づくメンバー (家族・ペット) 用の間柄プリセット
+const MEMBER_RELATION_PRESETS = ['妻', '夫', '長男', '長女', '子', '兄弟姉妹', '親', 'ペット', '犬', '猫']
+const MEMBER_EMOJI_PRESETS = ['👶', '🧒', '👦', '👧', '🧑', '👨', '👩', '👴', '👵', '🐶', '🐱', '🐹']
 
 const BG = '#0a0b14'
 
@@ -61,6 +65,10 @@ interface Draft {
   tags: string[]
   emoji: string | null
   color: string | null
+  // 親カードに紐づくメンバーとして登録/編集する場合の親 id。null = トップレベル。
+  linkedTo: string | null
+  // 親の名前 (モーダル見出し用。保存には使わない)。
+  linkedToName: string | null
 }
 
 function emptyDraft(): Draft {
@@ -68,6 +76,17 @@ function emptyDraft(): Draft {
     id: null, name: '', nickname: '', reading: '', relation: '',
     ageMode: 'exact', birthDate: '', approxAge: '',
     note: '', tags: [], emoji: null, color: null,
+    linkedTo: null, linkedToName: null,
+  }
+}
+
+// 親カードにメンバーを足すときの下書き (年齢は「だいたい」を既定に)。
+function memberDraft(parent: Person): Draft {
+  return {
+    id: null, name: '', nickname: '', reading: '', relation: '',
+    ageMode: 'none', birthDate: '', approxAge: '',
+    note: '', tags: [], emoji: null, color: parent.color_tag,
+    linkedTo: parent.id, linkedToName: parent.name,
   }
 }
 
@@ -119,7 +138,7 @@ export default function AgeyApp() {
   const loadPeople = useCallback(async (uid: string) => {
     const { data, error } = await supabase
       .from('agey_people')
-      .select('id, name, nickname, reading, relation, birth_year, birth_month, birth_day, approx_age, approx_age_as_of, note, tags, emoji, color_tag')
+      .select('id, name, nickname, reading, relation, birth_year, birth_month, birth_day, approx_age, approx_age_as_of, note, tags, emoji, color_tag, linked_to')
       .eq('user_id', uid)
       .order('created_at', { ascending: false })
     if (error) {
@@ -162,16 +181,37 @@ export default function AgeyApp() {
   }, [people])
 
   // ────────────────────────────
-  // 検索 + 絞り込み + ソート
+  // 紐づくメンバー (家族・ペット) を親 id ごとにまとめる
+  // ────────────────────────────
+  const membersByParent = useMemo(() => {
+    const map = new Map<string, Person[]>()
+    people.forEach(p => {
+      if (!p.linked_to) return
+      const arr = map.get(p.linked_to)
+      if (arr) arr.push(p)
+      else map.set(p.linked_to, [p])
+    })
+    // people は created_at DESC。メンバーは登録の古い順 (上から足した順) に並べる。
+    map.forEach(arr => arr.reverse())
+    return map
+  }, [people])
+
+  // ────────────────────────────
+  // 検索 + 絞り込み + ソート (トップレベルの人物のみ)
   // ────────────────────────────
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
-    let list = people.filter(p => {
+    const matches = (p: Person) => {
       if (activeTag && !p.tags.includes(activeTag)) return false
       if (!q) return true
       const hay = [p.name, p.nickname, p.reading, p.relation, p.note, ...p.tags]
         .filter(Boolean).join(' ').toLowerCase()
       return hay.includes(q)
+    }
+    // トップレベル (linked_to なし) を対象。本人 or 紐づくメンバーのどれかがヒットすれば表示。
+    let list = people.filter(p => !p.linked_to).filter(main => {
+      if (matches(main)) return true
+      return (membersByParent.get(main.id) ?? []).some(matches)
     })
     list = [...list]
     if (sortMode === 'name') {
@@ -189,7 +229,7 @@ export default function AgeyApp() {
     }
     // 'recent' は created_at DESC のまま
     return list
-  }, [people, query, activeTag, sortMode, now])
+  }, [people, membersByParent, query, activeTag, sortMode, now])
 
   // ────────────────────────────
   // モーダル操作
@@ -197,6 +237,12 @@ export default function AgeyApp() {
   const openCreate = useCallback(() => {
     setModalError(null)
     setDraft(emptyDraft())
+  }, [])
+
+  // 親カードに家族・ペットを足す
+  const openAddMember = useCallback((parent: Person) => {
+    setModalError(null)
+    setDraft(memberDraft(parent))
   }, [])
 
   const openEdit = useCallback((p: Person) => {
@@ -213,6 +259,7 @@ export default function AgeyApp() {
       const r = resolveAge(toAgeSource(p), new Date())
       approxAge = String(r.years != null ? Math.round(r.years) : p.approx_age)
     }
+    const parent = p.linked_to ? people.find(x => x.id === p.linked_to) ?? null : null
     setDraft({
       id: p.id,
       name: p.name,
@@ -224,8 +271,10 @@ export default function AgeyApp() {
       tags: [...p.tags],
       emoji: p.emoji,
       color: p.color_tag,
+      linkedTo: p.linked_to,
+      linkedToName: parent?.name ?? null,
     })
-  }, [])
+  }, [people])
 
   const closeModal = useCallback(() => {
     setDraft(null)
@@ -270,6 +319,7 @@ export default function AgeyApp() {
       tags: draft.tags,
       emoji: draft.emoji,
       color_tag: draft.color,
+      linked_to: draft.linkedTo,
     }
     try {
       if (draft.id) {
@@ -292,13 +342,18 @@ export default function AgeyApp() {
   }, [draft, userId, loadPeople, closeModal])
 
   const deletePerson = useCallback(async (p: Person) => {
-    if (!window.confirm(`「${p.name}」を削除しますか？`)) return
+    const memberCount = (membersByParent.get(p.id) ?? []).length
+    const msg = memberCount > 0
+      ? `「${p.name}」と、紐づく ${memberCount} 人（家族・ペット）も一緒に削除します。よろしいですか？`
+      : `「${p.name}」を削除しますか？`
+    if (!window.confirm(msg)) return
     const { error } = await supabase
       .from('agey_people').delete()
       .eq('id', p.id).eq('user_id', userId)
     if (error) { console.error('[agey] delete failed', error); return }
-    setPeople(prev => prev.filter(x => x.id !== p.id))
-  }, [userId])
+    // 親を消すと DB 側は CASCADE。ローカルでも本人＋紐づくメンバーを除く。
+    setPeople(prev => prev.filter(x => x.id !== p.id && x.linked_to !== p.id))
+  }, [userId, membersByParent])
 
   // ────────────────────────────
   // レンダリング
@@ -409,9 +464,13 @@ export default function AgeyApp() {
                   <PersonCard
                     key={p.id}
                     person={p}
+                    members={membersByParent.get(p.id) ?? []}
                     now={now}
                     onEdit={() => openEdit(p)}
                     onDelete={() => deletePerson(p)}
+                    onAddMember={() => openAddMember(p)}
+                    onEditMember={(m) => openEdit(m)}
+                    onDeleteMember={(m) => deletePerson(m)}
                     onTagClick={(t) => setActiveTag(t)}
                   />
                 ))}
@@ -503,12 +562,16 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 }
 
 function PersonCard({
-  person, now, onEdit, onDelete, onTagClick,
+  person, members, now, onEdit, onDelete, onAddMember, onEditMember, onDeleteMember, onTagClick,
 }: {
   person: Person
+  members: Person[]
   now: Date
   onEdit: () => void
   onDelete: () => void
+  onAddMember: () => void
+  onEditMember: (m: Person) => void
+  onDeleteMember: (m: Person) => void
   onTagClick: (t: string) => void
 }) {
   const age = resolveAge(toAgeSource(person), now)
@@ -596,8 +659,75 @@ function PersonCard({
           <button onClick={onDelete} aria-label="削除" style={iconBtnStyle}>🗑️</button>
         </div>
       </div>
+
+      {/* 紐づくメンバー (家族・ペット) */}
+      <div style={{ marginTop: members.length > 0 ? 12 : 8, paddingLeft: 6, borderLeft: '2px dashed rgba(255,255,255,0.1)', marginLeft: 18 }}>
+        {members.map(m => (
+          <MemberRow
+            key={m.id}
+            member={m}
+            now={now}
+            onEdit={() => onEditMember(m)}
+            onDelete={() => onDeleteMember(m)}
+          />
+        ))}
+        <button
+          onClick={onAddMember}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            marginTop: members.length > 0 ? 6 : 0,
+            padding: '5px 12px', borderRadius: 999, fontSize: 12, cursor: 'pointer',
+            background: 'rgba(124,196,255,0.08)', border: '1px dashed rgba(124,196,255,0.35)',
+            color: '#9fc6f0', fontWeight: 600,
+          }}>
+          ＋ 家族・ペットを追加
+        </button>
+      </div>
     </div>
   )
+}
+
+// 親カードにぶら下がるメンバー (家族・ペット) の 1 行表示
+function MemberRow({
+  member, now, onEdit, onDelete,
+}: {
+  member: Person
+  now: Date
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const age = resolveAge(toAgeSource(member), now)
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px',
+    }}>
+      <span style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>
+        {member.emoji ?? '👤'}
+      </span>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: '#eee', wordBreak: 'break-word' }}>
+          {member.name}
+        </span>
+        {member.nickname && (
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#9fc6f0' }}>「{member.nickname}」</span>
+        )}
+        {member.relation && (
+          <span style={{ fontSize: 10, color: '#9fb0c8' }}>{member.relation}</span>
+        )}
+        {age.kind !== 'none' && (
+          <span style={{ fontSize: 13, fontWeight: 800, color: member.color_tag ?? '#7cc4ff' }}>{age.label}</span>
+        )}
+      </div>
+      <button onClick={onEdit} aria-label="編集" style={miniBtnStyle}>✏️</button>
+      <button onClick={onDelete} aria-label="削除" style={miniBtnStyle}>🗑️</button>
+    </div>
+  )
+}
+
+const miniBtnStyle: React.CSSProperties = {
+  width: 26, height: 26, borderRadius: 7, cursor: 'pointer', flexShrink: 0,
+  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+  fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
 }
 
 const iconBtnStyle: React.CSSProperties = {
@@ -622,6 +752,10 @@ function EditModal({
 }) {
   const [tagInput, setTagInput] = useState('')
   const today = useMemo(() => todayISO(), [])
+  // 親カードに紐づくメンバー (家族・ペット) を登録/編集しているか
+  const isMember = draft.linkedTo != null
+  const relationPresets = isMember ? MEMBER_RELATION_PRESETS : RELATION_PRESETS
+  const emojiPresets = isMember ? MEMBER_EMOJI_PRESETS : EMOJI_PRESETS
 
   const addTag = useCallback((raw: string) => {
     const t = raw.trim()
@@ -656,14 +790,24 @@ function EditModal({
           border: '1px solid rgba(124,196,255,0.25)', borderBottom: 'none',
           padding: '20px 20px 28px',
         }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isMember ? 6 : 16 }}>
           <h2 style={{ fontSize: 17, fontWeight: 800, color: '#fff', margin: 0 }}>
-            {draft.id ? '編集' : '新しく登録'}
+            {draft.id
+              ? (isMember ? '家族・ペットを編集' : '編集')
+              : (isMember ? '家族・ペットを追加' : '新しく登録')}
           </h2>
           <button onClick={onClose} aria-label="閉じる" style={{
             background: 'none', border: 'none', color: '#888', fontSize: 24, cursor: 'pointer', lineHeight: 1,
           }}>×</button>
         </div>
+        {isMember && draft.linkedToName && (
+          <div style={{
+            marginBottom: 16, padding: '7px 12px', borderRadius: 9, fontSize: 12,
+            background: 'rgba(124,196,255,0.1)', border: '1px solid rgba(124,196,255,0.25)', color: '#cde8ff',
+          }}>
+            🔗 「{draft.linkedToName}」に紐づけて登録します
+          </div>
+        )}
 
         {/* 名前 */}
         <label style={labelStyle}>名前 <span style={{ color: '#ff6b6b' }}>*</span></label>
@@ -705,7 +849,7 @@ function EditModal({
           style={inputStyle}
         />
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-          {RELATION_PRESETS.map(r => (
+          {relationPresets.map(r => (
             <button key={r} onClick={() => setDraft({ ...draft, relation: r })} style={{
               padding: '3px 10px', borderRadius: 999, fontSize: 11, cursor: 'pointer',
               background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.14)', color: '#aaa',
@@ -771,7 +915,8 @@ function EditModal({
           </div>
         )}
 
-        {/* グループタグ */}
+        {/* グループタグ (メンバーには出さない) */}
+        {!isMember && <>
         <label style={{ ...labelStyle, marginTop: 16 }}>グループ（保育園・クラス・部活・会社など）</label>
         {draft.tags.length > 0 && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -808,6 +953,7 @@ function EditModal({
             ))}
           </div>
         )}
+        </>}
 
         {/* メモ */}
         <label style={{ ...labelStyle, marginTop: 16 }}>メモ（親の名前・特徴・どこで会ったか等）</label>
@@ -823,7 +969,7 @@ function EditModal({
         {/* アイコン */}
         <label style={{ ...labelStyle, marginTop: 16 }}>アイコン</label>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {EMOJI_PRESETS.map(em => (
+          {emojiPresets.map(em => (
             <button
               key={em}
               onClick={() => setDraft({ ...draft, emoji: draft.emoji === em ? null : em })}
