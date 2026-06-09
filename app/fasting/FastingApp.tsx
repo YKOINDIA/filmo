@@ -60,6 +60,12 @@ interface BodyLog {
   note: string | null
 }
 
+// 食事ウィンドウ (食べてよい時間帯)。'HH:MM:SS' のローカル時刻。本人のみ・非公開。
+interface MealWindow {
+  eat_start: string
+  eat_end: string
+}
+
 function userOf(row: { users?: UserLite | UserLite[] | null }): UserLite {
   const u = row.users
   const v = Array.isArray(u) ? u[0] : u
@@ -145,6 +151,72 @@ function fmtRelative(iso: string, now: number): string {
   return `${d}日前`
 }
 
+// 'HH:MM' 表記 (秒は切り捨て)。'HH:MM:SS' でも先頭 5 文字で OK。
+function fmtHm(time: string): string {
+  return time.slice(0, 5)
+}
+
+// ミリ秒を「○時間○分」表記に。1 時間未満は「○分」。
+function fmtUntil(ms: number): string {
+  const totalMin = Math.max(0, Math.ceil(ms / 60000))
+  const h = Math.floor(totalMin / 60)
+  const m = totalMin % 60
+  if (h <= 0) return `${m}分`
+  return `${h}時間${String(m).padStart(2, '0')}分`
+}
+
+// ====================================================
+// 食事ウィンドウから「いま食べてよいか / 次の食事まで」を算出
+// ====================================================
+interface MealState {
+  eating: boolean
+  /** いま食べてよい場合: ウィンドウ終了までの残り ms */
+  toEndMs: number
+  /** いま断食中の場合: 次に食べ始められるまでの ms */
+  toStartMs: number
+  startLabel: string
+  endLabel: string
+}
+
+// 'HH:MM:SS' をその日の経過分に変換。
+function timeToMin(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return (h || 0) * 60 + (m || 0)
+}
+
+function computeMeal(mw: MealWindow | null, now: number): MealState | null {
+  if (!mw) return null
+  const d = new Date(now)
+  const nowMin = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60
+  const startMin = timeToMin(mw.eat_start)
+  const endMin = timeToMin(mw.eat_end)
+  const DAY = 24 * 60
+  // 食べてよい時間帯に入っているか (深夜跨ぎ start>end も考慮)。
+  const overnight = startMin > endMin
+  const eating = overnight
+    ? (nowMin >= startMin || nowMin < endMin)
+    : (nowMin >= startMin && nowMin < endMin)
+
+  // 終了 / 開始までの「分」を、跨ぎを考慮して前方向に計算。
+  const fwd = (target: number) => {
+    let diff = target - nowMin
+    if (diff <= 0) diff += DAY
+    return diff
+  }
+  const toEndMs = (overnight
+    ? (nowMin < endMin ? endMin - nowMin : DAY - nowMin + endMin)
+    : endMin - nowMin) * 60000
+  const toStartMs = fwd(startMin) * 60000
+
+  return {
+    eating,
+    toEndMs: Math.max(0, toEndMs),
+    toStartMs: Math.max(0, toStartMs),
+    startLabel: fmtHm(mw.eat_start),
+    endLabel: fmtHm(mw.eat_end),
+  }
+}
+
 // ====================================================
 // メイン
 // ====================================================
@@ -159,6 +231,7 @@ export default function FastingApp() {
   const [postCount, setPostCount] = useState(0)
   const [cheersGiven, setCheersGiven] = useState(0)
   const [bodyLogs, setBodyLogs] = useState<BodyLog[]>([])
+  const [mealWindow, setMealWindow] = useState<MealWindow | null>(null)
 
   // コミュニティ
   const [activeCount, setActiveCount] = useState(0)
@@ -168,11 +241,14 @@ export default function FastingApp() {
 
   // UI
   const [now, setNow] = useState<number>(() => Date.now())
-  const [showTargetPicker, setShowTargetPicker] = useState(false)
+  // 目標時間ピッカー: null=非表示 / 'start'=新規開始 / 'change'=実行中の目標変更
+  const [pickerMode, setPickerMode] = useState<null | 'start' | 'change'>(null)
   const [postModal, setPostModal] = useState<null | { sessionId: string | null; fastedHours: number | null }>(null)
   const [bodyModal, setBodyModal] = useState<null | { edit: BodyLog | null }>(null)
+  const [mealModal, setMealModal] = useState(false)
   const [starting, setStarting] = useState(false)
   const [ending, setEnding] = useState(false)
+  const [changingTarget, setChangingTarget] = useState(false)
 
   const level: LevelProgress = useMemo(() => levelForHours(stats.totalHours), [stats.totalHours])
   const communityTitles: CommunityTitle[] = useMemo(
@@ -293,6 +369,18 @@ export default function FastingApp() {
   }, [])
 
   // ────────────────────────────
+  // 食事ウィンドウ (本人のみ・非公開)
+  // ────────────────────────────
+  const loadMealWindow = useCallback(async (uid: string) => {
+    const { data } = await supabase
+      .from('fasting_meal_windows')
+      .select('eat_start, eat_end')
+      .eq('user_id', uid)
+      .maybeSingle()
+    setMealWindow((data as MealWindow) ?? null)
+  }, [])
+
+  // ────────────────────────────
   // 初期化
   // ────────────────────────────
   useEffect(() => {
@@ -305,7 +393,7 @@ export default function FastingApp() {
         setAuthed(!!session?.user)
         setUserId(uid)
         await loadCommunity(uid)
-        if (uid) await Promise.all([loadMine(uid), loadBody(uid)])
+        if (uid) await Promise.all([loadMine(uid), loadBody(uid), loadMealWindow(uid)])
       } catch (e) {
         console.error('[fasting] init failed', e)
       } finally {
@@ -313,7 +401,7 @@ export default function FastingApp() {
       }
     })()
     return () => { cancelled = true }
-  }, [loadCommunity, loadMine, loadBody])
+  }, [loadCommunity, loadMine, loadBody, loadMealWindow])
 
   // ────────────────────────────
   // 時計: 実行中は 1 秒、そうでなければ 30 秒
@@ -356,7 +444,7 @@ export default function FastingApp() {
         .single()
       if (error) throw error
       setMySession(data as SessionRow)
-      setShowTargetPicker(false)
+      setPickerMode(null)
       setNow(Date.now())
       loadCommunity(userId)
     } catch (e) {
@@ -395,6 +483,51 @@ export default function FastingApp() {
       setEnding(false)
     }
   }, [userId, mySession, loadMine, loadCommunity])
+
+  // 実行中セッションの目標時間を変更する。
+  const changeTarget = useCallback(async (targetHours: number) => {
+    if (!userId || !mySession) return
+    setChangingTarget(true)
+    try {
+      const { data, error } = await supabase
+        .from('fasting_sessions')
+        .update({ target_hours: targetHours })
+        .eq('id', mySession.id)
+        .eq('user_id', userId)
+        .select('id, user_id, started_at, target_hours, ended_at, result')
+        .single()
+      if (error) throw error
+      setMySession(data as SessionRow)
+      setPickerMode(null)
+    } catch (e) {
+      console.error('[fasting] change target failed', e)
+      alert('目標の変更に失敗しました。時間をおいて再度お試しください。')
+    } finally {
+      setChangingTarget(false)
+    }
+  }, [userId, mySession])
+
+  // 食事ウィンドウを登録/更新する (1 ユーザー 1 件・upsert)。
+  const saveMealWindow = useCallback(async (eatStart: string, eatEnd: string) => {
+    if (!userId) return
+    const { error } = await supabase
+      .from('fasting_meal_windows')
+      .upsert({ user_id: userId, eat_start: eatStart, eat_end: eatEnd }, { onConflict: 'user_id' })
+    if (error) throw error
+    setMealWindow({ eat_start: eatStart, eat_end: eatEnd })
+    setMealModal(false)
+  }, [userId])
+
+  const clearMealWindow = useCallback(async () => {
+    if (!userId) return
+    setMealWindow(null)
+    try {
+      await supabase.from('fasting_meal_windows').delete().eq('user_id', userId)
+    } catch (e) {
+      console.error('[fasting] meal window delete failed', e)
+      loadMealWindow(userId)
+    }
+  }, [userId, loadMealWindow])
 
   const toggleCheer = useCallback(async (post: PostRow) => {
     if (!userId) { setAuthed(false); return }
@@ -495,8 +628,15 @@ export default function FastingApp() {
     const ratio = Math.min(1, elapsedMs / targetMs)
     const reached = elapsedMs >= targetMs
     const remainMs = Math.max(0, targetMs - elapsedMs)
-    return { elapsedMs, ratio, reached, remainMs }
+    // 経過の「N日目」。開始した瞬間が 1 日目。
+    const dayNumber = Math.floor(Math.max(0, elapsedMs) / 86_400_000) + 1
+    return { elapsedMs, ratio, reached, remainMs, dayNumber }
   }, [mySession, now])
+
+  // ────────────────────────────
+  // 派生値: 次の食事までのカウントダウン
+  // ────────────────────────────
+  const meal = useMemo(() => computeMeal(mealWindow, now), [mealWindow, now])
 
   // ────────────────────────────
   // レンダリング
@@ -538,12 +678,14 @@ export default function FastingApp() {
               <ActiveTimerCard
                 timer={timer}
                 targetHours={mySession.target_hours}
+                meal={meal}
                 onEnd={endFast}
+                onChangeTarget={() => setPickerMode('change')}
                 ending={ending}
               />
             ) : authed ? (
               <StartCard
-                onStart={() => setShowTargetPicker(true)}
+                onStart={() => setPickerMode('start')}
                 starting={starting}
               />
             ) : (
@@ -565,7 +707,7 @@ export default function FastingApp() {
                   setUserId(uid)
                   setLoading(true)
                   await loadCommunity(uid)
-                  await Promise.all([loadMine(uid), loadBody(uid)])
+                  await Promise.all([loadMine(uid), loadBody(uid), loadMealWindow(uid)])
                   setLoading(false)
                 }}
               />
@@ -599,6 +741,25 @@ export default function FastingApp() {
                 onEdit={log => setBodyModal({ edit: log })}
                 onDelete={deleteBody}
               />
+            </section>
+          )}
+
+          {/* ===== 食事のタイミング (ログイン時・非公開) ===== */}
+          {authed && (
+            <section style={{ padding: '8px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <SectionTitle emoji="🍽" title="食事のタイミング" sub="食べてよい時間帯（自分だけが見られます）" noMargin />
+                <button
+                  onClick={() => setMealModal(true)}
+                  style={{
+                    padding: '7px 14px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                    background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`, color: '#06231a',
+                    fontSize: 13, fontWeight: 800, flexShrink: 0,
+                  }}>
+                  {mealWindow ? '変更' : '＋ 登録'}
+                </button>
+              </div>
+              <MealSection meal={meal} mealWindow={mealWindow} />
             </section>
           )}
 
@@ -645,15 +806,24 @@ export default function FastingApp() {
               </div>
             )}
           </section>
+
+          {/* ===== 友達を招待 ===== */}
+          <section style={{ padding: '0 16px 28px' }}>
+            <SectionTitle emoji="🎉" title="友達を招待" sub="一緒に頑張る仲間を誘おう" />
+            <InviteCard />
+          </section>
         </>
       )}
 
       {/* ===== 目標時間ピッカー ===== */}
-      {showTargetPicker && (
+      {pickerMode && (
         <TargetPicker
+          mode={pickerMode}
+          initialTarget={pickerMode === 'change' && mySession ? mySession.target_hours : 16}
           onPick={startFast}
-          onClose={() => setShowTargetPicker(false)}
-          starting={starting}
+          onChange={changeTarget}
+          onClose={() => setPickerMode(null)}
+          busy={pickerMode === 'change' ? changingTarget : starting}
           now={now}
         />
       )}
@@ -673,6 +843,16 @@ export default function FastingApp() {
           edit={bodyModal.edit}
           onSave={saveBody}
           onClose={() => setBodyModal(null)}
+        />
+      )}
+
+      {/* ===== 食事のタイミング モーダル ===== */}
+      {mealModal && (
+        <MealWindowModal
+          current={mealWindow}
+          onSave={saveMealWindow}
+          onClear={mealWindow ? clearMealWindow : undefined}
+          onClose={() => setMealModal(false)}
         />
       )}
     </div>
@@ -743,11 +923,13 @@ function StartCard({ onStart, starting }: { onStart: () => void; starting: boole
 }
 
 function ActiveTimerCard({
-  timer, targetHours, onEnd, ending,
+  timer, targetHours, meal, onEnd, onChangeTarget, ending,
 }: {
-  timer: { elapsedMs: number; ratio: number; reached: boolean; remainMs: number }
+  timer: { elapsedMs: number; ratio: number; reached: boolean; remainMs: number; dayNumber: number }
   targetHours: number
+  meal: MealState | null
   onEnd: () => void
+  onChangeTarget: () => void
   ending: boolean
 }) {
   const size = 220
@@ -776,6 +958,12 @@ function ActiveTimerCard({
           position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
         }}>
+          <div style={{
+            fontSize: 11, fontWeight: 800, color: ACCENT, letterSpacing: 1,
+            padding: '2px 10px', borderRadius: 999, background: `${ACCENT}1f`, marginBottom: 4,
+          }}>
+            {timer.dayNumber}日目
+          </div>
           <div style={{ fontSize: 11, color: '#8aa79b', letterSpacing: 1 }}>経過時間</div>
           <div style={{
             fontSize: 34, fontWeight: 900, color: '#fff',
@@ -795,19 +983,55 @@ function ActiveTimerCard({
         </div>
       </div>
 
-      <button
-        onClick={onEnd}
-        disabled={ending}
-        style={{
-          marginTop: 18, width: '100%', maxWidth: 280, padding: '14px 0', borderRadius: 999,
-          border: timer.reached ? 'none' : '1px solid rgba(255,255,255,0.18)',
-          cursor: ending ? 'default' : 'pointer',
-          background: timer.reached ? 'linear-gradient(135deg, #ffd24a, #ff9f43)' : 'rgba(255,255,255,0.06)',
-          color: timer.reached ? '#3a2600' : '#dfe9e4',
-          fontSize: 15, fontWeight: 800,
+      {/* 次の食事までのカウントダウン (食事ウィンドウ登録時) */}
+      {meal && !meal.eating && (
+        <div style={{
+          marginTop: 14, padding: '10px 14px', borderRadius: 12,
+          background: `${ACCENT2}14`, border: `1px solid ${ACCENT2}40`,
+          fontSize: 13, color: '#cfe',
         }}>
-        {ending ? '処理中…' : timer.reached ? '⏹ 終えて回復食をシェア' : '⏹ 終了する'}
-      </button>
+          🍽 次の食事（{meal.startLabel}）まで{' '}
+          <strong style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{fmtUntil(meal.toStartMs)}</strong>
+        </div>
+      )}
+      {meal && meal.eating && (
+        <div style={{
+          marginTop: 14, padding: '10px 14px', borderRadius: 12,
+          background: 'rgba(255,210,74,0.12)', border: '1px solid rgba(255,210,74,0.4)',
+          fontSize: 13, color: '#ffe08a',
+        }}>
+          🍽 いまは食事タイム（〜{meal.endLabel}）。残り{' '}
+          <strong style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{fmtUntil(meal.toEndMs)}</strong>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+        <button
+          onClick={onChangeTarget}
+          disabled={ending}
+          style={{
+            flex: 1, padding: '14px 0', borderRadius: 999,
+            border: '1px solid rgba(255,255,255,0.18)',
+            cursor: ending ? 'default' : 'pointer',
+            background: 'rgba(255,255,255,0.06)', color: '#dfe9e4',
+            fontSize: 14, fontWeight: 800,
+          }}>
+          🎯 目標を変更
+        </button>
+        <button
+          onClick={onEnd}
+          disabled={ending}
+          style={{
+            flex: 1.4, padding: '14px 0', borderRadius: 999,
+            border: timer.reached ? 'none' : '1px solid rgba(255,255,255,0.18)',
+            cursor: ending ? 'default' : 'pointer',
+            background: timer.reached ? 'linear-gradient(135deg, #ffd24a, #ff9f43)' : 'rgba(255,255,255,0.06)',
+            color: timer.reached ? '#3a2600' : '#dfe9e4',
+            fontSize: 14, fontWeight: 800,
+          }}>
+          {ending ? '処理中…' : timer.reached ? '⏹ 終えてシェア' : '⏹ 終了する'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -1059,12 +1283,20 @@ const BACKDATE_CHIPS: { label: string; hoursAgo: number }[] = [
   { label: '4日前', hoursAgo: 96 },
 ]
 
-function TargetPicker({ onPick, onClose, starting, now }: {
-  onPick: (h: number, startedAtISO?: string) => void; onClose: () => void; starting: boolean; now: number
+function TargetPicker({ mode, initialTarget, onPick, onChange, onClose, busy, now }: {
+  mode: 'start' | 'change'
+  initialTarget: number
+  onPick: (h: number, startedAtISO?: string) => void
+  onChange: (h: number) => void
+  onClose: () => void
+  busy: boolean
+  now: number
 }) {
-  const [target, setTarget] = useState<number>(16)
-  const [customMode, setCustomMode] = useState(false)
-  const [customHours, setCustomHours] = useState('')
+  const isChange = mode === 'change'
+  const presetMatch = TARGET_PRESETS.some(p => p.hours === initialTarget)
+  const [target, setTarget] = useState<number>(initialTarget)
+  const [customMode, setCustomMode] = useState(!presetMatch)
+  const [customHours, setCustomHours] = useState(presetMatch ? '' : String(initialTarget))
   const [backdate, setBackdate] = useState(false)
   const [startLocal, setStartLocal] = useState<string>(() => toLocalInput(new Date(now)))
 
@@ -1089,12 +1321,16 @@ function TargetPicker({ onPick, onClose, starting, now }: {
   }
 
   const submit = () => {
-    if (!validTarget || startInvalid || starting) return
-    onPick(effectiveTarget, startDate ? startDate.toISOString() : undefined)
+    if (!validTarget || startInvalid || busy) return
+    if (isChange) {
+      onChange(effectiveTarget)
+    } else {
+      onPick(effectiveTarget, startDate ? startDate.toISOString() : undefined)
+    }
   }
 
   return (
-    <BottomSheet onClose={onClose} title="目標時間を選ぶ">
+    <BottomSheet onClose={onClose} title={isChange ? '目標時間を変更' : '目標時間を選ぶ'}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
         {TARGET_PRESETS.map(p => {
           const sel = !customMode && target === p.hours
@@ -1152,7 +1388,8 @@ function TargetPicker({ onPick, onClose, starting, now }: {
         </div>
       )}
 
-      {/* すでに始めている (途中参加) */}
+      {/* すでに始めている (途中参加) — 変更モードでは非表示 */}
+      {!isChange && (
       <label style={{
         display: 'flex', alignItems: 'center', gap: 10, marginTop: 18, cursor: 'pointer',
         padding: '12px 14px', borderRadius: 12,
@@ -1172,8 +1409,9 @@ function TargetPicker({ onPick, onClose, starting, now }: {
           </div>
         </div>
       </label>
+      )}
 
-      {backdate && (
+      {!isChange && backdate && (
         <div style={{ marginTop: 12 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
             {BACKDATE_CHIPS.map(c => (
@@ -1213,20 +1451,24 @@ function TargetPicker({ onPick, onClose, starting, now }: {
 
       <button
         onClick={submit}
-        disabled={!validTarget || startInvalid || starting}
+        disabled={!validTarget || startInvalid || busy}
         style={{
           width: '100%', marginTop: 18, padding: '15px 0', borderRadius: 999, border: 'none',
-          cursor: (!validTarget || startInvalid || starting) ? 'default' : 'pointer',
-          background: (!validTarget || startInvalid || starting)
+          cursor: (!validTarget || startInvalid || busy) ? 'default' : 'pointer',
+          background: (!validTarget || startInvalid || busy)
             ? `${ACCENT}55`
             : `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`,
           color: '#06231a', fontSize: 16, fontWeight: 900, letterSpacing: 1,
         }}>
-        {starting ? '開始中…' : `▶ ${validTarget ? `${effectiveTarget}h で` : ''}開始する`}
+        {isChange
+          ? (busy ? '変更中…' : `🎯 ${validTarget ? `${effectiveTarget}h に` : ''}変更する`)
+          : (busy ? '開始中…' : `▶ ${validTarget ? `${effectiveTarget}h で` : ''}開始する`)}
       </button>
 
       <div style={{ fontSize: 11, color: '#789', marginTop: 14, lineHeight: 1.6, textAlign: 'center' }}>
-        いつでも途中で終了できます。無理のない範囲で。
+        {isChange
+          ? '経過時間はそのまま、目標だけが変わります。'
+          : 'いつでも途中で終了できます。無理のない範囲で。'}
       </div>
     </BottomSheet>
   )
@@ -1570,6 +1812,211 @@ function BodyModal({ edit, onSave, onClose }: {
         }}>{busy ? '保存中…' : '保存する'}</button>
       </div>
     </BottomSheet>
+  )
+}
+
+// ====================================================
+// 食事のタイミング セクション (本人のみ・非公開)
+// ====================================================
+function MealSection({ meal, mealWindow }: { meal: MealState | null; mealWindow: MealWindow | null }) {
+  if (!mealWindow || !meal) {
+    return (
+      <div style={{
+        padding: 24, textAlign: 'center', color: '#789', fontSize: 13,
+        border: `1px dashed ${ACCENT}33`, borderRadius: 16,
+      }}>
+        食べてよい時間帯（例 12:00〜20:00）を登録すると、次の食事までの時間が分かります。
+      </div>
+    )
+  }
+  return (
+    <div style={{
+      padding: 16, borderRadius: 16,
+      background: 'rgba(18,28,24,0.7)', border: '1px solid rgba(255,255,255,0.08)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 22 }}>🍽</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 11, color: '#8aa79b', fontWeight: 700 }}>食べてよい時間帯</div>
+          <div style={{ fontSize: 18, fontWeight: 900, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>
+            {meal.startLabel} 〜 {meal.endLabel}
+          </div>
+        </div>
+      </div>
+      <div style={{
+        marginTop: 12, padding: '11px 14px', borderRadius: 12,
+        background: meal.eating ? 'rgba(255,210,74,0.12)' : `${ACCENT2}14`,
+        border: `1px solid ${meal.eating ? 'rgba(255,210,74,0.4)' : `${ACCENT2}40`}`,
+        fontSize: 13.5, color: meal.eating ? '#ffe08a' : '#cfe',
+      }}>
+        {meal.eating ? (
+          <>いまは食事タイム。終了（{meal.endLabel}）まで{' '}
+            <strong style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{fmtUntil(meal.toEndMs)}</strong></>
+        ) : (
+          <>次の食事（{meal.startLabel}）まで{' '}
+            <strong style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{fmtUntil(meal.toStartMs)}</strong></>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ====================================================
+// 食事のタイミング 入力モーダル
+// ====================================================
+function MealWindowModal({ current, onSave, onClear, onClose }: {
+  current: MealWindow | null
+  onSave: (eatStart: string, eatEnd: string) => Promise<void>
+  onClear?: () => void
+  onClose: () => void
+}) {
+  const [start, setStart] = useState(current ? fmtHm(current.eat_start) : '12:00')
+  const [end, setEnd] = useState(current ? fmtHm(current.eat_end) : '20:00')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const overnight = timeToMin(start) > timeToMin(end)
+
+  const submit = async () => {
+    if (!start || !end) { setErr('開始と終了の時刻を入力してください'); return }
+    if (start === end) { setErr('開始と終了が同じ時刻です'); return }
+    setBusy(true); setErr(null)
+    try {
+      await onSave(start, end)
+    } catch (e) {
+      console.error('[fasting] meal window save failed', e)
+      setErr('保存に失敗しました。時間をおいて再度お試しください。')
+      setBusy(false)
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    flex: 1, padding: '12px 14px', borderRadius: 12, boxSizing: 'border-box',
+    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)',
+    color: '#fff', fontSize: 16, outline: 'none', colorScheme: 'dark',
+  }
+
+  return (
+    <BottomSheet onClose={busy ? undefined : onClose} title="食事のタイミング">
+      <div style={{
+        marginBottom: 14, padding: '8px 12px', borderRadius: 10, fontSize: 11.5,
+        background: 'rgba(124,196,255,0.08)', border: '1px solid rgba(124,196,255,0.25)', color: '#bcd', lineHeight: 1.6,
+      }}>
+        🔒 食べてよい時間帯（例 16:8 なら 12:00〜20:00）を登録すると、次の食事までカウントダウンします。あなただけが見られます。
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 4 }}>食べ始め</label>
+          <input type="time" value={start} onChange={e => setStart(e.target.value)} style={inputStyle} />
+        </div>
+        <span style={{ fontSize: 16, color: '#8aa79b', paddingTop: 18 }}>〜</span>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: 11, color: '#8aa79b', display: 'block', marginBottom: 4 }}>食べ終わり</label>
+          <input type="time" value={end} onChange={e => setEnd(e.target.value)} style={inputStyle} />
+        </div>
+      </div>
+
+      {overnight && (
+        <div style={{ fontSize: 11, color: '#9fb8ad', marginTop: 8 }}>
+          深夜をまたぐ時間帯として登録します（例 22:00〜翌 06:00）。
+        </div>
+      )}
+
+      {err && (
+        <div style={{
+          marginTop: 12, padding: '9px 12px', borderRadius: 8, fontSize: 13,
+          background: 'rgba(255,107,107,0.12)', border: '1px solid rgba(255,107,107,0.35)', color: '#ffb3b3',
+        }}>{err}</div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button onClick={onClose} disabled={busy} style={{
+          flex: 1, padding: '12px', borderRadius: 12, cursor: busy ? 'default' : 'pointer',
+          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)',
+          color: '#bcd', fontSize: 14, fontWeight: 700,
+        }}>キャンセル</button>
+        <button onClick={submit} disabled={busy} style={{
+          flex: 2, padding: '12px', borderRadius: 12, border: 'none',
+          cursor: busy ? 'default' : 'pointer',
+          background: busy ? `${ACCENT}66` : `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`,
+          color: '#06231a', fontSize: 14, fontWeight: 800,
+        }}>{busy ? '保存中…' : '保存する'}</button>
+      </div>
+
+      {onClear && (
+        <button
+          onClick={() => { if (confirm('食事のタイミングを削除しますか？')) { onClear(); onClose() } }}
+          disabled={busy}
+          style={{
+            width: '100%', marginTop: 10, padding: '11px', borderRadius: 12,
+            background: 'none', border: 'none', cursor: busy ? 'default' : 'pointer',
+            color: '#ff9b9b', fontSize: 13, fontWeight: 700,
+          }}>
+          登録を削除する
+        </button>
+      )}
+    </BottomSheet>
+  )
+}
+
+// ====================================================
+// 友達を招待 (X / LINE / リンクコピー)
+// ====================================================
+function InviteCard() {
+  const [copied, setCopied] = useState(false)
+  const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/fasting` : ''
+  const text = '一緒にファスティング始めよう🍃 仲間と励まし合えるよ！'
+
+  const openShare = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      window.prompt('このリンクをコピーしてください', shareUrl)
+    }
+  }
+
+  const btn: React.CSSProperties = {
+    flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+    padding: '14px 8px', borderRadius: 14, cursor: 'pointer',
+    border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: 12.5, fontWeight: 700,
+  }
+
+  return (
+    <div style={{
+      padding: 16, borderRadius: 16,
+      background: 'rgba(18,28,24,0.7)', border: '1px solid rgba(255,255,255,0.08)',
+    }}>
+      <div style={{ fontSize: 12.5, color: '#9fb8ad', lineHeight: 1.6, marginBottom: 14 }}>
+        ひとりより、みんなで。友達を誘って一緒に続けよう。
+      </div>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button
+          onClick={() => openShare(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${text}\n${shareUrl}`)}`)}
+          style={{ ...btn, background: 'rgba(0,0,0,0.4)' }}>
+          <span style={{ fontSize: 22 }}>𝕏</span>
+          X でシェア
+        </button>
+        <button
+          onClick={() => openShare(`https://line.me/R/msg/text/?${encodeURIComponent(`${text}\n${shareUrl}`)}`)}
+          style={{ ...btn, background: 'rgba(6,199,85,0.18)', border: '1px solid rgba(6,199,85,0.5)' }}>
+          <span style={{ fontSize: 22 }}>💬</span>
+          LINE で送る
+        </button>
+        <button
+          onClick={copyLink}
+          style={{ ...btn, background: `${ACCENT}1a`, border: `1px solid ${ACCENT}55` }}>
+          <span style={{ fontSize: 22 }}>{copied ? '✓' : '🔗'}</span>
+          {copied ? 'コピー済' : 'リンク'}
+        </button>
+      </div>
+    </div>
   )
 }
 
