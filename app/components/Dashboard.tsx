@@ -822,6 +822,42 @@ function FilmoUniverseSection() {
         </div>
       </Link>
 
+      {/* ===== Filmo ファスティング — 断食コミュニティ ===== */}
+      <Link
+        href="/fasting"
+        className="universe-card"
+        style={{
+          display: 'block',
+          padding: 18,
+          borderRadius: 16,
+          background: 'linear-gradient(135deg, rgba(79,209,165,0.22), rgba(124,196,255,0.18))',
+          border: '1px solid rgba(79,209,165,0.4)',
+          textDecoration: 'none',
+          color: 'inherit',
+          marginBottom: 18,
+        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ fontSize: 32 }}>🍃</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <span style={{
+                fontSize: 10, fontWeight: 800, color: '#4fd1a5',
+                background: 'rgba(79,209,165,0.15)',
+                border: '1px solid rgba(79,209,165,0.4)',
+                borderRadius: 4, padding: '2px 6px', letterSpacing: 0.5,
+              }}>🍃 ファスティング</span>
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>
+              Filmo ファスティング
+            </div>
+            <div style={{ fontSize: 12, color: '#ddd', marginTop: 4, lineHeight: 1.5 }}>
+              仲間とゲーム感覚で断食を継続。<br />いま頑張る仲間が見え、回復食を称え合える
+            </div>
+          </div>
+          <div style={{ fontSize: 22, color: '#4fd1a5' }}>→</div>
+        </div>
+      </Link>
+
       {/* ===== Coming Soon ===== */}
       <SubHeader emoji="✨" label="Coming Soon" />
       <div style={{
