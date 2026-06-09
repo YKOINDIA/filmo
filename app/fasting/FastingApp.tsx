@@ -151,6 +151,17 @@ function compressImage(file: File, maxDim = 1080, quality = 0.8): Promise<Blob> 
   })
 }
 
+// ネットワーク待ち (storage アップロード・DB) が永遠に終わらず
+// 「投稿中…」のまま固まるのを防ぐ。指定時間で必ず reject する。
+function withTimeout<T>(work: PromiseLike<T>, ms: number, label: string): Promise<T> {
+  let timer = 0
+  const timeout = new Promise<never>((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error(`${label} timed out`)), ms)
+  })
+  return Promise.race([Promise.resolve(work), timeout])
+    .finally(() => window.clearTimeout(timer))
+}
+
 // ====================================================
 // 時間フォーマット
 // ====================================================
@@ -700,27 +711,36 @@ export default function FastingApp() {
         const blob = await compressImage(file)
         const ext = blob.type === 'image/jpeg' ? 'jpg' : 'webp'
         const path = `${userId}/${Date.now()}.${ext}`
-        const { error: upErr } = await supabase.storage
-          .from('fasting')
-          .upload(path, blob, { contentType: blob.type || 'image/webp', cacheControl: '3600' })
+        const { error: upErr } = await withTimeout(
+          supabase.storage
+            .from('fasting')
+            .upload(path, blob, { contentType: blob.type || 'image/webp', cacheControl: '3600' }),
+          30000, 'upload',
+        )
         if (upErr) throw upErr
         const { data: urlData } = supabase.storage.from('fasting').getPublicUrl(path)
         photo_url = urlData.publicUrl
       }
-      const { error } = await supabase.from('fasting_posts').insert({
-        user_id: userId,
-        session_id: postModal.sessionId,
-        body: body.trim() || null,
-        photo_url,
-        fasted_hours: postModal.fastedHours,
-      })
+      const { error } = await withTimeout(
+        supabase.from('fasting_posts').insert({
+          user_id: userId,
+          session_id: postModal.sessionId,
+          body: body.trim() || null,
+          photo_url,
+          fasted_hours: postModal.fastedHours,
+        }),
+        20000, 'insert',
+      )
       if (error) throw error
       setPostModal(null)
       setPostCount(c => c + 1)
       loadCommunity(userId)
     } catch (e) {
       console.error('[fasting] post failed', e)
-      alert('投稿に失敗しました。写真サイズを下げるか、時間をおいて再度お試しください。')
+      const timedOut = e instanceof Error && e.message.includes('timed out')
+      alert(timedOut
+        ? '通信に時間がかかり中断しました。電波の良い場所で、もう一度お試しください。'
+        : '投稿に失敗しました。写真サイズを下げるか、時間をおいて再度お試しください。')
     }
   }, [userId, postModal, loadCommunity])
 
