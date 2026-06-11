@@ -5,6 +5,7 @@ import "./globals.css";
 import { LocaleProviderWrapper } from "./components/LocaleProviderWrapper";
 import GoogleAnalytics from "./components/GoogleAnalytics";
 import MaintenanceCard from "./components/MaintenanceCard";
+import AdsInit from "./components/AdsInit";
 
 // 計画メンテナンス用キルスイッチ。Vercel の環境変数で `MAINTENANCE_MODE=1` を
 // セットしてデプロイすると、サイト全体がメンテナンス画面に切り替わる。
@@ -149,6 +150,10 @@ export default function RootLayout({
         {/* GA4: useSearchParams() を含むので Suspense 境界で囲む (Next.js App Router 要件) */}
         <Suspense fallback={null}>
           <GoogleAnalytics />
+        </Suspense>
+        {/* 広告 (ネイティブ: AdMob / Web: AdSense)。usePathname を使うため Suspense 境界内に置く */}
+        <Suspense fallback={null}>
+          <AdsInit />
         </Suspense>
         <LocaleProviderWrapper>{children}</LocaleProviderWrapper>
         {/*
