@@ -106,6 +106,20 @@ function lsSet(key: string, value: string) {
   try { window.localStorage.setItem(key, value) } catch { /* private mode 等 */ }
 }
 
+/** ページがフォアグラウンド (visible) になるまで待つ。ATT ダイアログ表示の前提条件。 */
+function waitForPageVisible(): Promise<void> {
+  if (document.visibilityState === 'visible') return Promise.resolve()
+  return new Promise((resolve) => {
+    const onChange = () => {
+      if (document.visibilityState === 'visible') {
+        document.removeEventListener('visibilitychange', onChange)
+        resolve()
+      }
+    }
+    document.addEventListener('visibilitychange', onChange)
+  })
+}
+
 /** 初回起動時刻を記録し、新規ユーザー保護期間中かを返す */
 function inNewUserGrace(): boolean {
   const now = Date.now()
@@ -147,25 +161,39 @@ async function initAdmob(): Promise<void> {
       await import('@capacitor-community/admob')
     await AdMob.initialize()
 
-    // 同意フロー:
-    //  1. UMP (EEA 向け GDPR 同意) の状態を取得
-    //  2. iOS の ATT が未決定なら OS のトラッキング許可ダイアログを表示
-    //  3. UMP フォームが必要なら表示
-    // 失敗しても広告自体は出せる (npa=true で非パーソナライズ化) ので throw しない。
+    // 同意フロー。ATT と UMP は **必ず独立した try で** 処理する。
+    // かつて同一 try に入れていたところ、AdMob コンソールのプライバシー
+    // メッセージ未設定環境で requestConsentInfo が throw し、後続の ATT
+    // 要求までスキップされて「ATT ダイアログが一度も出ない」事故が起きた。
+
+    // 1. ATT (iOS のトラッキング許可)。アプリがフォアグラウンドで active に
+    //    なる前に要求すると iOS が無言で握りつぶす (ダイアログ非表示のまま
+    //    notDetermined が続く) ことがあるため、visible を待って少し置いてから呼ぶ。
+    if (Capacitor.getPlatform() === 'ios') {
+      try {
+        await waitForPageVisible()
+        await new Promise((r) => setTimeout(r, 700))
+        const att = await AdMob.trackingAuthorizationStatus()
+        if (att.status === 'notDetermined') {
+          await AdMob.requestTrackingAuthorization()
+        }
+        npa = (await AdMob.trackingAuthorizationStatus()).status !== 'authorized'
+      } catch (e) {
+        npa = true
+        console.warn('[ads] ATT request failed (fallback to npa):', e)
+      }
+    }
+
+    // 2. UMP (EEA 向け GDPR 同意フォーム)。AdMob コンソールで未設定だと
+    //    requestConsentInfo が throw するが、日本のユーザーには不要なので
+    //    失敗しても広告配信は続行してよい。
     try {
       const consentInfo = await AdMob.requestConsentInfo()
-      const att = await AdMob.trackingAuthorizationStatus()
-      if (att.status === 'notDetermined') {
-        await AdMob.requestTrackingAuthorization()
-      }
-      const attAfter = await AdMob.trackingAuthorizationStatus()
-      npa = attAfter.status !== 'authorized'
       if (consentInfo.isConsentFormAvailable && consentInfo.status === AdmobConsentStatus.REQUIRED) {
         await AdMob.showConsentForm()
       }
     } catch (e) {
-      npa = true
-      console.warn('[ads] consent flow failed (fallback to npa):', e)
+      console.warn('[ads] UMP consent info unavailable (continuing):', e)
     }
 
     admobReady = true
