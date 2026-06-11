@@ -389,7 +389,8 @@ export default function Page() {
         </div>
       )}
 
-      <main style={{ padding: '0 0 80px 0' }}>
+      {/* --filmo-ad-inset: AdMob バナー表示中はその高さが入る (app/lib/ads.ts) */}
+      <main style={{ padding: '0 0 calc(80px + var(--filmo-ad-inset, 0px)) 0' }}>
         {tab === 'home' && <Dashboard userId={userId} onOpenWork={openWork} />}
         {tab === 'search' && (
           <Search

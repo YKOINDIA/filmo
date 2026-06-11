@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { copyToClipboard, shareToLine, shareToTwitter } from '../lib/share'
+import { maybeShowInterstitial } from '../lib/ads'
 
 export type GameShareChannel = 'twitter' | 'line' | 'copy_link'
 
@@ -28,6 +29,14 @@ export default function GameShareButtons({
   shareText, shareUrl, onTrack, variant = 'normal',
 }: Props) {
   const [copied, setCopied] = useState(false)
+
+  // このコンポーネントは各ゲームの結果画面 (ゲームオーバー/クリア) にだけ
+  // マウントされるので、「プレイの区切り」としてインタースティシャル広告の
+  // トリガーに使う。頻度制御 (3 分間隔・日次上限・新規 24h 免除) は
+  // maybeShowInterstitial 側に内蔵。ネイティブアプリ以外では no-op。
+  useEffect(() => {
+    void maybeShowInterstitial('game_result')
+  }, [])
 
   const onLine = useCallback(() => {
     shareToLine(shareText, shareUrl)
