@@ -66,12 +66,11 @@
 	-->
 	<!-- ============================================================
 	  AdMob (広告マネタイズ)。手順の全体像は docs/ads-setup.md を参照。
-	  ⚠️ GADApplicationIdentifier は現在 Google 公式の「テスト用 App ID」。
-	     AdMob コンソールでアプリを登録したら本番 App ID (ca-app-pub-xxxx~yyyy)
-	     に差し替えること。テスト ID のまま審査に出さない。
+	  GADApplicationIdentifier は本番 App ID (AdMob コンソール > アプリ設定)。
+	  広告ユニット ID は Vercel の env (NEXT_PUBLIC_ADMOB_*) 側で管理。
 	============================================================ -->
 	<key>GADApplicationIdentifier</key>
-	<string>ca-app-pub-3940256099942544~1458002511</string>
+	<string>ca-app-pub-1988566884852514~6819091187</string>
 	<!-- 同意フロー (UMP/ATT) が終わる前に計測を始めないよう、SDK の自動計測を遅延 -->
 	<key>GADDelayAppMeasurementInit</key>
 	<true/>
