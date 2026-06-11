@@ -46,6 +46,16 @@ const PAGES = [
     gradient: 'linear-gradient(135deg, rgba(108,242,255,0.22), rgba(162,155,254,0.18))',
     border: 'rgba(108,242,255,0.45)',
   },
+  {
+    href: '/fable5/jobs',
+    emoji: '🔮',
+    badge: '🤖 AI本人が予言',
+    badgeColor: '#ffd24a',
+    title: '10年後に消える仕事・生き残る仕事',
+    subtitle: '仕事を奪う側の張本人(AI)が一人称で正直に告白。学校教育はどう変わるべきかの提言と「2036年の時間割」つき',
+    gradient: 'linear-gradient(135deg, rgba(255,210,74,0.22), rgba(255,122,122,0.16))',
+    border: 'rgba(255,210,74,0.45)',
+  },
 ]
 
 export default function Fable5HubPage() {
