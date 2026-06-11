@@ -209,9 +209,11 @@ function PolicyRow({ tag, tagColor, text }: { tag: string; tagColor: string; tex
 export function PriorityRanking({
   items,
   barColor,
+  note = 'スコア = インパクト × 実現可能性 ÷ コスト で算出した総合おすすめ度(100点満点)',
 }: {
   items: { label: string; emoji: string; score: number }[] // score: 0-100
   barColor: string
+  note?: string
 }) {
   const sorted = [...items].sort((a, b) => b.score - a.score)
   return (
@@ -251,7 +253,7 @@ export function PriorityRanking({
         </div>
       ))}
       <div style={{ fontSize: 10, color: '#777', marginTop: 2 }}>
-        スコア = インパクト × 実現可能性 ÷ コスト で算出した総合おすすめ度(100点満点)
+        {note}
       </div>
     </div>
   )

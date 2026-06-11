@@ -887,7 +887,7 @@ function FilmoUniverseSection() {
               Filmo Fable 5
             </div>
             <div style={{ fontSize: 12, color: '#ddd', marginTop: 4, lineHeight: 1.5 }}>
-              AIが本気で考えた政策提言と未来シナリオ。<br />幸せになる政策 × 最強になる政策 × 宇宙の未来
+              AIが本気で考えた政策提言と未来予測。<br />日本の政策・宇宙の未来・10年後に消える仕事
             </div>
           </div>
           <div style={{ fontSize: 22, color: '#ffd24a' }}>→</div>
