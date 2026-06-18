@@ -14,6 +14,8 @@ import EditProposalModal from './EditProposalModal'
 import ReportModal from './ReportModal'
 import TranslateButton from './TranslateButton'
 import StarRating from './StarRating'
+import AiReviewAssist from './AiReviewAssist'
+import { shareToTwitter } from '../lib/share'
 import { useLocale } from '../lib/i18n'
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p'
@@ -1615,6 +1617,25 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
                 })}
               </div>
 
+              {/* AI 下書きアシスト */}
+              <AiReviewAssist
+                title={title || detail?.title || detail?.name || ''}
+                year={year}
+                mediaType={workType}
+                genres={(detail?.genres || []).map(g => g.name)}
+                score={score}
+                watchContext={reviewWatchContext}
+                allowSpoiler={reviewSpoiler}
+                hasExistingBody={!!reviewBody.trim()}
+                onGenerated={text => {
+                  setReviewBody(text)
+                  if (!reviewStartedRef.current) {
+                    reviewStartedRef.current = true
+                    trackReviewStarted(workId)
+                  }
+                }}
+              />
+
               {/* Review textarea */}
               <textarea
                 style={s.textarea}
@@ -1677,12 +1698,32 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
               {/* 保存直後インラインフィードバック (toast の保険) */}
               {reviewJustSaved === 'posted' && (
                 <div style={{
-                  padding: '10px 14px', borderRadius: 10,
+                  padding: '12px 14px', borderRadius: 10,
                   background: 'rgba(46,204,138,0.15)', border: '1px solid #2ecc8a',
-                  fontSize: 13, fontWeight: 700, color: '#2ecc8a',
-                  display: 'flex', alignItems: 'center', gap: 6,
+                  display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10,
                 }}>
-                  <span>✅</span><span>レビューを投稿しました</span>
+                  <span style={{
+                    fontSize: 13, fontWeight: 700, color: '#2ecc8a',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}>
+                    <span>✅</span><span>レビューを投稿しました</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = `${window.location.origin}/${workType === 'tv' ? 'tv' : 'movies'}/${workId}`
+                      const head = `「${title || detail?.title || detail?.name || ''}」${score > 0 ? ` ★${score.toFixed(1)}` : ''}`
+                      shareToTwitter(`${head}\n${reviewBody}`, url)
+                    }}
+                    style={{
+                      marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '7px 14px', borderRadius: 999, fontSize: 13, fontWeight: 700,
+                      background: '#000', color: '#fff', border: 'none', cursor: 'pointer',
+                    }}
+                  >
+                    <span style={{ fontSize: 15, fontWeight: 900, lineHeight: 1 }}>𝕏</span>
+                    <span>でシェア</span>
+                  </button>
                 </div>
               )}
               {reviewJustSaved === 'draft' && (
