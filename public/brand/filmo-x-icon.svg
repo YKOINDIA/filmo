@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#181b22"/>
+      <stop offset="1" stop-color="#08090d"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.30" r="0.6">
+      <stop offset="0" stop-color="#00c030" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#00c030" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#40d868"/>
+      <stop offset="1" stop-color="#009924"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="400" height="400" rx="92" fill="url(#bg)"/>
+  <rect x="0" y="0" width="400" height="400" rx="92" fill="url(#glow)"/>
+  <rect x="3" y="3" width="394" height="394" rx="90" fill="none" stroke="#ffffff" stroke-opacity="0.06" stroke-width="2"/>
+
+  <!-- film strip / play mark -->
+  <g>
+    <rect x="108" y="92" width="184" height="126" rx="18" fill="url(#green)"/>
+    <!-- perforations top -->
+    <g fill="#08090d">
+      <rect x="124" y="103" width="16" height="13" rx="3.5"/>
+      <rect x="152" y="103" width="16" height="13" rx="3.5"/>
+      <rect x="180" y="103" width="16" height="13" rx="3.5"/>
+      <rect x="208" y="103" width="16" height="13" rx="3.5"/>
+      <rect x="236" y="103" width="16" height="13" rx="3.5"/>
+      <rect x="260" y="103" width="16" height="13" rx="3.5"/>
+    </g>
+    <!-- perforations bottom -->
+    <g fill="#08090d">
+      <rect x="124" y="194" width="16" height="13" rx="3.5"/>
+      <rect x="152" y="194" width="16" height="13" rx="3.5"/>
+      <rect x="180" y="194" width="16" height="13" rx="3.5"/>
+      <rect x="208" y="194" width="16" height="13" rx="3.5"/>
+      <rect x="236" y="194" width="16" height="13" rx="3.5"/>
+      <rect x="260" y="194" width="16" height="13" rx="3.5"/>
+    </g>
+    <!-- screen window -->
+    <rect x="134" y="124" width="132" height="62" rx="11" fill="#0a0b10"/>
+    <!-- play triangle -->
+    <path d="M188 139 L188 171 L218 155 Z" fill="#ffffff"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="200" y="312" text-anchor="middle"
+        font-family="'Segoe UI', Arial, sans-serif" font-size="78" font-weight="800"
+        fill="#ffffff" letter-spacing="-1">Filmo</text>
+</svg>

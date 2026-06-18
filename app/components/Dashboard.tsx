@@ -274,6 +274,28 @@ export default function Dashboard({ userId, onOpenWork }: DashboardProps) {
         }
       `}</style>
 
+      {/* ===== 映画好き診断 トップバナー (ホーム最上部のタップ導線) ===== */}
+      <Link
+        href="/diagnosis"
+        aria-label="映画好き診断をはじめる"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '13px 20px',
+          background: 'linear-gradient(135deg, #00c030, #009924)',
+          color: '#fff',
+          textDecoration: 'none',
+        }}
+      >
+        <span style={{ fontSize: 24, flexShrink: 0 }}>🎬</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 800 }}>あなたに合う映画を診断</div>
+          <div style={{ fontSize: 12, opacity: 0.92 }}>8問でわかる映画好き診断・おすすめ映画つき</div>
+        </div>
+        <span style={{ fontSize: 18, fontWeight: 800, flexShrink: 0 }}>→</span>
+      </Link>
+
       {/* Hero Section - 注目セクション */}
       {sectionLoading.trending ? (
         <div style={{
@@ -703,6 +725,47 @@ function FilmoUniverseSection() {
           </div>
         </div>
       </div>
+
+      {/* ===== 映画好き診断 — featured 大カード ===== */}
+      <Link
+        href="/diagnosis"
+        className="universe-card"
+        style={{
+          display: 'block',
+          padding: 18,
+          borderRadius: 16,
+          background: 'linear-gradient(135deg, rgba(64,216,104,0.26), rgba(0,192,48,0.15))',
+          border: '1px solid rgba(64,216,104,0.4)',
+          textDecoration: 'none',
+          color: 'inherit',
+          marginBottom: 18,
+        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ fontSize: 36 }}>🎬✨</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <span style={{
+                fontSize: 10, fontWeight: 800, color: '#40d868',
+                background: 'rgba(0,192,48,0.16)',
+                border: '1px solid rgba(64,216,104,0.4)',
+                borderRadius: 4, padding: '2px 6px', letterSpacing: 0.5,
+              }}>🎬 診断</span>
+              <span style={{
+                fontSize: 10, fontWeight: 800, color: '#0a0b14',
+                background: '#FFD24A',
+                borderRadius: 4, padding: '2px 6px', letterSpacing: 0.5,
+              }}>NEW</span>
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>
+              映画好き診断
+            </div>
+            <div style={{ fontSize: 12, color: '#ddd', marginTop: 4, lineHeight: 1.5 }}>
+              8問であなたの映画タイプを診断。<br />ぴったりのおすすめ映画もわかる
+            </div>
+          </div>
+          <div style={{ fontSize: 22, color: '#40d868' }}>→</div>
+        </div>
+      </Link>
 
       {/* ===== うらにゃん。— featured 大カード ===== */}
       <Link
