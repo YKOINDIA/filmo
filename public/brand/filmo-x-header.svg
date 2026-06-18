@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 500" width="1500" height="500">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0d12"/>
+      <stop offset="1" stop-color="#08090d"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.6">
+      <stop offset="0" stop-color="#00c030" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#00c030" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#40d868"/>
+      <stop offset="1" stop-color="#009924"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="1500" height="500" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1500" height="500" fill="url(#glow)"/>
+
+  <!-- film strip top & bottom edges -->
+  <g>
+    <rect x="0" y="0" width="1500" height="22" fill="#101319"/>
+    <rect x="0" y="478" width="1500" height="22" fill="#101319"/>
+    <g fill="#2a2f3a">
+      <rect x="18" y="7" width="26" height="9" rx="2"/><rect x="78" y="7" width="26" height="9" rx="2"/><rect x="138" y="7" width="26" height="9" rx="2"/><rect x="198" y="7" width="26" height="9" rx="2"/><rect x="258" y="7" width="26" height="9" rx="2"/><rect x="318" y="7" width="26" height="9" rx="2"/><rect x="378" y="7" width="26" height="9" rx="2"/><rect x="438" y="7" width="26" height="9" rx="2"/><rect x="498" y="7" width="26" height="9" rx="2"/><rect x="558" y="7" width="26" height="9" rx="2"/><rect x="618" y="7" width="26" height="9" rx="2"/><rect x="678" y="7" width="26" height="9" rx="2"/><rect x="738" y="7" width="26" height="9" rx="2"/><rect x="798" y="7" width="26" height="9" rx="2"/><rect x="858" y="7" width="26" height="9" rx="2"/><rect x="918" y="7" width="26" height="9" rx="2"/><rect x="978" y="7" width="26" height="9" rx="2"/><rect x="1038" y="7" width="26" height="9" rx="2"/><rect x="1098" y="7" width="26" height="9" rx="2"/><rect x="1158" y="7" width="26" height="9" rx="2"/><rect x="1218" y="7" width="26" height="9" rx="2"/><rect x="1278" y="7" width="26" height="9" rx="2"/><rect x="1338" y="7" width="26" height="9" rx="2"/><rect x="1398" y="7" width="26" height="9" rx="2"/><rect x="1458" y="7" width="26" height="9" rx="2"/>
+      <rect x="18" y="484" width="26" height="9" rx="2"/><rect x="78" y="484" width="26" height="9" rx="2"/><rect x="138" y="484" width="26" height="9" rx="2"/><rect x="198" y="484" width="26" height="9" rx="2"/><rect x="258" y="484" width="26" height="9" rx="2"/><rect x="318" y="484" width="26" height="9" rx="2"/><rect x="378" y="484" width="26" height="9" rx="2"/><rect x="438" y="484" width="26" height="9" rx="2"/><rect x="498" y="484" width="26" height="9" rx="2"/><rect x="558" y="484" width="26" height="9" rx="2"/><rect x="618" y="484" width="26" height="9" rx="2"/><rect x="678" y="484" width="26" height="9" rx="2"/><rect x="738" y="484" width="26" height="9" rx="2"/><rect x="798" y="484" width="26" height="9" rx="2"/><rect x="858" y="484" width="26" height="9" rx="2"/><rect x="918" y="484" width="26" height="9" rx="2"/><rect x="978" y="484" width="26" height="9" rx="2"/><rect x="1038" y="484" width="26" height="9" rx="2"/><rect x="1098" y="484" width="26" height="9" rx="2"/><rect x="1158" y="484" width="26" height="9" rx="2"/><rect x="1218" y="484" width="26" height="9" rx="2"/><rect x="1278" y="484" width="26" height="9" rx="2"/><rect x="1338" y="484" width="26" height="9" rx="2"/><rect x="1398" y="484" width="26" height="9" rx="2"/><rect x="1458" y="484" width="26" height="9" rx="2"/>
+    </g>
+  </g>
+
+  <!-- film/play mark (centered, above wordmark) -->
+  <g transform="translate(618,-2.7) scale(0.66)">
+    <rect x="108" y="92" width="184" height="126" rx="18" fill="url(#green)"/>
+    <g fill="#08090d">
+      <rect x="124" y="103" width="16" height="13" rx="3.5"/><rect x="152" y="103" width="16" height="13" rx="3.5"/><rect x="180" y="103" width="16" height="13" rx="3.5"/><rect x="208" y="103" width="16" height="13" rx="3.5"/><rect x="236" y="103" width="16" height="13" rx="3.5"/><rect x="260" y="103" width="16" height="13" rx="3.5"/>
+      <rect x="124" y="194" width="16" height="13" rx="3.5"/><rect x="152" y="194" width="16" height="13" rx="3.5"/><rect x="180" y="194" width="16" height="13" rx="3.5"/><rect x="208" y="194" width="16" height="13" rx="3.5"/><rect x="236" y="194" width="16" height="13" rx="3.5"/><rect x="260" y="194" width="16" height="13" rx="3.5"/>
+    </g>
+    <rect x="134" y="124" width="132" height="62" rx="11" fill="#0a0b10"/>
+    <path d="M188 139 L188 171 L218 155 Z" fill="#ffffff"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="750" y="300" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif"
+        font-size="132" font-weight="800" fill="#ffffff" letter-spacing="-3">Filmo</text>
+
+  <!-- EN label -->
+  <text x="750" y="350" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif"
+        font-size="26" font-weight="700" fill="#40d868" letter-spacing="11">MOVIE NOTES</text>
+
+  <!-- JP tagline -->
+  <text x="750" y="402" text-anchor="middle"
+        font-family="'Yu Gothic UI','Yu Gothic','Meiryo','Segoe UI',sans-serif"
+        font-size="29" font-weight="500" fill="#9aa0b4">観た映画を記録して、レビューで「好き」を深める。</text>
+
+  <!-- handle -->
+  <text x="1476" y="56" text-anchor="end" font-family="'Segoe UI', Arial, sans-serif"
+        font-size="30" font-weight="700" fill="#40d868">@filmotokyo</text>
+
+  <!-- subtle star accents -->
+  <g fill="#ff8000" opacity="0.9">
+    <path d="M235 250 l6 15 16 1 -12 10 4 16 -14 -9 -14 9 4 -16 -12 -10 16 -1 z"/>
+    <path d="M1262 258 l5 13 14 1 -11 9 4 14 -12 -8 -12 8 4 -14 -11 -9 14 -1 z" opacity="0.75"/>
+  </g>
+</svg>
