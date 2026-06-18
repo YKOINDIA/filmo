@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { getLevelFromPoints, LEVEL_TITLES, checkAndAwardTitles } from '../lib/points'
+import { loadHensachi, type HensachiRank } from '../lib/eiga-hensachi'
+import { getTypeById } from '../lib/diagnosis/types'
 
 interface PointEntry {
   points: number
@@ -49,6 +51,8 @@ export default function Gamification({ userId }: { userId: string }) {
   const [checking, setChecking] = useState(false)
   const [newTitles, setNewTitles] = useState<{ name: string; id: string }[]>([])
   const [loading, setLoading] = useState(true)
+  const [hensachi, setHensachi] = useState<{ value: number; rank: HensachiRank } | null>(null)
+  const [diagnosisType, setDiagnosisType] = useState<string | null>(null)
 
   useEffect(() => { loadData() }, [])
 
@@ -61,6 +65,13 @@ export default function Gamification({ userId }: { userId: string }) {
         setUserPoints(user.points || 0)
         setUserLevel(user.level || 1)
       }
+
+      // 映画偏差値 (計算式ベース)
+      loadHensachi(userId).then(({ value, rank }) => setHensachi({ value, rank })).catch(() => {})
+
+      // 診断タイプ (00035 マイグレーション未適用でも他の表示を壊さないよう独立取得)
+      supabase.from('users').select('diagnosis_type').eq('id', userId).single()
+        .then(({ data }) => { if (data?.diagnosis_type) setDiagnosisType(data.diagnosis_type) })
 
       // ポイント履歴
       const { data: history } = await supabase
@@ -164,6 +175,53 @@ export default function Gamification({ userId }: { userId: string }) {
           </div>
         </div>
       </div>
+
+      {/* 映画偏差値カード */}
+      {hensachi && (
+        <div style={{
+          background: `linear-gradient(135deg, ${hensachi.rank.color}20, ${hensachi.rank.color}05)`,
+          borderRadius: 16, padding: 20, border: `1px solid ${hensachi.rank.color}40`,
+          marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16,
+        }}>
+          <div style={{ textAlign: 'center', flexShrink: 0, minWidth: 72 }}>
+            <div style={{ fontSize: 11, color: 'var(--fm-text-sub)', fontWeight: 600 }}>映画偏差値</div>
+            <div style={{ fontSize: 40, fontWeight: 900, color: hensachi.rank.color, lineHeight: 1.05 }}>
+              {hensachi.value}
+            </div>
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: hensachi.rank.color }}>{hensachi.rank.label}</div>
+            <div style={{ fontSize: 12, color: 'var(--fm-text-sub)', marginTop: 4, lineHeight: 1.6 }}>
+              見た映画を記録するほど偏差値はアップ。鑑賞ログを増やして上を目指そう！
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 映画タイプ (診断結果) */}
+      {(() => {
+        const t = getTypeById(diagnosisType)
+        return (
+          <a
+            href={t ? `/diagnosis/result/${t.id}` : '/diagnosis'}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none',
+              background: 'var(--fm-bg-card)', borderRadius: 12, padding: '14px 16px',
+              border: '1px solid var(--fm-border)', marginBottom: 16, color: 'inherit',
+            }}>
+            <span style={{ fontSize: 30, flexShrink: 0 }}>{t ? t.emoji : '🎬'}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, color: 'var(--fm-text-sub)', fontWeight: 600 }}>あなたの映画タイプ</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--fm-text)' }}>
+                {t ? t.name : '映画好き診断を受けてみよう'}
+              </div>
+            </div>
+            <span style={{ fontSize: 18, color: 'var(--fm-accent)', flexShrink: 0 }}>
+              {t ? '↗' : '→'}
+            </span>
+          </a>
+        )
+      })()}
 
       {/* 称号チェックボタン */}
       <button onClick={handleCheckTitles} disabled={checking}
