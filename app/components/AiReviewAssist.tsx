@@ -12,6 +12,14 @@ import { useState } from 'react'
 
 type WatchContext = 'solo' | 'family' | 'couple' | 'friends'
 
+// サーバーの英語エラー文言をそのまま見せず、HTTP ステータスに応じた
+// ユーザー向けの日本語メッセージに変換する。
+function friendlyAiError(status: number): string {
+  if (status === 503) return 'AI下書き機能は現在ご利用いただけません。時間をおいて再度お試しください。'
+  if (status === 429) return 'アクセスが集中しています。少し待ってから再度お試しください。'
+  return 'AIの下書き生成に失敗しました。少し待って再試行してください。'
+}
+
 // 「何が刺さった？」チップ。複数選択可。
 const ASPECT_OPTIONS = [
   'ストーリー', '映像美', '演技', '音楽', 'アクション',
@@ -73,14 +81,16 @@ export default function AiReviewAssist({
           allowSpoiler,
         }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({} as { text?: string }))
       if (!res.ok || !data.text) {
-        throw new Error(data.error || '生成に失敗しました')
+        setError(friendlyAiError(res.status))
+        return
       }
       onGenerated(data.text)
       setOpen(false)
-    } catch (e) {
-      setError((e as Error).message || '生成に失敗しました。少し待って再試行してください。')
+    } catch {
+      // ネットワークエラー等 (fetch 自体の失敗)
+      setError('通信に失敗しました。電波状況をご確認のうえ、再度お試しください。')
     } finally {
       setLoading(false)
     }
