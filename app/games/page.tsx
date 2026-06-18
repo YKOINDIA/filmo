@@ -124,6 +124,33 @@ export default function GamesHubPage() {
         </div>
       </section>
 
+      {/* Featured: 映画好き診断 */}
+      <section style={{ padding: '8px 20px 4px' }}>
+        <Link
+          href="/diagnosis"
+          style={{
+            display: 'block', padding: 18, borderRadius: 16, textDecoration: 'none', color: 'inherit',
+            background: 'linear-gradient(135deg, rgba(108,92,231,0.32), rgba(162,155,254,0.18))',
+            border: '1px solid rgba(162,155,254,0.45)',
+          }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ fontSize: 36, lineHeight: 1, flexShrink: 0 }}>🎬✨</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 17, fontWeight: 800, color: '#fff' }}>映画好き診断</span>
+                <span style={{
+                  fontSize: 10, fontWeight: 800, color: '#0a0b14', background: '#ffd24a',
+                  borderRadius: 6, padding: '2px 6px', letterSpacing: 0.5,
+                }}>NEW</span>
+              </div>
+              <div style={{ fontSize: 13, color: '#ddd', marginTop: 3 }}>あなたに合う映画を診断</div>
+              <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>8問で映画タイプ判定・結果をXでシェア</div>
+            </div>
+            <div style={{ fontSize: 24, color: 'var(--fm-accent)', flexShrink: 0 }}>→</div>
+          </div>
+        </Link>
+      </section>
+
       {/* Games list */}
       <section style={{ padding: '8px 20px' }}>
         <div style={{ display: 'grid', gap: 12 }}>
