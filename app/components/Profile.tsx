@@ -860,9 +860,9 @@ export default function Profile({ user, onUpdate, onLogout, onOpenWork, onOpenPe
       }}>
         <div style={{ display: 'flex', gap: 0, marginBottom: 12, background: 'var(--fm-bg-secondary)', borderRadius: 10, padding: 3 }}>
           {([
-            { key: 'watched' as WatchStatus, label: '✓ Watched' },
-            { key: 'want' as WatchStatus, label: '📌 Watchlist' },
-            { key: 'watching' as WatchStatus, label: '📺 Watching' },
+            { key: 'watched' as WatchStatus, label: '✓ 視聴済み' },
+            { key: 'want' as WatchStatus, label: '📌 観たい' },
+            { key: 'watching' as WatchStatus, label: '📺 視聴中' },
           ]).map(t => (
             <button key={t.key} onClick={() => setWatchTab(t.key)}
               style={{

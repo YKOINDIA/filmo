@@ -33,8 +33,9 @@ interface LoginPromptProps {
  */
 export default function LoginPrompt({ title, subtitle, onAuthenticated }: LoginPromptProps) {
   const { t } = useLocale()
-  // 認証チャネル: email (従来) / id (新規・メール不要)
-  const [authChannel, setAuthChannel] = useState<'email' | 'id'>('email')
+  // 認証チャネル: id (デフォルト・メール不要) / email (従来)
+  // メール確認が最大の登録離脱点だったため、ID+パスワードを第一導線にする
+  const [authChannel, setAuthChannel] = useState<'email' | 'id'>('id')
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
   const [authEmail, setAuthEmail] = useState('')
   const [authUsername, setAuthUsername] = useState('')
@@ -209,8 +210,8 @@ export default function LoginPrompt({ title, subtitle, onAuthenticated }: LoginP
           background: 'var(--fm-bg-card)', borderRadius: 12, padding: 4,
         }}>
           {([
+            { key: 'id' as const,    label: '🆔 ID (メール不要)' },
             { key: 'email' as const, label: '📧 メール' },
-            { key: 'id' as const,    label: '🆔 IDで' },
           ]).map(c => (
             <button key={c.key}
               onClick={() => { setAuthChannel(c.key); setAuthError(''); setAuthSuccess('') }}
