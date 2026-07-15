@@ -12,6 +12,7 @@ import VoiceReviewPlayer from './VoiceReviewPlayer'
 import ShareCard from './ShareCard'
 import EditProposalModal from './EditProposalModal'
 import ReportModal from './ReportModal'
+import LoginPrompt from './LoginPrompt'
 import TranslateButton from './TranslateButton'
 import StarRating from './StarRating'
 import AiReviewAssist from './AiReviewAssist'
@@ -36,6 +37,8 @@ interface WorkDetailProps {
   onClose: () => void
   onOpenWork: (id: number, type?: 'movie' | 'tv') => void
   onOpenPerson?: (id: number) => void
+  /** ゲストが画面内ログインに成功したとき親にプロフィール再読込を依頼する */
+  onAuthenticated?: (userId: string) => void
 }
 
 interface Genre { id: number; name: string }
@@ -162,14 +165,17 @@ function LoadingSpinner() {
 
 // ── Main Component ─────────────────────────────────────────────────────────
 
-export default function WorkDetail({ workId, workType, userId, onClose, onOpenWork, onOpenPerson }: WorkDetailProps) {
+export default function WorkDetail({ workId, workType, userId, onClose, onOpenWork, onOpenPerson, onAuthenticated }: WorkDetailProps) {
   const { t, tmdbLang } = useLocale()
   // ゲスト(未ログイン)時は userId が空文字。閲覧は可能だが投稿系アクションはガードする。
   const isGuest = !userId
+  // ゲストが記録系アクションを踏んだらその場でログイン/登録できるモーダルを出す
+  // (以前はトースト表示のみで、登録導線に繋がっていなかった)
+  const [authGateMsg, setAuthGateMsg] = useState<string | null>(null)
   const requireAuth = (msg = 'この機能を使うにはログインが必要です', feature = 'unknown'): boolean => {
     if (isGuest) {
       trackAuthGateHit(feature)
-      showToast(msg)
+      setAuthGateMsg(msg)
       return false
     }
     return true
@@ -622,11 +628,11 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
 
       if (status === 'watched') {
         await addPoints(userId, POINT_CONFIG.WATCH_COMPLETE, '鑑賞完了')
-        showToast('✓ Watched に追加しました！ +' + POINT_CONFIG.WATCH_COMPLETE + 'pt')
+        showToast(`✓ ${t('work.watchStatus.watched')}に記録しました！ +${POINT_CONFIG.WATCH_COMPLETE}pt`)
       } else if (status === 'want_to_watch') {
-        showToast('📌 Watchlist に追加しました')
+        showToast(`📌 ${t('work.watchStatus.want_to_watch')}に追加しました`)
       } else if (status === 'watching') {
-        showToast('📺 Watching に設定しました')
+        showToast(`📺 ${t('work.watchStatus.watching')}に設定しました`)
       }
     } catch {
       showToast('エラーが発生しました')
@@ -651,7 +657,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
   const handleSaveWatchDetails = async () => {
     if (!requireAuth('保存するにはログインが必要です', 'watch_details')) return
     if (!watchEntry) {
-      showToast('先にWatchedまたはWatchlistボタンを押してください')
+      showToast(`先に「${t('work.watchStatus.watched')}」または「${t('work.watchStatus.want_to_watch')}」ボタンを押してください`)
       return
     }
     setSavingWatchlist(true)
@@ -1026,14 +1032,20 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
     : rawReleaseDate
   const homepage = detail?.homepage || null
   const runtime = detail?.runtime || (detail?.episode_run_time?.[0]) || null
+  // 同一人物が複数ジョブ (Screenplay + Story 等) で重複して返るため人物 id で dedupe する
+  // (重複すると表示名の重複と React の key 衝突を起こす)
+  const uniqueByPersonId = <T extends { id: number }>(list: T[]): T[] => {
+    const seen = new Set<number>()
+    return list.filter(c => !seen.has(c.id) && seen.add(c.id))
+  }
   const director = detail?.credits?.crew?.find(c => c.job === 'Director') || null
-  const directors = detail?.credits?.crew?.filter(c => c.job === 'Director') || []
-  const writers = detail?.credits?.crew?.filter(c =>
+  const directors = uniqueByPersonId(detail?.credits?.crew?.filter(c => c.job === 'Director') || [])
+  const writers = uniqueByPersonId(detail?.credits?.crew?.filter(c =>
     c.job === 'Screenplay' || c.job === 'Writer' || c.job === 'Story'
-  ).slice(0, 5) || []
-  const composers = detail?.credits?.crew?.filter(c => c.job === 'Original Music Composer' || c.job === 'Music').slice(0, 3) || []
-  const cinematographers = detail?.credits?.crew?.filter(c => c.job === 'Director of Photography').slice(0, 3) || []
-  const editors = detail?.credits?.crew?.filter(c => c.job === 'Editor').slice(0, 3) || []
+  ) || []).slice(0, 5)
+  const composers = uniqueByPersonId(detail?.credits?.crew?.filter(c => c.job === 'Original Music Composer' || c.job === 'Music') || []).slice(0, 3)
+  const cinematographers = uniqueByPersonId(detail?.credits?.crew?.filter(c => c.job === 'Director of Photography') || []).slice(0, 3)
+  const editors = uniqueByPersonId(detail?.credits?.crew?.filter(c => c.job === 'Editor') || []).slice(0, 3)
   const cast = detail?.credits?.cast?.slice(0, 20) || []
   const similar = detail?.recommendations?.results?.slice(0, 15) ||
     detail?.similar?.results?.slice(0, 15) || []
@@ -1508,14 +1520,14 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           onClick={() => handleStatusChange('watched')}
           disabled={savingWatchlist}
         >
-          ✓ Watched
+          ✓ {t('work.watchStatus.watched')}
         </button>
         <button
           style={s.actionBtn(currentStatus === 'want_to_watch')}
           onClick={() => handleStatusChange('want_to_watch')}
           disabled={savingWatchlist}
         >
-          📌 Watchlist
+          📌 {t('work.watchStatus.want_to_watch')}
         </button>
         {workType === 'tv' && (
           <button
@@ -1523,7 +1535,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
             onClick={() => handleStatusChange('watching')}
             disabled={savingWatchlist}
           >
-            📺 Watching
+            📺 {t('work.watchStatus.watching')}
           </button>
         )}
       </div>
@@ -1540,7 +1552,7 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
               background: 'rgba(108,92,231,0.10)', border: '1px solid rgba(108,92,231,0.3)',
               fontSize: 13, color: 'var(--fm-accent)',
             }}>
-              💡 上の「✓ Watched」を押してから書くと正確な記録になります(レビューだけでも投稿可)
+              💡 上の「✓ {t('work.watchStatus.watched')}」を押してから書くと正確な記録になります(レビューだけでも投稿可)
             </div>
           )}
           {/* Voice Review Recorder */}
@@ -2854,6 +2866,45 @@ export default function WorkDetail({ workId, workType, userId, onClose, onOpenWo
           targetLabel={reportTarget.label}
           onClose={() => setReportTarget(null)}
         />
+      )}
+
+      {/* ゲスト向けログインゲート: 記録系アクションを押したその場で登録/ログインできる */}
+      {authGateMsg && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setAuthGateMsg(null) }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 10000,
+            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+            overflowY: 'auto', padding: '24px 12px calc(24px + env(safe-area-inset-bottom))',
+          }}
+        >
+          <div style={{
+            position: 'relative', width: '100%', maxWidth: 480,
+            background: 'var(--fm-bg)', border: '1px solid var(--fm-border)', borderRadius: 16,
+          }}>
+            <button
+              onClick={() => setAuthGateMsg(null)}
+              aria-label="閉じる"
+              style={{
+                position: 'absolute', top: 8, right: 8, zIndex: 1,
+                width: 36, height: 36, borderRadius: '50%', border: '1px solid var(--fm-border)',
+                background: 'var(--fm-bg-card)', color: 'var(--fm-text)', fontSize: 18,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              ×
+            </button>
+            <LoginPrompt
+              subtitle={`${authGateMsg}。無料で登録して、観た作品を記録しましょう。`}
+              onAuthenticated={(uid) => {
+                setAuthGateMsg(null)
+                onAuthenticated?.(uid)
+                showToast('ログインしました')
+              }}
+            />
+          </div>
+        </div>
       )}
     </div>
   )

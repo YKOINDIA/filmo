@@ -15,7 +15,6 @@ import Gamification from './components/Gamification'
 import Link from 'next/link'
 import UserLists from './components/UserLists'
 import NotificationBell from './components/NotificationBell'
-import Toast from './components/Toast'
 import FeedbackWidget from './components/FeedbackWidget'
 import { showToast } from './lib/toast'
 import { setUserContext, trackSignUp, trackAuthStarted, trackAuthFailed, trackSignIn, trackTabChanged } from './lib/analytics'
@@ -60,7 +59,6 @@ export default function Page() {
   const [selectedWorkType, setSelectedWorkType] = useState<'movie' | 'tv'>('movie')
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null)
   const [pendingBrowseGenre, setPendingBrowseGenre] = useState<{ id: number; label: string } | null>(null)
-  const [toastMsg, setToastMsg] = useState('')
   const [streakBonus, setStreakBonus] = useState(0)
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [levelUpData, setLevelUpData] = useState<{ level: number; title: string; color: string; totalPoints: number } | null>(null)
@@ -130,15 +128,6 @@ export default function Page() {
 
   useEffect(() => {
     const handler = (e: Event) => {
-      setToastMsg((e as CustomEvent).detail)
-      setTimeout(() => setToastMsg(''), 3000)
-    }
-    window.addEventListener('filmo-toast', handler)
-    return () => window.removeEventListener('filmo-toast', handler)
-  }, [])
-
-  useEffect(() => {
-    const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
       setLevelUpData(detail)
     }
@@ -166,16 +155,23 @@ export default function Page() {
         if (bonus > 0) setStreakBonus(bonus)
 
         // Check if user needs onboarding (< MIN_RATINGS_FOR_MATCH rated movies)
+        // 一度完了/スキップしたら二度と出さない (以前は評価5本未満だと起動のたびに
+        // 全画面オンボーディングが再表示され、スキップ派のリテンションを削っていた)
         try {
-          const { data: watchlists } = await supabase
-            .from('watchlists')
-            .select('id, score')
-            .eq('user_id', uid)
-            .eq('status', 'watched')
-            .limit(MIN_RATINGS_FOR_MATCH)
-          const ratedCount = (watchlists || []).filter(d => d.score != null && d.score > 0).length
-          if (ratedCount < MIN_RATINGS_FOR_MATCH) {
-            setNeedsOnboarding(true)
+          const onboardingSeen = localStorage.getItem(`filmo_onboarding_done:${uid}`) === '1'
+          if (!onboardingSeen) {
+            const { data: watchlists } = await supabase
+              .from('watchlists')
+              .select('id, score')
+              .eq('user_id', uid)
+              .eq('status', 'watched')
+              .limit(MIN_RATINGS_FOR_MATCH)
+            const ratedCount = (watchlists || []).filter(d => d.score != null && d.score > 0).length
+            if (ratedCount < MIN_RATINGS_FOR_MATCH) {
+              setNeedsOnboarding(true)
+            } else {
+              localStorage.setItem(`filmo_onboarding_done:${uid}`, '1')
+            }
           }
         } catch { /* ignore — proceed to dashboard */ }
       }
@@ -309,7 +305,10 @@ export default function Page() {
     return (
       <Onboarding
         userId={user.id}
-        onComplete={() => setNeedsOnboarding(false)}
+        onComplete={() => {
+          try { localStorage.setItem(`filmo_onboarding_done:${user.id}`, '1') } catch { /* private mode */ }
+          setNeedsOnboarding(false)
+        }}
       />
     )
   }
@@ -334,6 +333,7 @@ export default function Page() {
         onClose={closeWork}
         onOpenWork={openWork}
         onOpenPerson={openPerson}
+        onAuthenticated={onAuthSucceeded}
       />
     )
   }
@@ -480,8 +480,6 @@ export default function Page() {
           </button>
         ))}
       </nav>
-
-      {toastMsg && <Toast message={toastMsg} />}
 
       {/* お問い合わせウィジェット (ログインユーザー全員に表示、右下に常駐) */}
       {user && <FeedbackWidget userId={user.id} />}

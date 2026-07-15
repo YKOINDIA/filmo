@@ -6,6 +6,7 @@ import { LocaleProviderWrapper } from "./components/LocaleProviderWrapper";
 import GoogleAnalytics from "./components/GoogleAnalytics";
 import MaintenanceCard from "./components/MaintenanceCard";
 import AdsInit from "./components/AdsInit";
+import ToastHost from "./components/ToastHost";
 
 // 計画メンテナンス用キルスイッチ。Vercel の環境変数で `MAINTENANCE_MODE=1` を
 // セットしてデプロイすると、サイト全体がメンテナンス画面に切り替わる。
@@ -156,6 +157,9 @@ export default function RootLayout({
           <AdsInit />
         </Suspense>
         <LocaleProviderWrapper>{children}</LocaleProviderWrapper>
+        {/* showToast() の受け口。全ルート・全画面 (WorkDetail 等の全画面ビュー含む) で
+            トーストを表示できるよう layout 直下に常駐させる */}
+        <ToastHost />
         {/*
           Service Worker は Capacitor WebView の標準オリジン (capacitor://) では
           動かず、エラーになる場合がある。明示的に http(s) スキームのときだけ登録。
