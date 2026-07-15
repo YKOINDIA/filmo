@@ -735,6 +735,20 @@ export default function Onboarding({ userId, onComplete }: OnboardingProps) {
               : `あと${MIN_RATINGS_FOR_MATCH - ratedCount}本評価してください`
             }
           </button>
+          {/* 5本評価は推奨だが強制しない。ここで離脱するくらいなら
+              あとで作品詳細から評価してもらう方がよい */}
+          {!canProceed && (
+            <button
+              onClick={() => { trackOnboardingStep(2, 'skip'); setPage(3) }}
+              style={{
+                width: '100%', marginTop: 10, padding: '6px 0',
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: 'rgba(255,255,255,0.45)', fontSize: 13, textDecoration: 'underline',
+              }}
+            >
+              あとで評価する (スキップ)
+            </button>
+          )}
         </div>
       </div>
     )

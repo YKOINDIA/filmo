@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useTheme } from '../lib/useTheme'
 import { showToast } from '../lib/toast'
 import { useLocale } from '../lib/i18n'
+import { isIdEmail } from '../lib/idAuth'
 import LanguageSelector from './LanguageSelector'
 
 export default function Settings({ userId, onBack }: { userId: string; onBack: () => void }) {
@@ -19,6 +20,7 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
     notify_email: false,
   })
   const [email, setEmail] = useState('')
+  const [username, setUsername] = useState<string | null>(null)
   const [feedbackCategory, setFeedbackCategory] = useState('feature')
   const [feedbackSubject, setFeedbackSubject] = useState('')
   const [feedbackBody, setFeedbackBody] = useState('')
@@ -44,10 +46,11 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
 
   const loadSettings = async () => {
     const { data } = await supabase.from('users')
-      .select('email, notify_new_release, notify_streaming, notify_follow, notify_like, notify_community, notify_email, gender, birth_year, birth_month, birth_day, country, hometown, current_location, is_profile_public')
+      .select('email, username, notify_new_release, notify_streaming, notify_follow, notify_like, notify_community, notify_email, gender, birth_year, birth_month, birth_day, country, hometown, current_location, is_profile_public')
       .eq('id', userId).single()
     if (data) {
       setEmail(data.email)
+      setUsername(data.username || null)
       setNotifySettings({
         notify_new_release: data.notify_new_release,
         notify_streaming: data.notify_streaming,
@@ -197,9 +200,12 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
         <SettingRow label="コミュニティ通知" desc="フォロー中ユーザーの活動">
           <ToggleSwitch checked={notifySettings.notify_community} onChange={v => updateNotify('notify_community', v)} />
         </SettingRow>
-        <SettingRow label="メール通知">
-          <ToggleSwitch checked={notifySettings.notify_email} onChange={v => updateNotify('notify_email', v)} />
-        </SettingRow>
+        {/* ID登録ユーザーは実メールを持たない (合成メールはバウンスする) ので非表示 */}
+        {!isIdEmail(email) && (
+          <SettingRow label="メール通知">
+            <ToggleSwitch checked={notifySettings.notify_email} onChange={v => updateNotify('notify_email', v)} />
+          </SettingRow>
+        )}
       </div>
 
       {/* プライバシー */}
@@ -213,8 +219,18 @@ export default function Settings({ userId, onBack }: { userId: string; onBack: (
       {/* アカウント */}
       <div style={{ fontSize: 13, color: 'var(--fm-text-sub)', fontWeight: 600, marginBottom: 8, marginLeft: 4 }}>アカウント</div>
       <div style={{ background: 'var(--fm-bg-card)', borderRadius: 12, padding: '14px 16px', border: '1px solid var(--fm-border)', marginBottom: 16 }}>
-        <div style={{ fontSize: 13, color: 'var(--fm-text-sub)' }}>メールアドレス</div>
-        <div style={{ fontSize: 15, marginTop: 4 }}>{email}</div>
+        {isIdEmail(email) ? (
+          <>
+            {/* ID登録ユーザー: 内部用の合成メールは見せず、ログインIDを表示 */}
+            <div style={{ fontSize: 13, color: 'var(--fm-text-sub)' }}>ログインID</div>
+            <div style={{ fontSize: 15, marginTop: 4 }}>{username || email.split('@')[0]}</div>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 13, color: 'var(--fm-text-sub)' }}>メールアドレス</div>
+            <div style={{ fontSize: 15, marginTop: 4 }}>{email}</div>
+          </>
+        )}
       </div>
 
       {/* プロフィール属性 (任意・レコメンドに使用、公開はされない) */}
