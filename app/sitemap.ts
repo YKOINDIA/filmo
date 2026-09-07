@@ -14,13 +14,15 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
  *  - 公開リスト ( /lists/[slug] )
  *  - 公開プロフィール ( /u/[id] ※ is_profile_public=true のみ )
  *  - 作品ページ ( /movies/[id], /tv/[id] ※ poster_path 持ちのみ)
- *  - 人物ページ ( /people/[id] ※ profile_path 持ちのみ)
+ *  - 人物ページ ( /people/[id] ※ レビュー 1 件以上 かつ profile_path 持ちのみ)
  *
  * Google の 1 sitemap あたり上限は 50,000 URL。
  * (作品 × 2 type) + 人物 + 既存 lists/users で 60K を超えそうなら
  * generateSitemaps による分割が必要。当面は各カテゴリでキャップする。
  */
 const WORK_LIMIT_PER_TYPE = 20000
+// レビュー付き人物の上限。Supabase の 1 クエリ既定上限 (1000 行) が先に効くため
+// 実質のキャップはそちら。レビュー数がそこを超えたら分割取得が必要。
 const PERSON_LIMIT = 15000
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticEntries: MetadataRoute.Sitemap = [
@@ -105,14 +107,32 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }
     }
 
-    // 人物ページ (profile_path を持つ persons のみ、新しいものから)
+    // 人物ページ (レビューが 1 件以上ある人物のみ)
     // ユーザー登録 (tmdb_id IS NULL) も含めるため id を fallback として使用。
-    const { data: persons } = await admin
-      .from('persons')
-      .select('id, tmdb_id, profile_path, cached_at')
-      .not('profile_path', 'is', null)
-      .order('cached_at', { ascending: false })
+    //
+    // 条件は shouldIndexPerson() (= レビュー 1 件以上) と揃える。揃っていないと
+    // noindex のページを sitemap で申告することになり、Search Console の
+    // 「送信された URL が noindex です」を大量計上してクロールバジェットを浪費する。
+    //
+    // cached_at 順で拾ってはいけない: cached_at は /people/[id] へのアクセスで
+    // 更新されるため、クローラが未知の TMDB ID を踏むだけで sitemap の先頭を
+    // 乗っ取れてしまう (2026-09-07 にスクレイパーが 211K リクエストで実際に発生させ、
+    // persons が 164 万行に膨張・sitemap 上位が全て当日分に置き換わった)。
+    const { data: reviewed } = await admin
+      .from('person_reviews')
+      .select('person_id')
+      .eq('is_hidden', false)
+      .eq('is_draft', false)
       .limit(PERSON_LIMIT)
+    const reviewedIds = [...new Set(((reviewed || []) as { person_id: number }[]).map(r => r.person_id))]
+
+    const { data: persons } = reviewedIds.length
+      ? await admin
+          .from('persons')
+          .select('id, tmdb_id, profile_path, cached_at')
+          .in('id', reviewedIds)
+          .not('profile_path', 'is', null)
+      : { data: [] }
     const personRows = (persons || []) as { id: number; tmdb_id: number | null; profile_path: string; cached_at: string }[]
     for (const p of personRows) {
       const idForUrl = p.tmdb_id ?? p.id
